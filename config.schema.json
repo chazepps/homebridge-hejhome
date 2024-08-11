@@ -2,8 +2,8 @@
   "pluginAlias": "Hejhome",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "<p align='center'><img width='100px' src='https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/logo.png'></p>\n\nThe **Hejhome** plugin allows you to control Hejhome Devices. \n\nTo get started link your Hejhome account.\n\n1. Download Hejhome App on App Store or Google Play Store.\n\n2. Register a Hejhome account and log in into your account.\n\n3. Input your `Email` and `Password` into the parameters below.",
-  "footerDisplay": "Please raise any issues on our [project page](https://github.com/Hejhome/homebridge-hejhome/issues).\n\nIf you would like to have other Hejhome Devices added to this plugin fill out [Feature Request Form](https://github.com/Hejhome/homebridge-hejhome/issues/new?assignees=&labels=&template=feature_request.md).\n\n[Hejhome Website](https://www.hejhome.com)",
+  "headerDisplay": "<p align='center'><img height='100px' src='https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/logo.png'></p>\n\nThe **Hejhome** plugin allows you to control Hejhome Devices. \n\nTo get started link your Hejhome account.\n\n1. Download Hejhome App on App Store or Google Play Store.\n\n2. Register a Hejhome account and log in into your account.\n\n3. Input your `Email` and `Password` into the parameters below.",
+  "footerDisplay": "Please raise any issues on our [project page](https://github.com/chazepps/homebridge-hejhome/issues).\n\nIf you would like to have other Hejhome Devices added to this plugin fill out [Feature Request Form](https://github.com/chazepps/homebridge-hejhome/issues/new?assignees=&labels=&template=feature-request.md).\n\n[Hejhome Website](https://hej.life/)",
   "schema": {
     "type": "object",
     "properties": {
@@ -28,21 +28,11 @@
             "x-schema-form": {
               "type": "password"
             }
-          },
-          "familyId": {
-            "title": "Family ID",
-            "type": "string"
-          },
-          "roomId": {
-            "title": "Room ID",
-            "type": "string",
-            "description": "Optional"
           }
         },
         "required": [
           "email",
-          "password",
-          "familyId"
+          "password"
         ]
       }
     }
@@ -55,9 +45,7 @@
       "expanded": false,
       "items": [
         "credentials.email",
-        "credentials.password",
-        "credentials.familyId",
-        "credentials.roomId"
+        "credentials.password"
       ]
     }
   ]
