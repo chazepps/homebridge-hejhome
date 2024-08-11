@@ -1,0 +1,84 @@
+{
+  "name": "@chazepps/homebridge-hejhome",
+  "version": "1.0.0",
+  "description": "The Hejhome plugin allows you to access your Hejhome device(s) from HomeKit.",
+  "author": {
+    "name": "Chaz",
+    "email": "chaz.epps@gmail.com",
+    "url": "https://github.com/chazepps"
+  },
+  "contributors": [
+    {
+      "name": "Chaz",
+      "url": "https://github.com/chazepps"
+    }
+  ],
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/chazepps/homebridge-hejhome.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chazepps/homebridge-hejhome/issues"
+  },
+  "funding": [
+    {
+      "type": "GitHub",
+      "url": "https://github.com/sponsors/chazepps"
+    }
+  ],
+  "keywords": [
+    "homebridge-plugin",
+    "hejhome",
+    "hub",
+    "lightstrip",
+    "lights",
+    "motion",
+    "outlet"
+  ],
+  "icon": "https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/icon.png",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "rimraf ./dist && tsc",
+    "lint": "eslint src/**/*.ts --max-warnings=0",
+    "prepublishOnly": "npm run lint && npm run build",
+    "watch": "npm run build && npm link && nodemon"
+  },
+  "dependencies": {
+    "@types/uuid": "^10.0.0",
+    "bluebird": "^3.7.2",
+    "deepmerge": "^4.3.1",
+    "ky": "^1.5.0",
+    "lodash": "^4.17.21",
+    "paho-mqtt": "^1.1.0",
+    "uuid": "^10.0.0",
+    "validator": "^13.12.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/bluebird": "^3.5.42",
+    "@types/lodash": "^4.17.7",
+    "@types/node": "^20.14.12",
+    "@types/paho-mqtt": "^1.0.10",
+    "@types/validator": "^13.12.0",
+    "@types/ws": "^8.5.12",
+    "@typescript-eslint/eslint-plugin": "^7.17.0",
+    "@typescript-eslint/parser": "^7.17.0",
+    "eslint": "^8.57.0",
+    "homebridge": "^2.0.0-beta.0",
+    "nodemon": "^3.1.4",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "homebridge": "^1.8.0 || ^2.0.0-beta.0",
+    "node": "^18.20.4 || ^20.16.0 || ^22.5.1"
+  },
+  "engineStrict": true,
+  "displayName": "Hejhome",
+  "publishConfig": {
+    "access": "public"
+  }
+}
