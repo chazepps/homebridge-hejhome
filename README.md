@@ -1,6 +1,6 @@
 <p align="center">
 
-<img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/logo.png" width="150">
+<img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/logo.png" height="150">
 
 </p>
 
