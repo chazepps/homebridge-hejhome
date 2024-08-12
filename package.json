@@ -1,6 +1,6 @@
 {
   "name": "@chazepps/homebridge-hejhome",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "The Hejhome plugin allows you to access your Hejhome device(s) from HomeKit.",
   "author": {
     "name": "Chaz",
@@ -27,6 +27,7 @@
       "url": "https://github.com/sponsors/chazepps"
     }
   ],
+  "homepage": "https://github.com/chazepps/homebridge-hejhome#readme",
   "keywords": [
     "homebridge-plugin",
     "hejhome",
