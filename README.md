@@ -8,6 +8,18 @@
 
 The Hejhome plugin facilitates seamless integration of Hejhome devices with HomeKit.
 
+### Supported Devices List
+
+Currently supported devices are listed below. I am working based on the products I own, so if you want to add a device, feel free to send a PR or request it in an issue, and I will try to purchase and work on it.
+
+| Status    | Name                           | Product Link                                                | Notes                                                                  |
+| --------- | ------------------------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| ✅ Stable | Zigbee Switch (1-gang, 2-gang) | [Link](https://hej.life/product/detail.html?product_no=95)  | 3-gang not supported yet                                               |
+| ✅ Stable | Smart Bulb (Color)             | [Link](https://hej.life/product/detail.html?product_no=100) |                                                                        |
+| 🟡 WIP    | Smart Button                   | [Link](https://hej.life/product/detail.html?product_no=105) | Bug: Settings sometimes disappear in Home app when updating the plugin |
+| 🟡 WIP    | Smart Motion Sensor            | [Link](https://hej.life/product/detail.html?product_no=107) | Not fully tested yet                                                   |
+| 🟡 WIP    | Smart Line LED                 | [Link](https://hej.life/product/detail.html?product_no=116) | Not fully tested yet                                                   |
+
 ### Development Environment Setup
 
 To develop Homebridge plugins, ensure that Node.js version 20 or later is installed, along with a modern code editor such as [VS Code](https://code.visualstudio.com/). This plugin utilizes [TypeScript](https://www.typescriptlang.org/) for an enhanced development experience and includes pre-configured settings for [VS Code](https://code.visualstudio.com/) and ESLint. If you are using VS Code, please install the following extension:
