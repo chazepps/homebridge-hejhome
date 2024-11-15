@@ -1,8 +1,12 @@
 <p align="center">
-
 <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/logo.png" height="150">
-
 </p>
+
+<div align="center">
+
+[![verified-by-homebridge](https://img.shields.io/badge/homebridge-verified-blueviolet?color=%23491F59&style=for-the-badge&logoColor=%23FFFFFF&logo=homebridge)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
+
+</div>
 
 <h1 align="center">Homebridge Hejhome Plugin</h1>
 
@@ -16,6 +20,7 @@ Currently supported devices are listed below. I am working based on the products
 | --------- | ------------------------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
 | ✅ Stable | Zigbee Switch (1-gang, 2-gang) | [Link](https://hej.life/product/detail.html?product_no=95)  | 3-gang not supported yet                                               |
 | ✅ Stable | Smart Bulb (Color)             | [Link](https://hej.life/product/detail.html?product_no=100) |                                                                        |
+| 🟡 WIP    | Smart Relay Controller         | [Link](https://hej.life/product/detail.html?product_no=109) | Not yet implemented.                                                   |
 | 🟡 WIP    | Smart Button                   | [Link](https://hej.life/product/detail.html?product_no=105) | Bug: Settings sometimes disappear in Home app when updating the plugin |
 | 🟡 WIP    | Smart Motion Sensor            | [Link](https://hej.life/product/detail.html?product_no=107) | Not fully tested yet                                                   |
 | 🟡 WIP    | Smart Line LED                 | [Link](https://hej.life/product/detail.html?product_no=116) | Not fully tested yet                                                   |
