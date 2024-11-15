@@ -32,7 +32,8 @@ type HejDevice = {
   | 'SensorMo'
   | 'LedStripRgbw2'
   | 'SmartButton'
-  | 'SensorTh';
+  | 'SensorTh'
+  | 'RelayController';
   hasSubDevices: boolean;
   modelName: string | null;
   familyId: number;

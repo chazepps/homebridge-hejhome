@@ -1,8 +1,8 @@
 import { API, DynamicPlatformPlugin, Logging, PlatformAccessory, Service, Characteristic } from 'homebridge';
 
 import { HejhomePlatformConfig, PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
-import { HejDevice, getToken, hejDevices, hejEvent, startRealtime } from './requests/index.js';
-import { ZigbeeSwitch1, ZigbeeSwitch2, LightRgbw5, LedStripRgbw2, SmartButton, SensorMo, Base } from './accessories/index.js';
+import { getToken, HejDevice, hejDevices, hejEvent, startRealtime } from './requests/index.js';
+import { Base, LedStripRgbw2, LightRgbw5, RelayController, SensorMo, SmartButton, ZigbeeSwitch1, ZigbeeSwitch2 } from './accessories/index.js';
 
 export class HejhomePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -156,6 +156,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         break;
       case 'SmartButton':
         hejAccessory = new SmartButton(platform, accessory, device);
+        break;
+      case 'RelayController':
+        hejAccessory = new RelayController(platform, accessory, device);
         break;
     }
 
