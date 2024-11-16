@@ -8,7 +8,7 @@ export const PLATFORM_NAME = 'Hejhome';
 /**
  * This must match the name of your plugin as defined the package.json
  */
-export const PLUGIN_NAME = 'homebridge-hejhome';
+export const PLUGIN_NAME = '@chazepps/homebridge-hejhome';
 
 // Config
 export interface HejhomePlatformConfig extends PlatformConfig {

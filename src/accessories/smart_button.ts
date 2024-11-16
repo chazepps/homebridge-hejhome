@@ -9,12 +9,10 @@ export const EVENT_BUTTON_PRESSED = 'clickSmartButton';
 
 export const SMART_BUTTON_ACTION_SINGLE_CLICK = 'single_click';
 export const SMART_BUTTON_ACTION_DOUBLE_CLICK = 'double_click';
-export const SMART_BUTTON_ACTION_LONG_CLICK = 'long_click';
 
 export type SmartButtonAction =
   typeof SMART_BUTTON_ACTION_SINGLE_CLICK |
-  typeof SMART_BUTTON_ACTION_DOUBLE_CLICK |
-  typeof SMART_BUTTON_ACTION_LONG_CLICK;
+  typeof SMART_BUTTON_ACTION_DOUBLE_CLICK;
 
 const CHARACTERISTIC_MANUFACTURER = 'Hejhome';
 const CHARACTERISTIC_MODEL = 'Unknown Hejhome device';
@@ -37,7 +35,8 @@ export class SmartButton extends Base {
         Name,
       },
       Service,
-    } = this.platform;
+      uuid,
+    } = this.platform.api.hap;
 
     this.accessory
       .getService(Service.AccessoryInformation)!
@@ -47,13 +46,24 @@ export class SmartButton extends Base {
 
     this.services = [...Array(4).keys()].map(i => {
       const serviceName = `Button ${i + 1}`;
-      let service = this.accessory.getService(serviceName);
+      const serviceUUID = uuid.generate(`${this.device.id}-button-${i + 1}`);
+      let service = this.accessory.getService(serviceUUID);
 
       if (!service) {
-        service = this.accessory.addService(Service.StatelessProgrammableSwitch, serviceName, `button-${i + 1}`);
+        service = this.accessory.addService(Service.StatelessProgrammableSwitch, serviceName, serviceUUID);
       }
 
       service.setCharacteristic(Name, serviceName);
+
+      service.getCharacteristic(this.platform.Characteristic.ProgrammableSwitchEvent)
+        .setProps({
+          validValues: [
+            this.platform.Characteristic.ProgrammableSwitchEvent.SINGLE_PRESS,
+            this.platform.Characteristic.ProgrammableSwitchEvent.DOUBLE_PRESS,
+          ],
+        });
+      service.setCharacteristic(this.platform.Characteristic.ServiceLabelIndex, i + 1);
+
       return service;
     });
 
@@ -74,7 +84,6 @@ export class SmartButton extends Base {
     const characteristicValues = {
       [SMART_BUTTON_ACTION_SINGLE_CLICK]: ProgrammableSwitchEvent.SINGLE_PRESS,
       [SMART_BUTTON_ACTION_DOUBLE_CLICK]: ProgrammableSwitchEvent.DOUBLE_PRESS,
-      [SMART_BUTTON_ACTION_LONG_CLICK]: ProgrammableSwitchEvent.LONG_PRESS,
     };
 
     this.services[idx].updateCharacteristic(ProgrammableSwitchEvent, characteristicValues[value]);

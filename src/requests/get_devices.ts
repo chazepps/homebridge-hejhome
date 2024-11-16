@@ -1,5 +1,5 @@
-import { hejRequest } from './request.js';
 import { HejhomePlatform } from '../platform.js';
+import { hejRequest } from './request.js';
 
 export const getDevices = async (
   platform: HejhomePlatform,
@@ -40,7 +40,8 @@ export interface HejDevice {
   | 'SensorMo'
   | 'LedStripRgbw2'
   | 'SmartButton'
-  | 'SensorTh';
+  | 'SensorTh'
+  | 'RelayController';
   hasSubDevices: boolean;
   modelName: string | null;
   familyId: number;

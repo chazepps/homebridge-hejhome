@@ -7,10 +7,10 @@ import { HejDevice } from '../requests/get_devices.js';
 import { hejDevices } from '../requests/realtime.js';
 import { Base } from './base.js';
 
-const CHARACTERISTIC_MANUFACTURER = '반디통신기술(주)';
-const CHARACTERISTIC_MODEL = 'BDS03G1(1구)';
+const CHARACTERISTIC_MANUFACTURER = '(주)고퀄';
+const CHARACTERISTIC_MODEL = 'LKW-RC031';
 
-export class ZigbeeSwitch1 extends Base {
+export class RelayController extends Base {
   private service: Service;
   private platform: HejhomePlatform;
   private accessory: PlatformAccessory;
@@ -70,7 +70,7 @@ export class ZigbeeSwitch1 extends Base {
     }
 
     this.platform.log.info(
-      `Device ${this.device.name} (ZigbeeSwitch1) power state changed to ${value ? 'ON' : 'OFF'}`,
+      `Device ${this.device.name} (RelayController) power state changed to ${value ? 'ON' : 'OFF'}`,
     );
   }
 

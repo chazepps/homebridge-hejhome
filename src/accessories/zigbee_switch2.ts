@@ -1,11 +1,11 @@
-import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
+import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { v4 as uuidv4 } from 'uuid';
 
-import { HejDevice } from '../requests/get_devices.js';
-import { Base } from './base.js';
-import { hejDevices } from '../requests/realtime.js';
-import { control } from '../requests/control.js';
 import { HejhomePlatform } from '../platform.js';
+import { control } from '../requests/control.js';
+import { HejDevice } from '../requests/get_devices.js';
+import { hejDevices } from '../requests/realtime.js';
+import { Base } from './base.js';
 
 const CHARACTERISTIC_MANUFACTURER = '반디통신기술(주)';
 const CHARACTERISTIC_MODEL = 'BDS03G2(2구)';

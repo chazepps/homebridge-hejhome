@@ -1,14 +1,15 @@
-import { API, DynamicPlatformPlugin, Logging, PlatformAccessory, Service, Characteristic } from 'homebridge';
+import { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, Service } from 'homebridge';
 
+import { Base, LedStripRgbw2, LightRgbw5, RelayController, SensorMo, SmartButton, ZigbeeSwitch1, ZigbeeSwitch2 } from './accessories/index.js';
+import { getToken, hejAccessories, HejDevice, hejDevices, hejEvent, startRealtime } from './requests/index.js';
 import { HejhomePlatformConfig, PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
-import { HejDevice, getToken, hejDevices, hejEvent, startRealtime } from './requests/index.js';
-import { ZigbeeSwitch1, ZigbeeSwitch2, LightRgbw5, LedStripRgbw2, SmartButton, SensorMo, Base } from './accessories/index.js';
 
 export class HejhomePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
 
-  public readonly accessories: PlatformAccessory[] = [];
+  public readonly accessories: Map<string, PlatformAccessory> = new Map();
+  public readonly discoveredCacheUUIDs: string[] = [];
 
   public token: string | null = null;
   private tokenExpiry: number | null = null;
@@ -35,28 +36,29 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         }, 100);
       });
 
-
+      // Start real-time updates
       await startRealtime(this);
+      // Discover and register devices
       await this.discoverDevices();
 
-      hejEvent.on('deviceUpdated', (device) => {
-        // 디바이스 상태 업데이트 반영
-        const accessory = this.accessories.find(
-          (acc) => acc.context.device.id === device.id,
-        );
+      // Device state update event handler
+      hejEvent.on('deviceUpdated', (device: HejDevice) => {
+        const uuid = this.api.hap.uuid.generate(device.id);
+        const accessory = this.accessories.get(uuid);
         if (accessory) {
           accessory.context.device = device;
-
-          accessory.context.hejAccessory?.updateCharacteristics?.();
+          hejAccessories[device.id]?.updateCharacteristics();
         }
       });
     });
   }
 
+  // Initialize token and set refresh interval
   private async initializeToken() {
-    setInterval(() => this.refreshToken(), 24 * 60 * 60 * 1000); // 1일 간격으로 토큰 갱신
+    setInterval(() => this.refreshToken(), 24 * 60 * 60 * 1000); // Refresh token every 24 hours
   }
 
+  // Token refresh logic
   private async refreshToken() {
     const token = await getToken(this);
     if (!token) {
@@ -66,13 +68,14 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
     try {
       this.token = token;
-      this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 토큰 만료 시간 설정 (1일 후)
+      this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // Set token expiry time (24 hours later)
       this.log.info('Token refreshed successfully');
     } catch (error) {
       this.log.error('Failed to refresh token:', error);
     }
   }
 
+  // Validate and refresh token if necessary
   private async getToken() {
     if (!this.token || (this.tokenExpiry && Date.now() >= this.tokenExpiry)) {
       await this.refreshToken();
@@ -80,58 +83,44 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     return this.token;
   }
 
+  // Load accessory from cache
   configureAccessory(accessory: PlatformAccessory) {
-    this.log.info(
-      `Loading accessory from cache... name: ${accessory.displayName}`,
-    );
-
-    this.accessories.push(accessory);
+    this.log.info('Loading accessory from cache:', accessory.displayName);
+    this.accessories.set(accessory.UUID, accessory);
   }
 
+  // Discover and register devices
   async discoverDevices() {
-    const uuids = Object.values(hejDevices).map((device) =>
-      this.api.hap.uuid.generate(device.id),
-    );
-
-    for (const accessory of this.accessories) {
-      if (!uuids.includes(accessory.UUID)) {
-        this.log.info(
-          'Removing existing accessory from cache:',
-          accessory.displayName,
-        );
-        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
-          accessory,
-        ]);
-      }
-    }
-
-    // Register new devices
     for (const id in hejDevices) {
       const device = hejDevices[id];
-
       const uuid = this.api.hap.uuid.generate(device.id);
-      let accessory = this.accessories.find(
-        (accessory) => accessory.UUID === uuid,
-      );
+      let existingAccessory = this.accessories.get(uuid);
 
-      let needRegister = false;
+      if (existingAccessory) {
+        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
 
-      if (!accessory) {
-        accessory = new this.api.platformAccessory(device.name, uuid);
-        accessory.context.device = device;
-        needRegister = true;
+        this.initHejAccessory(this, existingAccessory, device);
+      } else {
+        this.log.info('Adding new accessory:', device.name);
+
+        const accessory = new this.api.platformAccessory(device.name, uuid);
+        this.initHejAccessory(this, accessory, device);
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
 
-      const supported = this.initHejAccessory(this, accessory, device);
+      this.discoveredCacheUUIDs.push(uuid);
+    }
 
-      if (needRegister && supported) {
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [
-          accessory,
-        ]);
+    // Remove accessories that are in cache but no longer exist
+    for (const [uuid, accessory] of this.accessories) {
+      if (!this.discoveredCacheUUIDs.includes(uuid)) {
+        this.log.info('Removing existing accessory from cache:', accessory.displayName);
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
     }
   }
 
+  // Initialize accessory based on device type
   initHejAccessory(
     platform: HejhomePlatform,
     accessory: PlatformAccessory,
@@ -157,13 +146,13 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       case 'SmartButton':
         hejAccessory = new SmartButton(platform, accessory, device);
         break;
+      case 'RelayController':
+        hejAccessory = new RelayController(platform, accessory, device);
+        break;
     }
 
     if (hejAccessory) {
-      accessory.context.hejAccessory = hejAccessory;
-      return true;
+      hejAccessories[device.id] = hejAccessory;
     }
-
-    return false;
   }
 }
