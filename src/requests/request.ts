@@ -7,6 +7,7 @@ export const hejRequest = async <Request extends Record<string, unknown> | null,
   method: 'GET' | 'POST',
   path: string,
   data: Request | undefined = undefined,
+  json = true,
 ) => {
   const url = `https://square.hej.so/${path}`;
   const response = await ky(url, {
@@ -21,5 +22,9 @@ export const hejRequest = async <Request extends Record<string, unknown> | null,
 
   const text = await response.text();
 
-  return JSON.parse(text) as Response;
+  if (json) {
+    return JSON.parse(text) as Response;
+  }
+
+  return text as Response;
 };

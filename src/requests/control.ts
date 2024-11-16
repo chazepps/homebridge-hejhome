@@ -6,7 +6,7 @@ export const control = async (
   platform: HejhomePlatform,
   deviceId: string,
   body: Data,
-) => hejRequest<Data, null>(platform, 'POST', `dashboard/control/${deviceId}`, body);
+) => hejRequest<Data, null>(platform, 'POST', `dashboard/control/${deviceId}`, body, false);
 
 export type Data = {
   requirments: HejDeviceState;
