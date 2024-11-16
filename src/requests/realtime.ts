@@ -1,15 +1,17 @@
 import Bluebird from 'bluebird';
-import lodash from 'lodash';
 import deepmerge from 'deepmerge';
-import ws from 'ws';
-import mqtt from 'paho-mqtt';
 import { EventEmitter } from 'events';
+import lodash from 'lodash';
+import mqtt from 'paho-mqtt';
+import ws from 'ws';
 
-import { getFamilies } from './get_family.js';
-import { getDevices } from './get_devices.js';
-import { getRooms } from './get_rooms.js';
-import { HejhomePlatform } from '../platform.js';
+import { Base } from '../accessories/base.js';
 import { EVENT_MOTION_DETECTED } from '../accessories/sensor_mo.js';
+import { EVENT_BUTTON_PRESSED } from '../accessories/smart_button.js';
+import { HejhomePlatform } from '../platform.js';
+import { getDevices } from './get_devices.js';
+import { getFamilies } from './get_family.js';
+import { getRooms } from './get_rooms.js';
 import { HEJ_CLIENT_ID, HEJ_CLIENT_SECRET } from './get_token.js';
 
 const { Client } = mqtt;
@@ -70,6 +72,7 @@ type HejFamilies = {
   };
 };
 
+export const hejAccessories: { [id: string]: Base } = {};
 export const hejDevices: { [id: string]: HejDevice } = {};
 const deviceOverrides: { [id: string]: Partial<HejDevice> } = {};
 const families: HejFamilies = {};
@@ -204,6 +207,10 @@ export const startRealtime = async (platform: HejhomePlatform) => {
 
       const devId = data.deviceDataReport?.devId;
 
+      console.log('## realtime...');
+      console.log(JSON.stringify(data.deviceDataReport, null, 2));
+      console.log('## realtime... end');
+
       if (data.deviceDataReport) {
         data.deviceDataReport.status.forEach((status) => {
           switch (status.code) {
@@ -261,7 +268,7 @@ export const startRealtime = async (platform: HejhomePlatform) => {
             case 'switch3_value':
             case 'switch4_value': {
               const idx = Number(status.code.replace('switch', '').replace('_value', '')) - 1;
-              hejEvent.emit('clickSmartButton', devId, idx, status.value);
+              hejEvent.emit(EVENT_BUTTON_PRESSED, devId, idx, status.value);
               break;
             }
             default:

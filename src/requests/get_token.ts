@@ -1,5 +1,6 @@
 import ky, { HTTPError } from 'ky';
 import validator from 'validator';
+
 import { HejhomePlatform } from '../platform.js';
 
 export const HEJ_CLIENT_ID = '62f4020744ca4510827d3b4a4d2c7e7f';

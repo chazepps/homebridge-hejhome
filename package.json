@@ -1,6 +1,6 @@
 {
   "name": "@chazepps/homebridge-hejhome",
-  "version": "1.0.3-alpha.2",
+  "version": "1.0.3-alpha.3",
   "description": "The Hejhome plugin allows you to access your Hejhome device(s) from HomeKit.",
   "author": {
     "name": "Chaz",
@@ -23,7 +23,7 @@
   },
   "funding": [
     {
-      "type": "GitHub",
+      "type": "github",
       "url": "https://github.com/sponsors/chazepps"
     }
   ],
@@ -35,7 +35,8 @@
     "lightstrip",
     "lights",
     "motion",
-    "outlet"
+    "outlet",
+    "헤이홈"
   ],
   "icon": "https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/icon.png",
   "main": "dist/index.js",
@@ -47,8 +48,8 @@
     "watch": "npm run build && npm link && nodemon"
   },
   "engines": {
-    "homebridge": "^1.8.0 || ^2.0.0-beta.0",
-    "node": "^18.20.4 || ^20.16.0 || ^22.5.1"
+    "homebridge": "^1.6.0 || ^2.0.0-beta.0",
+    "node": "^18.20.4 || ^20.15.1"
   },
   "engineStrict": true,
   "displayName": "Hejhome",

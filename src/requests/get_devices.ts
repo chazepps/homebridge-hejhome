@@ -1,5 +1,5 @@
-import { hejRequest } from './request.js';
 import { HejhomePlatform } from '../platform.js';
+import { hejRequest } from './request.js';
 
 export const getDevices = async (
   platform: HejhomePlatform,

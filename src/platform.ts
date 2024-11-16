@@ -1,9 +1,8 @@
-import { API, DynamicPlatformPlugin, Logging, PlatformAccessory, Service, Characteristic } from 'homebridge';
-import stringify from 'json-stringify-safe';
+import { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, Service } from 'homebridge';
 
-import { HejhomePlatformConfig, PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
-import { getToken, HejDevice, hejDevices, hejEvent, startRealtime } from './requests/index.js';
 import { Base, LedStripRgbw2, LightRgbw5, RelayController, SensorMo, SmartButton, ZigbeeSwitch1, ZigbeeSwitch2 } from './accessories/index.js';
+import { getToken, hejAccessories, HejDevice, hejDevices, hejEvent, startRealtime } from './requests/index.js';
+import { HejhomePlatformConfig, PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 export class HejhomePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -43,12 +42,12 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       await this.discoverDevices();
 
       // Device state update event handler
-      hejEvent.on('deviceUpdated', (device) => {
+      hejEvent.on('deviceUpdated', (device: HejDevice) => {
         const uuid = this.api.hap.uuid.generate(device.id);
         const accessory = this.accessories.get(uuid);
         if (accessory) {
           accessory.context.device = device;
-          accessory.context.hejAccessory?.updateCharacteristics?.();
+          hejAccessories[device.id]?.updateCharacteristics();
         }
       });
     });
@@ -153,7 +152,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     }
 
     if (hejAccessory) {
-      accessory.context.hejAccessory = hejAccessory;
+      hejAccessories[device.id] = hejAccessory;
     }
   }
 }
