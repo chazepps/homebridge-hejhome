@@ -207,9 +207,7 @@ export const startRealtime = async (platform: HejhomePlatform) => {
 
       const devId = data.deviceDataReport?.devId;
 
-      console.log('## realtime...');
-      console.log(JSON.stringify(data.deviceDataReport, null, 2));
-      console.log('## realtime... end');
+      platform.log.error('## realtime', JSON.stringify(data.deviceDataReport, null, 2));
 
       if (data.deviceDataReport) {
         data.deviceDataReport.status.forEach((status) => {
