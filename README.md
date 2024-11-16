@@ -16,14 +16,14 @@ The Hejhome plugin facilitates seamless integration of Hejhome devices with Home
 
 Currently supported devices are listed below. I am working based on the products I own, so if you want to add a device, feel free to send a PR or request it in an issue, and I will try to purchase and work on it.
 
-| Status    | Name                           | Product Link                                                | Notes                                                                  |
-| --------- | ------------------------------ | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
-| ✅ Stable | Zigbee Switch (1-gang, 2-gang) | [Link](https://hej.life/product/detail.html?product_no=95)  | 3-gang not supported yet                                               |
-| ✅ Stable | Smart Bulb (Color)             | [Link](https://hej.life/product/detail.html?product_no=100) |                                                                        |
-| 🟡 WIP    | Smart Relay Controller         | [Link](https://hej.life/product/detail.html?product_no=109) | Not yet implemented.                                                   |
-| 🟡 WIP    | Smart Button                   | [Link](https://hej.life/product/detail.html?product_no=105) | Bug: Settings sometimes disappear in Home app when updating the plugin |
-| 🟡 WIP    | Smart Motion Sensor            | [Link](https://hej.life/product/detail.html?product_no=107) | Not fully tested yet                                                   |
-| 🟡 WIP    | Smart Line LED                 | [Link](https://hej.life/product/detail.html?product_no=116) | Not fully tested yet                                                   |
+| Status    | Name                           | Product Link                                                | Notes                    |
+| --------- | ------------------------------ | ----------------------------------------------------------- | ------------------------ |
+| ✅ Stable | Zigbee Switch (1-gang, 2-gang) | [Link](https://hej.life/product/detail.html?product_no=95)  | 3-gang not supported yet |
+| ✅ Stable | Smart Bulb (Color)             | [Link](https://hej.life/product/detail.html?product_no=100) |                          |
+| ✅ Stable | Smart Relay Controller         | [Link](https://hej.life/product/detail.html?product_no=109) |                          |
+| ✅ Stable | Smart Button                   | [Link](https://hej.life/product/detail.html?product_no=105) |                          |
+| 🟡 WIP    | Smart Motion Sensor            | [Link](https://hej.life/product/detail.html?product_no=107) | Not fully tested yet     |
+| 🟡 WIP    | Smart Line LED                 | [Link](https://hej.life/product/detail.html?product_no=116) | Not fully tested yet     |
 
 ### Development Environment Setup
 
