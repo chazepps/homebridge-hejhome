@@ -207,7 +207,9 @@ export const startRealtime = async (platform: HejhomePlatform) => {
 
       const devId = data.deviceDataReport?.devId;
 
-      platform.log.error('## realtime', JSON.stringify(data.deviceDataReport, null, 2));
+      data.deviceDataReport?.status?.map((i) => {
+        platform.log.debug(`MQTT device event: ${i.code}@${data.deviceDataReport?.devId} ⇒ ${i.value}`);
+      });
 
       if (data.deviceDataReport) {
         data.deviceDataReport.status.forEach((status) => {
