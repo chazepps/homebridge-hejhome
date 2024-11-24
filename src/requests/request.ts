@@ -23,7 +23,7 @@ export const hejRequest = async <Request extends Record<string, unknown> | null,
   const text = await response.text();
 
   if (json) {
-    return JSON.parse(text) as Response;
+    return JSON.parse(text || '[]') as Response;
   }
 
   return text as Response;
