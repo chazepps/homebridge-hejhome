@@ -1,46 +1,55 @@
-<p align="center">
-<img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/logo.png" height="150">
-</p>
+# homebridge-hejhome
 
-<div align="center">
+Homebridge dynamic platform plugin for Hejhome devices. This repository is a fresh implementation based on the official Homebridge platform plugin model; archived code under `backup/` is reference-only and is not part of the new runtime.
 
-[![verified-by-homebridge](https://img.shields.io/badge/homebridge-verified-blueviolet?color=%23491F59&style=for-the-badge&logoColor=%23FFFFFF&logo=homebridge)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
+## Status
 
-</div>
+Source-derived implementation scaffold with tested authentication, storage, settings UI flow, and official plugin metadata gates.
 
-<h1 align="center">Homebridge Hejhome Plugin</h1>
+## Runtime Requirements
 
-The Hejhome plugin facilitates seamless integration of Hejhome devices with HomeKit.
+- Node.js `22.12.0` or `24.x`
+- Homebridge `^1.8.0` or `^2.0.0`
+- Homebridge Config UI X with custom plugin UI support
 
-### Supported Devices List
+## Development
 
-Currently supported devices are listed below. I am working based on the products I own, so if you want to add a device, feel free to send a PR or request it in an issue, and I will try to purchase and work on it.
+```sh
+npm install
+npm run build
+npm run homebridge:dev
+```
 
-| Status    | Name                           | Product Link                                                | Notes                    |
-| --------- | ------------------------------ | ----------------------------------------------------------- | ------------------------ |
-| ✅ Stable | Zigbee Switch (1-gang, 2-gang) | [Link](https://hej.life/product/detail.html?product_no=95)  | 3-gang not supported yet |
-| ✅ Stable | Smart Bulb (Color)             | [Link](https://hej.life/product/detail.html?product_no=100) |                          |
-| ✅ Stable | Smart Relay Controller         | [Link](https://hej.life/product/detail.html?product_no=109) |                          |
-| ✅ Stable | Smart Button                   | [Link](https://hej.life/product/detail.html?product_no=105) |                          |
-| 🟡 WIP    | Smart Motion Sensor            | [Link](https://hej.life/product/detail.html?product_no=107) | Not fully tested yet     |
-| 🟡 WIP    | Smart Line LED                 | [Link](https://hej.life/product/detail.html?product_no=116) | Not fully tested yet     |
+The local development config lives at `test/hbConfig/config.json`.
 
-### Development Environment Setup
+## Login Flow
 
-To develop Homebridge plugins, ensure that Node.js version 20 or later is installed, along with a modern code editor such as [VS Code](https://code.visualstudio.com/). This plugin utilizes [TypeScript](https://www.typescriptlang.org/) for an enhanced development experience and includes pre-configured settings for [VS Code](https://code.visualstudio.com/) and ESLint. If you are using VS Code, please install the following extension:
+The settings UI follows the Hejhome Web sequence:
 
-- [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+1. Enter email or phone identifier.
+2. Send verification code.
+3. Wait for the user to enter the code received outside Homebridge.
+4. Verify the code.
+5. Enable password input only after verification succeeds.
+6. Submit password login with auto-login fixed on.
+7. Store only session material under the Homebridge storage path.
 
-### Contributing
+Passwords are never persisted. Session values are redacted from logs and documentation checks.
 
-To contribute to the development of this plugin, please follow these steps:
+## Verification
 
-1. Fork the repository.
-2. Create a new branch for your feature or bug fix.
-3. Implement your changes and commit them with a descriptive message.
-4. Push your changes to your fork.
-5. Create a pull request to the main repository.
+```sh
+npm run lint
+npm run typecheck
+npm test
+npm run test:ui
+npm run build
+npm run docs:check
+npm pack --dry-run
+```
 
-### License
+## Documentation
 
-This project is licensed under the ISC License. Refer to the LICENSE file for more details.
+- `ARCHITECTURE.md` - runtime architecture
+- `DOCUMENTATION_REFACTORING.md` - documentation harness progress and gates
+- `docs/` - design, frontend, product, reliability, security, and release planning

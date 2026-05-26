@@ -1,0 +1,38 @@
+{
+    "bridge": {
+        "name": "Homebridge Test",
+        "username": "0E:AA:EE:00:00:01",
+        "port": 51826,
+        "pin": "031-45-154",
+        "bind": [
+            "en0"
+        ]
+    },
+    "accessories": [],
+    "platforms": [
+        {
+            "name": "Config",
+            "platform": "config",
+            "port": 8581,
+            "auth": "none",
+            "bridges": [
+                {
+                    "username": "0E:CC:A1:55:E3:36",
+                    "hideHapAlert": true
+                }
+            ]
+        },
+        {
+            "name": "Hejhome",
+            "platform": "Hejhome",
+            "_bridge": {
+                "username": "0E:CC:A1:55:E3:36",
+                "port": 35314,
+                "name": "Hejhome",
+                "matter": {
+                    "port": 5530
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,753 @@
+<style>
+  :root {
+    color-scheme: dark;
+  }
+
+  .hej-shell {
+    background: #1f2023;
+    border-radius: 18px;
+    color: #f4f4f5;
+    display: grid;
+    grid-template-columns: minmax(220px, 0.9fr) minmax(320px, 1.1fr);
+    min-height: 520px;
+    overflow: hidden;
+  }
+
+  .hej-brand {
+    align-items: center;
+    background: #36373c;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 44px;
+    text-align: center;
+  }
+
+  .hej-mark {
+    align-items: center;
+    background: #05b57d;
+    border-radius: 28%;
+    display: flex;
+    height: 92px;
+    justify-content: center;
+    margin-bottom: 28px;
+    width: 92px;
+  }
+
+  .hej-smile {
+    border-bottom: 9px solid #303238;
+    border-radius: 0 0 60px 60px;
+    height: 32px;
+    width: 48px;
+  }
+
+  .hej-title {
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: 0;
+    margin: 0;
+  }
+
+  .hej-pill {
+    background: #9d9d9a;
+    border-radius: 8px;
+    color: #303238;
+    display: inline-block;
+    font-weight: 700;
+    margin-top: 18px;
+    padding: 4px 18px;
+  }
+
+  .hej-copy {
+    color: #f2f2f2;
+    font-size: 16px;
+    line-height: 1.7;
+    margin-top: 42px;
+    max-width: 360px;
+    text-align: left;
+  }
+
+  .hej-form {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 50px 60px;
+  }
+
+  .hej-row {
+    align-items: end;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: 1fr auto;
+  }
+
+  .hej-field {
+    margin-bottom: 28px;
+  }
+
+  .hej-label {
+    color: #b9b9bb;
+    display: block;
+    font-size: 19px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .hej-input {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid #45474d;
+    border-radius: 0;
+    color: #fff;
+    font-size: 18px;
+    height: 48px;
+    outline: 0;
+    padding: 0;
+    width: 100%;
+  }
+
+  .hej-input:focus {
+    border-color: #81e4bd;
+    box-shadow: none;
+  }
+
+  .hej-inline-button {
+    background: transparent;
+    border: 0;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+    height: 48px;
+    padding: 0 0 8px;
+    white-space: nowrap;
+  }
+
+  .hej-inline-button:disabled {
+    color: #55575c;
+  }
+
+  .hej-check {
+    align-items: center;
+    color: #a9aaad;
+    display: flex;
+    font-size: 16px;
+    font-weight: 700;
+    gap: 12px;
+    margin-top: -8px;
+  }
+
+  .hej-check input {
+    accent-color: #81e4bd;
+    height: 24px;
+    width: 24px;
+  }
+
+  .hej-login {
+    background: #44464c;
+    border: 0;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 22px;
+    font-weight: 800;
+    margin-top: 52px;
+    min-height: 62px;
+    width: 100%;
+  }
+
+  .hej-login:disabled {
+    color: #77797e;
+  }
+
+  .hej-note {
+    color: #9b9c9f;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-top: 28px;
+  }
+
+  .hej-status {
+    border: 1px solid #3d7f62;
+    border-radius: 8px;
+    color: #d9fff0;
+    display: none;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-top: 24px;
+    padding: 14px 16px;
+  }
+
+  .hej-status.is-visible {
+    display: block;
+  }
+
+  .is-hidden {
+    display: none !important;
+  }
+
+  .hej-settings {
+    background: #202124;
+    color: #f4f4f5;
+    display: grid;
+    gap: 16px;
+    padding: 26px;
+  }
+
+  .hej-section {
+    background: #292b2f;
+    border: 1px solid #3b3d43;
+    border-radius: 8px;
+    padding: 22px;
+  }
+
+  .hej-section-head {
+    align-items: center;
+    display: flex;
+    gap: 14px;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .hej-section h1,
+  .hej-section h2,
+  .hej-section p {
+    letter-spacing: 0;
+    margin: 0;
+  }
+
+  .hej-section h1 {
+    font-size: 30px;
+  }
+
+  .hej-section h2 {
+    font-size: 18px;
+  }
+
+  .hej-muted {
+    color: #b9b9bb;
+    line-height: 1.6;
+  }
+
+  .hej-overview {
+    align-items: center;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: auto 1fr;
+  }
+
+  .hej-overview .hej-mark {
+    height: 58px;
+    margin: 0;
+    width: 58px;
+  }
+
+  .hej-overview .hej-smile {
+    border-bottom-width: 6px;
+    height: 22px;
+    width: 32px;
+  }
+
+  .hej-badge {
+    border: 1px solid #71747c;
+    border-radius: 999px;
+    color: #e4e4e7;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
+
+  .hej-badge.is-good {
+    border-color: #44c58a;
+    color: #aaf0cf;
+  }
+
+  .hej-badge.is-bad {
+    border-color: #e36a6a;
+    color: #ffb3b3;
+  }
+
+  .hej-badge.is-warn {
+    border-color: #d8b75d;
+    color: #ffe1a3;
+  }
+
+  .hej-action {
+    background: #7142cf;
+    border: 0;
+    border-radius: 8px;
+    color: #fff;
+    font-weight: 800;
+    min-height: 42px;
+    padding: 0 16px;
+  }
+
+  .hej-action.secondary {
+    background: #3a3c42;
+  }
+
+  .hej-stats {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 16px 0;
+  }
+
+  .hej-stat {
+    border: 1px solid #3d4047;
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .hej-stat strong {
+    display: block;
+    font-size: 28px;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .hej-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .hej-list-item {
+    align-items: center;
+    background: #202124;
+    border-radius: 8px;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    padding: 10px 12px;
+  }
+
+  .hej-code {
+    background: #18191c;
+    border: 1px solid #36383e;
+    border-radius: 8px;
+    color: #d9fff0;
+    font-size: 12px;
+    line-height: 1.5;
+    margin: 12px 0 0;
+    overflow: auto;
+    padding: 14px;
+    white-space: pre-wrap;
+  }
+
+  @media (max-width: 760px) {
+    .hej-shell {
+      grid-template-columns: 1fr;
+    }
+
+    .hej-brand,
+    .hej-form {
+      padding: 32px 24px;
+    }
+
+    .hej-row {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .hej-inline-button {
+      justify-self: start;
+    }
+
+    .hej-overview,
+    .hej-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .hej-section-head {
+      align-items: start;
+      flex-direction: column;
+    }
+  }
+</style>
+
+<div class="hej-shell is-hidden" id="loginView">
+  <section class="hej-brand" aria-label="Hejhome for Web">
+    <div class="hej-mark" aria-hidden="true">
+      <div class="hej-smile"></div>
+    </div>
+    <h1 class="hej-title">Hejhome</h1>
+    <span class="hej-pill">for Web</span>
+    <p class="hej-copy">
+      회원가입은 앱스토어나 플레이스토어에서 헤이홈 어플을 다운 받아 가능합니다.
+      헤이홈 for Web은 구글 크롬 브라우저 전용 서비스입니다.
+    </p>
+  </section>
+
+  <section class="hej-form" aria-label="Hejhome login">
+    <div class="hej-row">
+      <div class="hej-field">
+        <label class="hej-label" for="identifier">전화번호 or 이메일</label>
+        <input class="hej-input" id="identifier" autocomplete="username" inputmode="email">
+      </div>
+      <button class="hej-inline-button" id="sendCode" type="button">인증번호 전송</button>
+    </div>
+
+    <div class="hej-row">
+      <div class="hej-field">
+        <label class="hej-label" for="authCode">6자리 인증번호 입력</label>
+        <input class="hej-input" id="authCode" autocomplete="one-time-code" inputmode="numeric" maxlength="6" disabled>
+      </div>
+      <button class="hej-inline-button" id="verifyCode" type="button" disabled>확인</button>
+    </div>
+
+    <div class="hej-field">
+      <label class="hej-label" for="password">비밀번호</label>
+      <input class="hej-input" id="password" autocomplete="current-password" type="password" disabled>
+    </div>
+
+    <label class="hej-check" for="autoLogin">
+      <input id="autoLogin" type="checkbox" checked disabled>
+      자동 로그인
+    </label>
+
+    <button class="hej-login" id="login" type="button" disabled>로그인</button>
+
+    <p class="hej-note">
+      인증 토큰은 Homebridge storage 하위에 저장되며 비밀번호는 저장하지 않습니다.
+      자동 로그인은 Hejhome Web 세션을 가능한 오래 유지하기 위해 항상 활성화됩니다.
+    </p>
+    <p class="hej-status" id="loginStatus" role="status"></p>
+  </section>
+</div>
+
+<div class="hej-settings is-hidden" id="settingsView" aria-live="polite">
+  <section class="hej-section hej-overview" aria-label="Hejhome plugin overview">
+    <div class="hej-mark" aria-hidden="true">
+      <div class="hej-smile"></div>
+    </div>
+    <div>
+      <h1>Hejhome 설정</h1>
+      <p class="hej-muted">
+        Hejhome Web 세션을 Homebridge storage에 보관하고, 발견된 장비를 HomeKit 액세서리로 동기화합니다.
+      </p>
+    </div>
+  </section>
+
+  <section class="hej-section" aria-label="Hejhome session status">
+    <div class="hej-section-head">
+      <h2>세션 상태</h2>
+      <span class="hej-badge" id="sessionBadge">확인 중</span>
+    </div>
+    <p class="hej-muted" id="sessionDescription">저장된 세션을 확인하고 있습니다.</p>
+    <button class="hej-action secondary is-hidden" id="relogin" type="button">다시 로그인</button>
+  </section>
+
+  <section class="hej-section" aria-label="Hejhome device support">
+    <div class="hej-section-head">
+      <h2>장비 및 지원 현황</h2>
+      <span class="hej-badge" id="snapshotBadge">스냅샷 대기</span>
+    </div>
+    <div class="hej-stats">
+      <div class="hej-stat">
+        <strong id="registeredCount">0</strong>
+        <span class="hej-muted">등록된 장비</span>
+      </div>
+      <div class="hej-stat">
+        <strong id="supportedCount">0</strong>
+        <span class="hej-muted">지원 가능</span>
+      </div>
+      <div class="hej-stat">
+        <strong id="unsupportedCount">0</strong>
+        <span class="hej-muted">미지원 제품</span>
+      </div>
+    </div>
+
+    <h2>지원 모델</h2>
+    <div class="hej-list" id="supportedModels"></div>
+
+    <h2 style="margin-top: 20px;">미지원 제품</h2>
+    <div class="hej-list" id="unsupportedProducts"></div>
+
+    <h2 style="margin-top: 20px;">GitHub 이슈 템플릿</h2>
+    <p class="hej-muted">미지원 제품이 있으면 아래 내용을 이슈에 첨부하면 모델 매핑을 추가하기 쉽습니다.</p>
+    <pre class="hej-code" id="issueTemplate"></pre>
+  </section>
+</div>
+
+<script>
+(() => {
+	  const identifier = document.getElementById('identifier');
+	  const authCode = document.getElementById('authCode');
+	  const password = document.getElementById('password');
+	  const sendCode = document.getElementById('sendCode');
+	  const verifyCode = document.getElementById('verifyCode');
+	  const login = document.getElementById('login');
+	  const loginStatus = document.getElementById('loginStatus');
+	  const loginView = document.getElementById('loginView');
+	  const settingsView = document.getElementById('settingsView');
+	  const sessionBadge = document.getElementById('sessionBadge');
+	  const sessionDescription = document.getElementById('sessionDescription');
+	  const relogin = document.getElementById('relogin');
+	  const snapshotBadge = document.getElementById('snapshotBadge');
+	  const registeredCount = document.getElementById('registeredCount');
+	  const supportedCount = document.getElementById('supportedCount');
+	  const unsupportedCount = document.getElementById('unsupportedCount');
+	  const supportedModels = document.getElementById('supportedModels');
+	  const unsupportedProducts = document.getElementById('unsupportedProducts');
+	  const issueTemplate = document.getElementById('issueTemplate');
+  let busy = false;
+  let loginCompleted = false;
+  let verificationSent = false;
+  let verified = false;
+
+  function updateControls() {
+    if (loginCompleted) {
+      identifier.disabled = true;
+      authCode.disabled = true;
+      password.disabled = true;
+      sendCode.disabled = true;
+      verifyCode.disabled = true;
+      login.disabled = true;
+      return;
+    }
+
+    const hasIdentifier = identifier.value.trim().length > 0;
+    const hasSixDigitCode = /^\d{6}$/.test(authCode.value.trim());
+    const hasPassword = password.value.length > 0;
+
+    sendCode.disabled = busy || !hasIdentifier;
+    authCode.disabled = busy || !verificationSent || verified;
+    verifyCode.disabled = busy || verified || !verificationSent || !hasSixDigitCode;
+    password.disabled = busy || !verified;
+    login.disabled = busy || !verified || !hasPassword;
+  }
+
+  function resetVerification() {
+    if (busy) {
+      return;
+    }
+    verificationSent = false;
+    verified = false;
+    authCode.value = '';
+    password.value = '';
+    updateControls();
+  }
+
+  async function withSpinner(action, fn) {
+    if (busy || loginCompleted) {
+      logUiEvent(`${action}.ignored`, { reason: 'busy-or-completed' });
+      return;
+    }
+
+    try {
+      busy = true;
+      updateControls();
+      window.homebridge?.showSpinner?.();
+      await fn();
+    } finally {
+      window.homebridge?.hideSpinner?.();
+      busy = false;
+      updateControls();
+    }
+  }
+
+  function nowMs() {
+    return Math.round(performance.now());
+  }
+
+  function logUiEvent(event, data = {}) {
+    return window.homebridge?.request?.('/ui-event', {
+      event,
+      atMs: nowMs(),
+      ...data,
+    }).catch(() => undefined);
+  }
+
+  function requestWithTimeout(path, body, timeoutMs, label) {
+    let timer;
+    const request = window.homebridge.request(path, body);
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`${label} 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.`));
+      }, timeoutMs);
+    });
+
+    return Promise.race([request, timeout]).finally(() => clearTimeout(timer));
+  }
+
+	  function handleError(event, error) {
+	    logUiEvent(`${event}.error`, { message: error.message });
+	    window.homebridge.toast.error(error.message);
+	  }
+
+	  function showLoginView() {
+	    settingsView.classList.add('is-hidden');
+	    loginView.classList.remove('is-hidden');
+	    loginCompleted = false;
+	    updateControls();
+	    window.homebridge?.fixScrollHeight?.();
+	  }
+
+	  function showSettingsView(status) {
+	    loginView.classList.add('is-hidden');
+	    settingsView.classList.remove('is-hidden');
+	    renderSessionStatus(status);
+	    renderDeviceStatus(status);
+	    window.homebridge?.fixScrollHeight?.();
+	  }
+
+	  function renderSessionStatus(status) {
+	    sessionBadge.className = 'hej-badge';
+	    relogin.classList.add('is-hidden');
+
+	    if (status.sessionValid) {
+	      sessionBadge.textContent = '세션 유효함';
+	      sessionBadge.classList.add('is-good');
+	      sessionDescription.textContent = `현재 세션은 유효합니다. 만료 예정: ${status.expiresAtIso ?? '확인 불가'}. 권장 재로그인 시각: ${status.refreshRecommendedAtIso ?? '확인 불가'}.`;
+	      return;
+	    }
+
+	    if (status.sessionCheckStatus === 'error') {
+	      sessionBadge.textContent = '상태 확인 실패';
+	      sessionBadge.classList.add('is-warn');
+	      sessionDescription.textContent = '저장된 세션을 확인하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 열거나 필요한 경우 다시 로그인하세요.';
+	    } else {
+	      sessionBadge.textContent = '다시 로그인 필요';
+	      sessionBadge.classList.add('is-bad');
+	      sessionDescription.textContent = '저장된 세션이 만료되었거나 Hejhome Web에서 거부되었습니다. 다시 로그인하면 Homebridge가 새 세션으로 장비 동기화를 재시도합니다.';
+	    }
+	    relogin.classList.remove('is-hidden');
+	  }
+
+	  function renderDeviceStatus(status) {
+	    const summary = status.deviceSummary ?? {};
+	    registeredCount.textContent = String(summary.registeredCount ?? 0);
+	    supportedCount.textContent = String(summary.supportedCount ?? 0);
+	    unsupportedCount.textContent = String(summary.unsupportedCount ?? 0);
+	    snapshotBadge.textContent = summary.generatedAt ? `스냅샷 ${summary.generatedAt}` : '스냅샷 없음';
+
+	    replaceList(supportedModels, status.supportedModels ?? [], (model) => {
+	      const item = document.createElement('div');
+	      item.className = 'hej-list-item';
+	      const label = document.createElement('span');
+	      label.textContent = `${model.deviceType} · ${model.label}`;
+	      const service = document.createElement('span');
+	      service.className = 'hej-badge';
+	      service.textContent = model.homeKitService;
+	      item.append(label, service);
+	      return item;
+	    }, '지원 모델 정보가 없습니다.');
+
+	    replaceList(unsupportedProducts, summary.unsupportedProducts ?? [], (product) => {
+	      const item = document.createElement('div');
+	      item.className = 'hej-list-item';
+	      const label = document.createElement('span');
+	      label.textContent = `${product.deviceType}${product.modelName ? ` · ${product.modelName}` : ''}`;
+	      const count = document.createElement('span');
+	      count.className = 'hej-badge is-warn';
+	      count.textContent = `${product.count}`;
+	      item.append(label, count);
+	      return item;
+	    }, '감지된 미지원 제품이 없습니다.');
+
+	    const template = status.issueTemplate;
+	    issueTemplate.textContent = template ? `${template.title}\n\n${template.body}` : '';
+	  }
+
+	  function replaceList(container, items, renderItem, emptyText) {
+	    container.replaceChildren();
+	    if (!items.length) {
+	      const empty = document.createElement('p');
+	      empty.className = 'hej-muted';
+	      empty.textContent = emptyText;
+	      container.append(empty);
+	      return;
+	    }
+	    for (const item of items) {
+	      container.append(renderItem(item));
+	    }
+	  }
+
+	  async function initializeUi() {
+	    await logUiEvent('login-ui.opened', { autoLoginForced: true });
+	    try {
+	      const status = await requestWithTimeout('/session-status', {}, 10000, '세션 상태 확인');
+	      if (status?.configured) {
+	        showSettingsView(status);
+	        return;
+	      }
+	      showLoginView();
+	    } catch (error) {
+	      await logUiEvent('session-status.error', { message: error.message });
+	      showLoginView();
+	    }
+	  }
+
+  function setLoginCompleted() {
+    loginCompleted = true;
+    updateControls();
+	    loginStatus.textContent = '로그인이 저장되었습니다. Homebridge가 저장된 세션으로 장비 스냅샷을 만들고 액세서리 동기화를 시작합니다.';
+	    loginStatus.classList.add('is-visible');
+	    window.homebridge?.fixScrollHeight?.();
+	  }
+
+  sendCode.addEventListener('click', () => withSpinner('send-verification', async () => {
+    logUiEvent('send-verification.click');
+    resetVerification();
+    await requestWithTimeout('/send-verification', { identifier: identifier.value.trim() }, 15000, '인증번호 전송');
+    logUiEvent('send-verification.success');
+    verificationSent = true;
+    updateControls();
+    authCode.focus();
+    window.homebridge.toast.success('인증번호를 전송했습니다.');
+  }).catch((error) => handleError('send-verification', error)));
+
+  verifyCode.addEventListener('click', () => withSpinner('verify-code', async () => {
+    if (verified) {
+      logUiEvent('verify-code.ignored', { reason: 'already-verified' });
+      return;
+    }
+    logUiEvent('verify-code.click', { authCodeLength: authCode.value.trim().length });
+    await requestWithTimeout('/verify-code', {
+      identifier: identifier.value.trim(),
+      authCode: authCode.value.trim(),
+    }, 15000, '인증번호 확인');
+    logUiEvent('verify-code.success');
+    verified = true;
+    updateControls();
+    password.focus();
+    window.homebridge.toast.success('인증번호가 확인되었습니다.');
+  }).catch((error) => handleError('verify-code', error)));
+
+	  login.addEventListener('click', () => withSpinner('login', async () => {
+    if (!verified) {
+      window.homebridge.toast.error('이메일 인증을 먼저 완료해야 합니다.');
+      return;
+    }
+    const startedAt = nowMs();
+    logUiEvent('login.click', { passwordPresent: password.value.length > 0 });
+    const result = await requestWithTimeout('/login', {
+      identifier: identifier.value.trim(),
+      password: password.value,
+      autoLogin: true,
+	    }, 45000, '로그인');
+	    logUiEvent('login.success', { durationMs: nowMs() - startedAt, expiresAt: result.expiresAt });
+	    window.homebridge.toast.success('Hejhome 로그인이 저장되었습니다.');
+	    logUiEvent('config-marker.save.skipped', { reason: 'session is stored outside config.json' });
+	    const status = await requestWithTimeout('/session-status', {}, 10000, '세션 상태 확인');
+	    if (status?.configured) {
+	      showSettingsView(status);
+	    } else {
+	      setLoginCompleted();
+	    }
+	    window.homebridge.hideSpinner();
+	  }).catch((error) => handleError('login', error)));
+
+	  relogin.addEventListener('click', () => {
+	    logUiEvent('relogin.click');
+	    showLoginView();
+	    identifier.focus();
+	  });
+
+	  identifier.addEventListener('input', resetVerification);
+  authCode.addEventListener('input', updateControls);
+  password.addEventListener('input', updateControls);
+  updateControls();
+  void initializeUi();
+})();
+</script>

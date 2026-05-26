@@ -2,51 +2,42 @@
   "pluginAlias": "Hejhome",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "<p align='center'><img height='100px' src='https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/logo.png'></p>\n\nThe **Hejhome** plugin allows you to control Hejhome Devices. \n\nTo get started link your Hejhome account.\n\n1. Download Hejhome App on App Store or Google Play Store.\n\n2. Register a Hejhome account and log in into your account.\n\n3. Input your `Email` and `Password` into the parameters below.",
-  "footerDisplay": "Please raise any issues on our [project page](https://github.com/chazepps/homebridge-hejhome/issues).\n\nIf you would like to have other Hejhome Devices added to this plugin fill out [Feature Request Form](https://github.com/chazepps/homebridge-hejhome/issues/new?assignees=&labels=&template=feature-request.md).\n\n[Hejhome Website](https://hej.life/)",
+  "customUi": true,
+  "customUiPath": "./homebridge-ui",
+  "strictValidation": true,
   "schema": {
     "type": "object",
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false,
     "properties": {
       "name": {
-        "type": "string",
         "title": "Name",
+        "type": "string",
         "default": "Hejhome"
       },
-      "credentials": {
+      "auth": {
+        "title": "Hejhome Login State",
         "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "email": {
-            "title": "Email",
-            "type": "string",
-            "x-schema-form": {
-              "type": "email"
-            }
+          "identifier": {
+            "title": "전화번호 or 이메일",
+            "type": "string"
           },
-          "password": {
-            "title": "Password",
-            "type": "string",
-            "x-schema-form": {
-              "type": "password"
-            }
+          "sessionConfigured": {
+            "title": "Session Configured",
+            "type": "boolean",
+            "default": false
           }
-        },
-        "required": [
-          "email",
-          "password"
-        ]
+        }
+      },
+      "debug": {
+        "title": "Debug Logging",
+        "type": "boolean",
+        "default": false
       }
     }
-  },
-  "layout": [
-    {
-      "type": "fieldset",
-      "title": "Hejhome Account Info",
-      "expandable": true,
-      "expanded": false,
-      "items": [
-        "credentials.email",
-        "credentials.password"
-      ]
-    }
-  ]
+  }
 }

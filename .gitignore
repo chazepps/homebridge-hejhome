@@ -1,5 +1,6 @@
 # Ignore compiled code
 dist
+.DS_Store
 
 # ------------- Defaults ------------- #
 
@@ -69,6 +70,23 @@ web_modules/
 
 # Output of 'npm pack'
 *.tgz
+
+# Playwright output
+test-results/
+playwright-report/
+.playwright-mcp/
+homebridge-hejhome-dashboard.png
+
+# Homebridge local runtime state
+test/hbConfig/accessories/
+test/hbConfig/persist/
+test/hbConfig/.uix-*
+test/hbConfig/auth.json
+test/hbConfig/backups/
+test/hbConfig/hejhome/
+test/hbConfig/homebridge-ui.*
+test/hbConfig/matter/
+test/plugins/
 
 # Yarn Integrity file
 .yarn-integrity

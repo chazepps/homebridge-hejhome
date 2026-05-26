@@ -1,88 +1,74 @@
 {
-  "name": "@chazepps/homebridge-hejhome",
-  "version": "1.1.1",
-  "description": "The Hejhome plugin allows you to access your Hejhome device(s) from HomeKit.",
-  "author": {
-    "name": "Chaz",
-    "email": "chaz.epps@gmail.com",
-    "url": "https://github.com/chazepps"
-  },
-  "contributors": [
-    {
-      "name": "Chaz",
-      "url": "https://github.com/chazepps"
-    }
-  ],
+  "name": "homebridge-hejhome",
+  "displayName": "Hejhome",
+  "version": "2.0.0",
+  "private": false,
+  "description": "Homebridge dynamic platform plugin for Hejhome devices.",
+  "author": "Chaz",
   "license": "ISC",
+  "homepage": "https://github.com/chazepps/homebridge-hejhome#readme",
   "repository": {
     "type": "git",
-    "url": "git://github.com/chazepps/homebridge-hejhome.git"
+    "url": "https://github.com/chazepps/homebridge-hejhome.git"
   },
   "bugs": {
     "url": "https://github.com/chazepps/homebridge-hejhome/issues"
   },
-  "funding": [
-    {
-      "type": "github",
-      "url": "https://github.com/sponsors/chazepps"
-    }
-  ],
-  "homepage": "https://github.com/chazepps/homebridge-hejhome#readme",
   "keywords": [
     "homebridge-plugin",
+    "homebridge",
     "hejhome",
-    "hub",
-    "lightstrip",
-    "lights",
-    "motion",
-    "outlet",
-    "헤이홈"
+    "hej",
+    "smart-home",
+    "homekit"
   ],
-  "icon": "https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/icon.png",
   "main": "dist/index.js",
   "type": "module",
+  "files": [
+    "dist",
+    "homebridge-ui",
+    "config.schema.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0",
+    "homebridge": "^1.8.0 || ^2.0.0"
+  },
   "scripts": {
     "build": "rimraf ./dist && tsc",
-    "lint": "eslint src/**/*.ts --max-warnings=0",
-    "prepublishOnly": "npm run lint && npm run build",
+    "docs:generate": "node tools/docs/generate-project-structure.mjs",
+    "docs:check": "node tools/docs/inventory-doc-harness.mjs --check && node tools/docs/validate-doc-harness.mjs && node tools/docs/generate-project-structure.mjs --check",
+    "homebridge:dev": "homebridge -P . --strict-plugin-resolution -U ./test/hbConfig -D -Q",
+    "homebridge:ui": "node tools/homebridge/run-dev-ui.mjs",
+    "homebridge:ui:tmux": "tmux kill-session -t homebridge-hejhome 2>/dev/null || true; tmux new-session -d -s homebridge-hejhome -c \"$PWD\" 'unset npm_config_prefix; export NVM_DIR=\"$HOME/.nvm\"; if [ -s \"$NVM_DIR/nvm.sh\" ]; then . \"$NVM_DIR/nvm.sh\" && nvm use --silent >/dev/null; fi; npm run build && npm run homebridge:ui'",
+    "homebridge:ui:stop": "tmux kill-session -t homebridge-hejhome",
+    "lint": "eslint . --max-warnings=0",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run test:ui && npm run build && npm run docs:check",
+    "test": "vitest run",
+    "test:ui": "playwright test",
+    "typecheck": "tsc --noEmit",
     "watch": "npm run build && npm link && nodemon"
   },
-  "engines": {
-    "homebridge": "^1.6.0 || ^2.0.0-beta.0",
-    "node": "^18.20.4 || ^20.15.1"
-  },
-  "engineStrict": true,
-  "displayName": "Hejhome",
-  "publishConfig": {
-    "access": "public"
-  },
   "dependencies": {
-    "bluebird": "3.7.2",
-    "deepmerge": "4.3.1",
-    "json-stringify-safe": "^5.0.1",
-    "ky": "1.5.0",
-    "lodash": "4.17.21",
-    "paho-mqtt": "1.1.0",
-    "uuid": "10.0.0",
-    "validator": "13.12.0",
-    "ws": "8.18.0"
+    "@homebridge/plugin-ui-utils": "^2.2.3",
+    "mqtt": "^5.15.1"
   },
   "devDependencies": {
-    "@types/bluebird": "3.5.42",
-    "@types/json-stringify-safe": "^5.0.3",
-    "@types/lodash": "4.17.7",
-    "@types/node": "20.14.12",
-    "@types/paho-mqtt": "1.0.10",
-    "@types/uuid": "10.0.0",
-    "@types/validator": "13.12.0",
-    "@types/ws": "8.5.12",
-    "@typescript-eslint/eslint-plugin": "7.17.0",
-    "@typescript-eslint/parser": "7.17.0",
-    "eslint": "8.57.0",
-    "homebridge": "2.0.0-beta.0",
-    "nodemon": "3.1.4",
-    "rimraf": "6.0.1",
-    "ts-node": "10.9.2",
-    "typescript": "5.5.4"
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^24.12.4",
+    "eslint": "^10.4.0",
+    "homebridge": "^2.0.2",
+    "homebridge-config-ui-x": "^5.23.0",
+    "nodemon": "^3.1.14",
+    "rimraf": "^6.1.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
+    "vitest": "^4.1.7"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
