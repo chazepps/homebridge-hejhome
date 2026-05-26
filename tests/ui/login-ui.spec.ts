@@ -121,6 +121,7 @@ test('custom config UI shows the settings dashboard instead of the login form fo
             },
             supportedModels: [
               { deviceType: 'LightRgbw5', label: 'RGBW 조명', homeKitService: 'Lightbulb' },
+              { deviceType: 'LedStripRgbw2', label: 'LED 스트립', homeKitService: 'Lightbulb' },
               { deviceType: 'RelayController', label: '릴레이 컨트롤러', homeKitService: 'Switch' },
             ],
             issueTemplate: {
@@ -147,13 +148,22 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/session-status');
 
   await expect(page.getByRole('heading', { name: 'Hejhome 설정' })).toBeVisible();
-  await expect(page.getByText('세션 유효함')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '로그인 상태' })).toBeVisible();
+  await expect(page.getByText('로그인 정상')).toBeVisible();
+  await expect(page.getByText('현재 로그인은 정상입니다. 만료 예정: 2026-06-21 21:41:31 (KST). 권장 재로그인 시각: 2026-06-20 21:41:31 (KST).')).toBeVisible();
   await expect(page.getByText('등록된 장비')).toBeVisible();
   await expect(page.getByText('7')).toBeVisible();
   await expect(page.getByText('UnknownHeater · Warm Box')).toBeVisible();
   await expect(page.getByText('LightRgbw5')).toBeVisible();
+  await expect(page.getByText('LedStripRgbw2')).toBeVisible();
   await expect(page.getByText('RelayController')).toBeVisible();
+  await expect(page.getByText('구현 중')).toHaveCount(2);
+  await expect(page.getByText('전구')).toHaveCount(2);
+  await expect(page.getByText('스위치')).toBeVisible();
   await expect(page.getByText('[Unsupported Device] UnknownHeater / Warm Box')).toBeVisible();
+  await expect(page.getByText('세션')).toHaveCount(0);
+  await expect(page.getByText('Lightbulb')).toHaveCount(0);
+  await expect(page.getByText('Switch')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '로그인' })).toBeHidden();
 });
 

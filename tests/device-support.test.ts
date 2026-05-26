@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 
-import { createDeviceSupportSummary, SUPPORTED_DEVICE_MODELS } from '../src/utils/deviceSupport.js';
+import {
+  createDeviceSupportSummary,
+  createUnsupportedDeviceIssueTemplate,
+  SUPPORTED_DEVICE_MODELS,
+} from '../src/utils/deviceSupport.js';
 import type { HejDeviceSnapshot } from '../src/storage/deviceSnapshotStore.js';
 
 describe('device support summary', () => {
@@ -38,6 +42,29 @@ describe('device support summary', () => {
     });
     expect(SUPPORTED_DEVICE_MODELS.map((model) => model.deviceType)).toContain('LightRgbw5');
     expect(SUPPORTED_DEVICE_MODELS.map((model) => model.deviceType)).toContain('RelayController');
+  });
+
+  test('builds a readable Korean support request template with KST dates', () => {
+    const template = createUnsupportedDeviceIssueTemplate({
+      generatedAt: '2026-05-26T01:00:00.000Z',
+      registeredCount: 3,
+      supportedCount: 2,
+      unsupportedCount: 1,
+      unsupportedProducts: [
+        {
+          deviceType: 'UnknownHeater',
+          modelName: 'Warm Box',
+          count: 1,
+        },
+      ],
+    });
+
+    expect(template.title).toBe('[Unsupported Device] UnknownHeater / Warm Box');
+    expect(template.body).toContain('## 아직 지원하지 않는 Hejhome 제품');
+    expect(template.body).toContain('## Home 앱에서 기대하는 동작');
+    expect(template.body).toContain('- 등록된 장비 수: 3');
+    expect(template.body).toContain('- 장비 목록 생성 시각: 2026-05-26 10:00:00 (KST)');
+    expect(template.body).not.toContain('2026-05-26T01:00:00.000Z');
   });
 });
 

@@ -407,10 +407,10 @@
 
     <button class="hej-login" id="login" type="button" disabled>로그인</button>
 
-    <p class="hej-note">
-      인증 토큰은 Homebridge storage 하위에 저장되며 비밀번호는 저장하지 않습니다.
-      자동 로그인은 Hejhome Web 세션을 가능한 오래 유지하기 위해 항상 활성화됩니다.
-    </p>
+	  <p class="hej-note">
+	      로그인 정보는 Homebridge 저장 공간에 저장되며 비밀번호는 저장하지 않습니다.
+	      자동 로그인은 오래 로그인된 상태를 유지하기 위해 항상 켜집니다.
+	    </p>
     <p class="hej-status" id="loginStatus" role="status"></p>
   </section>
 </div>
@@ -421,26 +421,26 @@
       <div class="hej-smile"></div>
     </div>
     <div>
-      <h1>Hejhome 설정</h1>
-      <p class="hej-muted">
-        Hejhome Web 세션을 Homebridge storage에 보관하고, 발견된 장비를 HomeKit 액세서리로 동기화합니다.
-      </p>
-    </div>
-  </section>
+	      <h1>Hejhome 설정</h1>
+	      <p class="hej-muted">
+	        Hejhome Web 로그인 정보를 Homebridge 저장 공간에 보관하고, 발견한 장비를 Home 앱에 보여줍니다.
+	      </p>
+	    </div>
+	  </section>
 
-  <section class="hej-section" aria-label="Hejhome session status">
-    <div class="hej-section-head">
-      <h2>세션 상태</h2>
-      <span class="hej-badge" id="sessionBadge">확인 중</span>
-    </div>
-    <p class="hej-muted" id="sessionDescription">저장된 세션을 확인하고 있습니다.</p>
-    <button class="hej-action secondary is-hidden" id="relogin" type="button">다시 로그인</button>
-  </section>
+	  <section class="hej-section" aria-label="Hejhome login status">
+	    <div class="hej-section-head">
+	      <h2>로그인 상태</h2>
+	      <span class="hej-badge" id="sessionBadge">확인 중</span>
+	    </div>
+	    <p class="hej-muted" id="sessionDescription">저장된 로그인 정보를 확인하고 있습니다.</p>
+	    <button class="hej-action secondary is-hidden" id="relogin" type="button">다시 로그인</button>
+	  </section>
 
   <section class="hej-section" aria-label="Hejhome device support">
     <div class="hej-section-head">
       <h2>장비 및 지원 현황</h2>
-      <span class="hej-badge" id="snapshotBadge">스냅샷 대기</span>
+	      <span class="hej-badge" id="snapshotBadge">장비 목록 대기</span>
     </div>
     <div class="hej-stats">
       <div class="hej-stat">
@@ -453,25 +453,31 @@
       </div>
       <div class="hej-stat">
         <strong id="unsupportedCount">0</strong>
-        <span class="hej-muted">미지원 제품</span>
+	        <span class="hej-muted">아직 지원하지 않는 제품</span>
       </div>
     </div>
 
-    <h2>지원 모델</h2>
-    <div class="hej-list" id="supportedModels"></div>
+	    <h2>사용할 수 있는 모델</h2>
+	    <div class="hej-list" id="supportedModels"></div>
 
-    <h2 style="margin-top: 20px;">미지원 제품</h2>
-    <div class="hej-list" id="unsupportedProducts"></div>
+	    <h2 style="margin-top: 20px;">아직 지원하지 않는 제품</h2>
+	    <div class="hej-list" id="unsupportedProducts"></div>
 
-    <h2 style="margin-top: 20px;">GitHub 이슈 템플릿</h2>
-    <p class="hej-muted">미지원 제품이 있으면 아래 내용을 이슈에 첨부하면 모델 매핑을 추가하기 쉽습니다.</p>
+	    <h2 style="margin-top: 20px;">지원 요청용 GitHub 글</h2>
+	    <p class="hej-muted">아직 지원하지 않는 제품이 있으면 아래 내용을 GitHub 이슈에 붙여 주세요. 모델을 추가할 때 필요합니다.</p>
     <pre class="hej-code" id="issueTemplate"></pre>
   </section>
 </div>
 
 <script>
-(() => {
-	  const identifier = document.getElementById('identifier');
+  (() => {
+	  const IN_PROGRESS_DEVICE_TYPES = new Set(['LightRgbw5', 'LedStripRgbw2']);
+	  const HOMEKIT_SERVICE_LABELS = {
+	    Lightbulb: '전구',
+	    Switch: '스위치',
+	  };
+
+		  const identifier = document.getElementById('identifier');
 	  const authCode = document.getElementById('authCode');
 	  const password = document.getElementById('password');
 	  const sendCode = document.getElementById('sendCode');
@@ -591,47 +597,53 @@
 	    window.homebridge?.fixScrollHeight?.();
 	  }
 
-	  function renderSessionStatus(status) {
-	    sessionBadge.className = 'hej-badge';
-	    relogin.classList.add('is-hidden');
+		  function renderSessionStatus(status) {
+		    sessionBadge.className = 'hej-badge';
+		    relogin.classList.add('is-hidden');
 
-	    if (status.sessionValid) {
-	      sessionBadge.textContent = '세션 유효함';
-	      sessionBadge.classList.add('is-good');
-	      sessionDescription.textContent = `현재 세션은 유효합니다. 만료 예정: ${status.expiresAtIso ?? '확인 불가'}. 권장 재로그인 시각: ${status.refreshRecommendedAtIso ?? '확인 불가'}.`;
-	      return;
-	    }
+		    if (status.sessionValid) {
+		      sessionBadge.textContent = '로그인 정상';
+		      sessionBadge.classList.add('is-good');
+		      sessionDescription.textContent = `현재 로그인은 정상입니다. 만료 예정: ${formatKstDateTime(status.expiresAtIso)}. 권장 재로그인 시각: ${formatKstDateTime(status.refreshRecommendedAtIso)}.`;
+		      return;
+		    }
 
-	    if (status.sessionCheckStatus === 'error') {
-	      sessionBadge.textContent = '상태 확인 실패';
-	      sessionBadge.classList.add('is-warn');
-	      sessionDescription.textContent = '저장된 세션을 확인하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 열거나 필요한 경우 다시 로그인하세요.';
-	    } else {
-	      sessionBadge.textContent = '다시 로그인 필요';
-	      sessionBadge.classList.add('is-bad');
-	      sessionDescription.textContent = '저장된 세션이 만료되었거나 Hejhome Web에서 거부되었습니다. 다시 로그인하면 Homebridge가 새 세션으로 장비 동기화를 재시도합니다.';
-	    }
-	    relogin.classList.remove('is-hidden');
-	  }
+		    if (status.sessionCheckStatus === 'error') {
+		      sessionBadge.textContent = '로그인 상태 확인 실패';
+		      sessionBadge.classList.add('is-warn');
+		      sessionDescription.textContent = '저장된 로그인 정보를 확인하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 열거나 필요한 경우 다시 로그인하세요.';
+		    } else {
+		      sessionBadge.textContent = '다시 로그인 필요';
+		      sessionBadge.classList.add('is-bad');
+		      sessionDescription.textContent = '저장된 로그인 정보가 만료되었거나 Hejhome Web에서 거부되었습니다. 다시 로그인하면 Homebridge가 장비를 다시 불러옵니다.';
+		    }
+		    relogin.classList.remove('is-hidden');
+		  }
 
 	  function renderDeviceStatus(status) {
 	    const summary = status.deviceSummary ?? {};
-	    registeredCount.textContent = String(summary.registeredCount ?? 0);
-	    supportedCount.textContent = String(summary.supportedCount ?? 0);
-	    unsupportedCount.textContent = String(summary.unsupportedCount ?? 0);
-	    snapshotBadge.textContent = summary.generatedAt ? `스냅샷 ${summary.generatedAt}` : '스냅샷 없음';
+		    registeredCount.textContent = String(summary.registeredCount ?? 0);
+		    supportedCount.textContent = String(summary.supportedCount ?? 0);
+		    unsupportedCount.textContent = String(summary.unsupportedCount ?? 0);
+		    snapshotBadge.textContent = summary.generatedAt ? `장비 목록 ${formatKstDateTime(summary.generatedAt)}` : '장비 목록 없음';
 
 	    replaceList(supportedModels, status.supportedModels ?? [], (model) => {
 	      const item = document.createElement('div');
 	      item.className = 'hej-list-item';
 	      const label = document.createElement('span');
 	      label.textContent = `${model.deviceType} · ${model.label}`;
-	      const service = document.createElement('span');
-	      service.className = 'hej-badge';
-	      service.textContent = model.homeKitService;
-	      item.append(label, service);
-	      return item;
-	    }, '지원 모델 정보가 없습니다.');
+		      const service = document.createElement('span');
+		      service.className = 'hej-badge';
+		      service.textContent = formatHomeKitService(model.homeKitService);
+		      item.append(label, service);
+		      if (IN_PROGRESS_DEVICE_TYPES.has(model.deviceType)) {
+		        const status = document.createElement('span');
+		        status.className = 'hej-badge is-warn';
+		        status.textContent = '구현 중';
+		        item.append(status);
+		      }
+		      return item;
+		    }, '사용할 수 있는 모델 정보가 없습니다.');
 
 	    replaceList(unsupportedProducts, summary.unsupportedProducts ?? [], (product) => {
 	      const item = document.createElement('div');
@@ -663,10 +675,32 @@
 	    }
 	  }
 
+	  function formatHomeKitService(service) {
+	    return HOMEKIT_SERVICE_LABELS[service] ?? service ?? '알 수 없음';
+	  }
+
+	  function formatKstDateTime(value) {
+	    if (!value) {
+	      return '확인 불가';
+	    }
+	    const timeMs = Date.parse(value);
+	    if (Number.isNaN(timeMs)) {
+	      return '확인 불가';
+	    }
+	    const kst = new Date(timeMs + (9 * 60 * 60 * 1000));
+	    const year = String(kst.getUTCFullYear()).padStart(4, '0');
+	    const month = String(kst.getUTCMonth() + 1).padStart(2, '0');
+	    const day = String(kst.getUTCDate()).padStart(2, '0');
+	    const hours = String(kst.getUTCHours()).padStart(2, '0');
+	    const minutes = String(kst.getUTCMinutes()).padStart(2, '0');
+	    const seconds = String(kst.getUTCSeconds()).padStart(2, '0');
+	    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} (KST)`;
+	  }
+
 	  async function initializeUi() {
 	    await logUiEvent('login-ui.opened', { autoLoginForced: true });
 	    try {
-	      const status = await requestWithTimeout('/session-status', {}, 10000, '세션 상태 확인');
+	      const status = await requestWithTimeout('/session-status', {}, 10000, '로그인 상태 확인');
 	      if (status?.configured) {
 	        showSettingsView(status);
 	        return;
@@ -681,7 +715,7 @@
   function setLoginCompleted() {
     loginCompleted = true;
     updateControls();
-	    loginStatus.textContent = '로그인이 저장되었습니다. Homebridge가 저장된 세션으로 장비 스냅샷을 만들고 액세서리 동기화를 시작합니다.';
+	    loginStatus.textContent = '로그인이 저장되었습니다. Homebridge가 저장된 로그인 정보로 장비 목록을 만들고 Home 앱 장비를 준비합니다.';
 	    loginStatus.classList.add('is-visible');
 	    window.homebridge?.fixScrollHeight?.();
 	  }
@@ -729,7 +763,7 @@
 	    logUiEvent('login.success', { durationMs: nowMs() - startedAt, expiresAt: result.expiresAt });
 	    window.homebridge.toast.success('Hejhome 로그인이 저장되었습니다.');
 	    logUiEvent('config-marker.save.skipped', { reason: 'session is stored outside config.json' });
-	    const status = await requestWithTimeout('/session-status', {}, 10000, '세션 상태 확인');
+	    const status = await requestWithTimeout('/session-status', {}, 10000, '로그인 상태 확인');
 	    if (status?.configured) {
 	      showSettingsView(status);
 	    } else {
