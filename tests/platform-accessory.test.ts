@@ -98,6 +98,110 @@ describe('HejhomePlatformAccessory', () => {
       value: true,
     });
   });
+
+  test('exposes white lights with brightness and color temperature controls', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('전구 (WW)', 'uuid:white-1', platform);
+    const client = createClientMock();
+    const device = deviceFixture({
+      id: 'white-1',
+      name: '전구 (WW)',
+      deviceType: 'LightWw3',
+      modelName: 'GKW-LB031-WW',
+      deviceState: {
+        power: true,
+        brightness: 75,
+        temperature: 100,
+      },
+    });
+
+    new HejhomePlatformAccessory(platform, accessory, device, client);
+
+    const lightService = accessory.service('Lightbulb');
+    expect(lightService?.characteristics.has('On')).toBe(true);
+    expect(lightService?.characteristics.has('Brightness')).toBe(true);
+    expect(lightService?.characteristics.has('ColorTemperature')).toBe(true);
+
+    await lightService?.characteristic('ColorTemperature').setValue(250);
+
+    expect(client.controlDevice).toHaveBeenLastCalledWith('white-1', {
+      temperature: expect.any(Number),
+    });
+  });
+
+  test('exposes multi-gang switches as separate switch services', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('거실 스위치', 'uuid:switch-1', platform);
+    const client = createClientMock();
+    const device = deviceFixture({
+      id: 'switch-1',
+      name: '거실 스위치',
+      deviceType: 'Switch4',
+      deviceState: {
+        power1: true,
+        power2: false,
+        power3: false,
+        power4: true,
+      },
+    });
+
+    new HejhomePlatformAccessory(platform, accessory, device, client);
+
+    expect(accessory.serviceBySubtype('Switch', 'power1')).toBeDefined();
+    expect(accessory.serviceBySubtype('Switch', 'power4')).toBeDefined();
+
+    await accessory.serviceBySubtype('Switch', 'power3')?.characteristic('On').setValue(true);
+
+    expect(client.controlDevice).toHaveBeenCalledWith('switch-1', { power3: true });
+  });
+
+  test('exposes curtain devices as window coverings', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('거실 커튼', 'uuid:curtain-1', platform);
+    const client = createClientMock();
+    const device = deviceFixture({
+      id: 'curtain-1',
+      name: '거실 커튼',
+      deviceType: 'Curtain',
+      deviceState: {
+        percentState: 20,
+        percentControl: 20,
+        control: 'close',
+      },
+    });
+
+    new HejhomePlatformAccessory(platform, accessory, device, client);
+
+    const covering = accessory.service('WindowCovering');
+    expect(covering?.characteristics.has('CurrentPosition')).toBe(true);
+    expect(covering?.characteristics.has('TargetPosition')).toBe(true);
+    expect(covering?.characteristics.has('PositionState')).toBe(true);
+
+    await covering?.characteristic('TargetPosition').setValue(85);
+
+    expect(client.controlDevice).toHaveBeenCalledWith('curtain-1', { percentControl: 85 });
+  });
+
+  test('exposes temperature and humidity sensors with battery service', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('온습도 센서', 'uuid:sensor-1', platform);
+    const device = deviceFixture({
+      id: 'sensor-1',
+      name: '온습도 센서',
+      deviceType: 'SensorTh2',
+      deviceState: {
+        temperature: 23,
+        humidity: 55,
+        battery: 77,
+      },
+    });
+
+    new HejhomePlatformAccessory(platform, accessory, device, null);
+
+    await expect(accessory.service('TemperatureSensor')?.characteristic('CurrentTemperature').getValue()).resolves.toBe(23);
+    await expect(accessory.service('HumiditySensor')?.characteristic('CurrentRelativeHumidity').getValue()).resolves.toBe(55);
+    await expect(accessory.service('BatteryService')?.characteristic('BatteryLevel').getValue()).resolves.toBe(77);
+  });
 });
 
 function createPlatformMock(): HejhomePlatform {
@@ -110,21 +214,77 @@ function createPlatformMock(): HejhomePlatform {
   return {
     Service: {
       AccessoryInformation: 'AccessoryInformation',
+      BatteryService: 'BatteryService',
+      ContactSensor: 'ContactSensor',
+      Fanv2: 'Fanv2',
+      HumiditySensor: 'HumiditySensor',
+      LeakSensor: 'LeakSensor',
       Lightbulb: 'Lightbulb',
       MotionSensor: 'MotionSensor',
+      Outlet: 'Outlet',
+      SmokeSensor: 'SmokeSensor',
+      StatelessProgrammableSwitch: 'StatelessProgrammableSwitch',
       Switch: 'Switch',
+      TemperatureSensor: 'TemperatureSensor',
+      Thermostat: 'Thermostat',
+      WindowCovering: 'WindowCovering',
     },
     Characteristic: {
+      Active: 'Active',
       BatteryLevel: 'BatteryLevel',
       Brightness: 'Brightness',
+      ColorTemperature: 'ColorTemperature',
+      ContactSensorState: Object.assign('ContactSensorState', {
+        CONTACT_DETECTED: 0,
+        CONTACT_NOT_DETECTED: 1,
+      }),
+      CurrentHeatingCoolingState: Object.assign('CurrentHeatingCoolingState', {
+        OFF: 0,
+        COOL: 2,
+      }),
+      CurrentPosition: 'CurrentPosition',
+      CurrentRelativeHumidity: 'CurrentRelativeHumidity',
+      CurrentTemperature: 'CurrentTemperature',
       Hue: 'Hue',
+      LeakDetected: Object.assign('LeakDetected', {
+        LEAK_DETECTED: 1,
+        LEAK_NOT_DETECTED: 0,
+      }),
       Manufacturer: 'Manufacturer',
       Model: 'Model',
       MotionDetected: 'MotionDetected',
       Name: 'Name',
       On: 'On',
+      OutletInUse: 'OutletInUse',
+      PositionState: Object.assign('PositionState', {
+        DECREASING: 0,
+        INCREASING: 1,
+        STOPPED: 2,
+      }),
+      ProgrammableSwitchEvent: Object.assign('ProgrammableSwitchEvent', {
+        SINGLE_PRESS: 0,
+        DOUBLE_PRESS: 1,
+        LONG_PRESS: 2,
+      }),
       Saturation: 'Saturation',
       SerialNumber: 'SerialNumber',
+      ServiceLabelIndex: 'ServiceLabelIndex',
+      SmokeDetected: Object.assign('SmokeDetected', {
+        SMOKE_DETECTED: 1,
+        SMOKE_NOT_DETECTED: 0,
+      }),
+      StatusLowBattery: Object.assign('StatusLowBattery', {
+        BATTERY_LEVEL_NORMAL: 0,
+        BATTERY_LEVEL_LOW: 1,
+      }),
+      TargetHeatingCoolingState: Object.assign('TargetHeatingCoolingState', {
+        OFF: 0,
+        HEAT: 1,
+        COOL: 2,
+        AUTO: 3,
+      }),
+      TargetPosition: 'TargetPosition',
+      TargetTemperature: 'TargetTemperature',
     },
     api: {
       hap: {
@@ -176,9 +336,9 @@ class AccessoryMock {
     return this.services.get(type);
   }
 
-  addService(type: string, name: string): ServiceMock {
-    const service = new ServiceMock(type, name);
-    this.services.set(type, service);
+  addService(type: string, name: string, subtype?: string): ServiceMock {
+    const service = new ServiceMock(type, name, subtype);
+    this.services.set(serviceKey(type, subtype), service);
     return service;
   }
 
@@ -193,6 +353,14 @@ class AccessoryMock {
   service(type: string): ServiceMock | undefined {
     return this.services.get(type);
   }
+
+  getServiceById(type: string, subtype: string): ServiceMock | undefined {
+    return this.serviceBySubtype(type, subtype);
+  }
+
+  serviceBySubtype(type: string, subtype: string): ServiceMock | undefined {
+    return this.services.get(serviceKey(type, subtype));
+  }
 }
 
 class ServiceMock {
@@ -203,19 +371,20 @@ class ServiceMock {
   constructor(
     public readonly type: string,
     public readonly name: string,
+    public readonly subtype?: string,
   ) {}
 
   setCharacteristic(characteristic: string, value: CharacteristicValue): this {
-    this.setValues.push({ characteristic, value });
+    this.setValues.push({ characteristic: String(characteristic), value });
     return this;
   }
 
   getCharacteristic(characteristic: string): CharacteristicMock {
-    return this.characteristic(characteristic);
+    return this.characteristic(String(characteristic));
   }
 
   updateCharacteristic(characteristic: string, value: CharacteristicValue): this {
-    this.updates.push({ characteristic, value });
+    this.updates.push({ characteristic: String(characteristic), value });
     return this;
   }
 
@@ -228,6 +397,10 @@ class ServiceMock {
     this.characteristics.set(characteristic, next);
     return next;
   }
+}
+
+function serviceKey(type: string, subtype?: string): string {
+  return subtype ? `${type}:${subtype}` : type;
 }
 
 class CharacteristicMock {

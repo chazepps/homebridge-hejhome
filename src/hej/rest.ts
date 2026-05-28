@@ -60,6 +60,21 @@ export class HejRestClient {
     return this.request<HejDevice[]>(`dashboard/${familyId}${roomSegment}/devices-state?scope=shop`);
   }
 
+  async getCameraDevices(): Promise<unknown[]> {
+    return this.request<unknown[]>('dashboard/devices/camera');
+  }
+
+  async getWebrtcConfig(deviceId: string): Promise<unknown> {
+    return this.request<unknown>(`dashboard/webrtc/configs/${deviceId}`);
+  }
+
+  async createWebrtcAccessConfig(body: Record<string, unknown>): Promise<string> {
+    return this.requestText('dashboard/webrtc/access-config', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
   async controlDevice(deviceId: string, requirements: Record<string, unknown>): Promise<void> {
     await this.requestText(`dashboard/control/${deviceId}`, {
       method: 'POST',

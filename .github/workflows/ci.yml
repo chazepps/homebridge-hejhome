@@ -36,23 +36,8 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Unit tests
-        run: npm test
-
-      - name: UI tests
-        run: npm run test:ui
-
-      - name: Build
-        run: npm run build
-
-      - name: Documentation check
-        run: npm run docs:check
+      - name: Verify
+        run: npm run verify
 
       - name: Package dry run
         run: npm pack --dry-run

@@ -451,6 +451,19 @@
 	    </div>
 	  </section>
 
+  <section class="hej-section" aria-label="Hejhome family and room selection">
+    <div class="hej-section-head">
+      <h2>집/방 선택</h2>
+      <span class="hej-badge" id="scopeBadge">첫 번째 집</span>
+    </div>
+    <p class="hej-muted">처음 로그인하면 첫 번째 집의 모든 방을 사용합니다. 여기서 언제든 바꿀 수 있습니다.</p>
+    <div class="hej-list" id="scopeList"></div>
+    <div class="hej-actions">
+      <button class="hej-action secondary" id="saveScope" type="button">집/방 설정 저장</button>
+    </div>
+    <p class="hej-status" id="scopeStatus" role="status"></p>
+  </section>
+
   <section class="hej-section" aria-label="Hejhome device support">
     <div class="hej-section-head">
       <h2>장비 및 지원 현황</h2>
@@ -487,9 +500,21 @@
   (() => {
 	  const IN_PROGRESS_DEVICE_TYPES = new Set(['LedStripRgbw2']);
 	  const HOMEKIT_SERVICE_LABELS = {
+	    BatteryService: '배터리',
+	    Camera: '카메라',
+	    ContactSensor: '문 열림 센서',
+	    Fan: '선풍기',
+	    HumiditySensor: '습도 센서',
+	    LeakSensor: '누수 센서',
 	    Lightbulb: '전구',
 	    MotionSensor: '모션 센서',
+	    Outlet: '콘센트',
+	    SmokeSensor: '연기 센서',
+	    StatelessProgrammableSwitch: '버튼',
 	    Switch: '스위치',
+	    TemperatureSensor: '온도 센서',
+	    Thermostat: '온도 조절',
+	    WindowCovering: '커튼/블라인드',
 	  };
 
 		  const identifier = document.getElementById('identifier');
@@ -505,6 +530,10 @@
 	  const sessionDescription = document.getElementById('sessionDescription');
 	  const relogin = document.getElementById('relogin');
 	  const logout = document.getElementById('logout');
+	  const scopeBadge = document.getElementById('scopeBadge');
+	  const scopeList = document.getElementById('scopeList');
+	  const saveScope = document.getElementById('saveScope');
+	  const scopeStatus = document.getElementById('scopeStatus');
 	  const snapshotBadge = document.getElementById('snapshotBadge');
 	  const registeredCount = document.getElementById('registeredCount');
 	  const supportedCount = document.getElementById('supportedCount');
@@ -605,10 +634,11 @@
 	    window.homebridge?.fixScrollHeight?.();
 	  }
 
-	  function showSettingsView(status) {
+	  async function showSettingsView(status) {
 	    loginView.classList.add('is-hidden');
 	    settingsView.classList.remove('is-hidden');
 	    renderSessionStatus(status);
+	    await renderScopeStatus(status);
 	    renderDeviceStatus(status);
 	    window.homebridge?.fixScrollHeight?.();
 	  }
@@ -655,9 +685,17 @@
 	      label.textContent = `${model.deviceType} · ${model.label}`;
 	      const service = document.createElement('span');
 	      service.className = 'hej-badge';
-	      const serviceLabel = formatHomeKitService(model.homeKitService);
+	      const serviceLabel = formatHomeKitServices(model.homeKitServices ?? [model.homeKitService]);
 	      const isInProgress = IN_PROGRESS_DEVICE_TYPES.has(model.deviceType);
-	      service.textContent = isInProgress ? `${serviceLabel} / 구현 중` : serviceLabel;
+	      if (model.supportStatus === 'deferred') {
+	        service.textContent = model.note ?? '카메라는 API 분석 완료, Home 앱 영상 연동은 다음 단계';
+	        service.classList.add('is-warn');
+	      } else if (model.supportStatus === 'partial') {
+	        service.textContent = `${serviceLabel || '일부 기능'} / 부분 지원`;
+	        service.classList.add('is-warn');
+	      } else {
+	        service.textContent = isInProgress ? `${serviceLabel} / 구현 중` : serviceLabel;
+	      }
 	      if (isInProgress) {
 	        service.classList.add('is-warn');
 	      }
@@ -699,6 +737,137 @@
 	    return HOMEKIT_SERVICE_LABELS[service] ?? service ?? '알 수 없음';
 	  }
 
+	  function formatHomeKitServices(services) {
+	    return (services ?? [])
+	      .filter(Boolean)
+	      .map((service) => formatHomeKitService(service))
+	      .join(' + ');
+	  }
+
+	  async function getCurrentPlatformConfig() {
+	    try {
+	      const configs = await window.homebridge.getPluginConfig();
+	      return (configs ?? []).find((config) => config.platform === 'Hejhome') ?? { name: 'Hejhome', platform: 'Hejhome' };
+	    } catch {
+	      return { name: 'Hejhome', platform: 'Hejhome' };
+	    }
+	  }
+
+	  async function renderScopeStatus(status) {
+	    const platformConfig = await getCurrentPlatformConfig();
+	    const scope = platformConfig.scope ?? { mode: 'first-family' };
+	    const options = status.scopeOptions ?? { families: [] };
+	    scopeList.replaceChildren();
+	    scopeStatus.textContent = '';
+	    scopeStatus.classList.remove('is-visible');
+
+	    const families = options.families ?? [];
+	    if (!families.length) {
+	      const empty = document.createElement('p');
+	      empty.className = 'hej-muted';
+	      empty.textContent = '집/방 목록을 아직 불러오지 못했습니다.';
+	      scopeList.append(empty);
+	      scopeBadge.textContent = '목록 없음';
+	      return;
+	    }
+
+	    scopeBadge.textContent = scope.mode === 'all' ? '모든 집' : scope.mode === 'custom' ? '직접 선택' : '첫 번째 집';
+	    for (const [familyIndex, family] of families.entries()) {
+	      const familyChecked = isFamilySelected(scope, family, familyIndex);
+	      const familyRow = document.createElement('label');
+	      familyRow.className = 'hej-list-item hej-check';
+	      const familyInput = document.createElement('input');
+	      familyInput.type = 'checkbox';
+	      familyInput.dataset.familyId = String(family.familyId);
+	      familyInput.checked = familyChecked;
+	      const familyName = document.createElement('span');
+	      familyName.textContent = family.name;
+	      familyRow.append(familyInput, familyName);
+	      scopeList.append(familyRow);
+
+	      for (const room of family.rooms ?? []) {
+	        const roomRow = document.createElement('label');
+	        roomRow.className = 'hej-list-item hej-check';
+	        roomRow.style.marginLeft = '22px';
+	        const roomInput = document.createElement('input');
+	        roomInput.type = 'checkbox';
+	        roomInput.dataset.familyId = String(family.familyId);
+	        roomInput.dataset.roomId = String(room.roomId);
+	        roomInput.checked = isRoomSelected(scope, family, room, familyIndex, familyChecked);
+	        const roomName = document.createElement('span');
+	        roomName.textContent = room.name;
+	        roomRow.append(roomInput, roomName);
+	        scopeList.append(roomRow);
+	      }
+	    }
+	  }
+
+	  function isFamilySelected(scope, family, familyIndex) {
+	    if (scope.mode === 'all') {
+	      return true;
+	    }
+	    if (scope.mode === 'custom') {
+	      return (scope.includedFamilyIds ?? []).includes(Number(family.familyId));
+	    }
+	    return familyIndex === 0;
+	  }
+
+	  function isRoomSelected(scope, family, room, familyIndex, familyChecked) {
+	    if (!familyChecked) {
+	      return false;
+	    }
+	    if (scope.mode === 'all' || scope.mode === 'first-family') {
+	      return scope.mode === 'all' || familyIndex === 0;
+	    }
+	    const selectedRooms = scope.includedRoomsByFamilyId?.[String(family.familyId)];
+	    return selectedRooms ? selectedRooms.includes(Number(room.roomId)) : true;
+	  }
+
+	  async function saveScopeSelection() {
+	    const platformConfig = await getCurrentPlatformConfig();
+	    const familyInputs = [...scopeList.querySelectorAll('input[data-family-id]:not([data-room-id])')];
+	    const roomInputs = [...scopeList.querySelectorAll('input[data-room-id]')];
+	    const selectedFamilyIds = familyInputs
+	      .filter((input) => input.checked)
+	      .map((input) => Number(input.dataset.familyId));
+	    const selectedRoomsByFamily = {};
+	    for (const familyId of selectedFamilyIds) {
+	      const selectedRooms = roomInputs
+	        .filter((input) => Number(input.dataset.familyId) === familyId && input.checked)
+	        .map((input) => Number(input.dataset.roomId));
+	      if (selectedRooms.length > 0) {
+	        selectedRoomsByFamily[String(familyId)] = selectedRooms;
+	      }
+	    }
+
+	    const allFamilyIds = familyInputs.map((input) => Number(input.dataset.familyId));
+	    const firstFamilyId = allFamilyIds[0];
+	    let nextScope;
+	    if (selectedFamilyIds.length === allFamilyIds.length && allFamilyIds.length > 0) {
+	      nextScope = { mode: 'all' };
+	    } else if (selectedFamilyIds.length === 1 && selectedFamilyIds[0] === firstFamilyId) {
+	      nextScope = { mode: 'first-family' };
+	    } else {
+	      nextScope = {
+	        mode: 'custom',
+	        includedFamilyIds: selectedFamilyIds,
+	        includedRoomsByFamilyId: selectedRoomsByFamily,
+	      };
+	    }
+
+	    const configs = await window.homebridge.getPluginConfig();
+	    const nextConfig = { ...platformConfig, scope: nextScope };
+	    const nextConfigs = (configs ?? []).some((config) => config.platform === 'Hejhome')
+	      ? configs.map((config) => config.platform === 'Hejhome' ? nextConfig : config)
+	      : [...(configs ?? []), nextConfig];
+	    await window.homebridge.updatePluginConfig(nextConfigs);
+	    await window.homebridge.savePluginConfig();
+	    scopeStatus.textContent = '집/방 설정을 저장했습니다. Homebridge를 다시 시작하면 장비 목록이 새 설정으로 바뀝니다.';
+	    scopeStatus.classList.add('is-visible');
+	    window.homebridge.toast.success('집/방 설정을 저장했습니다.');
+	    await logUiEvent('scope.save.success', { mode: nextScope.mode, familyCount: selectedFamilyIds.length });
+	  }
+
 	  function formatKstDateTime(value) {
 	    if (!value) {
 	      return '확인 불가';
@@ -722,7 +891,7 @@
 	    try {
 	      const status = await requestWithTimeout('/session-status', {}, 10000, '로그인 상태 확인');
 	      if (status?.configured) {
-	        showSettingsView(status);
+	        await showSettingsView(status);
 	        return;
 	      }
 	      showLoginView();
@@ -797,7 +966,7 @@
 	    logUiEvent('config-marker.save.skipped', { reason: 'session is stored outside config.json' });
 	    const status = await requestWithTimeout('/session-status', {}, 10000, '로그인 상태 확인');
 	    if (status?.configured) {
-	      showSettingsView(status);
+	      await showSettingsView(status);
 	    } else {
 	      setLoginCompleted();
 	    }
@@ -819,6 +988,10 @@
 	    showLoginView();
 	    identifier.focus();
 	  }).catch((error) => handleError('logout', error)));
+
+	  saveScope.addEventListener('click', () => withSpinner('scope.save', async () => {
+	    await saveScopeSelection();
+	  }).catch((error) => handleError('scope.save', error)));
 
 	  identifier.addEventListener('input', resetVerification);
   authCode.addEventListener('input', updateControls);

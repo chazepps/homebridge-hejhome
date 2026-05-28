@@ -135,15 +135,18 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
         const sessionContext = createSessionLogContext(session);
         const sessionCheckStartedAt = performance.now();
         try {
-          await new HejRestClient(session, {
+          const restClient = new HejRestClient(session, {
             logger: (event) => this.log('rest.request', event),
             requestTimeoutMs: 8000,
-          }).getFamilies();
+          });
+          const families = await restClient.getFamilies();
+          const scopeOptions = await this.buildScopeOptions(restClient, families);
           result = {
             configured: true,
             sessionValid: true,
             sessionCheckStatus: 'valid',
             sessionCheckDurationMs: elapsed(sessionCheckStartedAt),
+            scopeOptions,
             ...sessionContext,
             ...baseStatus,
           };
@@ -170,6 +173,35 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       });
       return result;
     }, 'Hejhome 세션 상태 확인에 실패했습니다.');
+  }
+
+  async buildScopeOptions(restClient, families) {
+    const familyOptions = [];
+    for (const [index, family] of families.entries()) {
+      let rooms = [];
+      try {
+        rooms = await restClient.getRooms(family.familyId);
+      } catch (error) {
+        this.log('scope-options.rooms.error', {
+          familyId: family.familyId,
+          message: sanitizeForLog(error instanceof Error ? error.message : String(error)),
+        }, 'warn');
+      }
+      familyOptions.push({
+        familyId: family.familyId,
+        name: family.name,
+        selected: index === 0,
+        rooms: rooms.map((room) => ({
+          roomId: room.room_id,
+          name: room.name,
+          selected: index === 0,
+        })),
+      });
+    }
+    return {
+      defaultMode: 'first-family',
+      families: familyOptions,
+    };
   }
 
   handleUiEvent(payload) {

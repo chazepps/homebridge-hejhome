@@ -3,6 +3,7 @@ import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAcces
 import { HejRestClient } from './hej/rest.js';
 import { HejRealtimeClient } from './hej/realtime.js';
 import { HejhomePlatformAccessory } from './platformAccessory.js';
+import { resolveDiscoveryScope } from './discovery/scope.js';
 import { DeviceSnapshotStore } from './storage/deviceSnapshotStore.js';
 import { LogStore, type LogLevel } from './storage/logStore.js';
 import { SessionStore } from './storage/sessionStore.js';
@@ -109,14 +110,24 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     const discoveredCacheUUIDs = new Set<string>();
     const snapshotFamilies: Array<{ family: HejFamily; devices: HejDevice[] }> = [];
     const families = await this.client.getFamilies();
-    this.info('discovery.families', { familyCount: families.length });
-    for (const family of families) {
-      const devices = await this.client.getDevices(family.familyId);
+    const scope = resolveDiscoveryScope(this.config, families);
+    this.info('discovery.families', {
+      familyCount: families.length,
+      selectedFamilyCount: scope.length,
+      scopeMode: this.config.scope?.mode ?? 'first-family',
+    });
+    for (const selected of scope) {
+      const family = families.find((entry) => entry.familyId === selected.familyId);
+      if (!family) {
+        continue;
+      }
+      const devices = await this.getScopedDevices(selected.familyId, selected.roomIds);
       deviceCount += devices.length;
       snapshotFamilies.push({ family, devices });
       this.info('discovery.family-devices', {
         familyId: family.familyId,
         familyName: family.name,
+        roomIds: selected.roomIds,
         deviceCount: devices.length,
       });
       for (const device of devices) {
@@ -179,6 +190,26 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       updatedCount,
       staleCount,
     });
+  }
+
+  private async getScopedDevices(familyId: number, roomIds: number[] | undefined): Promise<HejDevice[]> {
+    if (!this.client) {
+      return [];
+    }
+    if (!roomIds?.length) {
+      return await this.client.getDevices(familyId);
+    }
+    const byId = new Map<string, HejDevice>();
+    for (const roomId of roomIds) {
+      const devices = await this.client.getDevices(familyId, roomId);
+      for (const device of devices) {
+        byId.set(device.id, {
+          ...device,
+          roomId,
+        });
+      }
+    }
+    return [...byId.values()];
   }
 
   private createAccessoryHandler(accessory: PlatformAccessory, device: HejDevice): void {

@@ -86,6 +86,88 @@ describe('HejRealtimeClient message mapping', () => {
       },
     });
   });
+
+  test('maps switch, curtain, plug, and sensor realtime datapoints into normalized state', () => {
+    const updates: Array<Partial<HejDevice> & { id: string }> = [];
+    const client = new HejRealtimeClient(session, {
+      onDeviceUpdate: (device) => updates.push(device),
+      onError: () => undefined,
+    });
+
+    dispatchMessage(client, {
+      deviceDataReport: {
+        devId: 'switch-1',
+        status: [
+          { code: 'switch_1', value: true },
+          { code: 'switch_3', value: false },
+        ],
+      },
+    });
+    dispatchMessage(client, {
+      deviceDataReport: {
+        devId: 'curtain-1',
+        status: [
+          { code: 'percent_state', value: 45 },
+          { code: 'percent_control', value: 60 },
+          { code: 'control', value: 'open' },
+        ],
+      },
+    });
+    dispatchMessage(client, {
+      deviceDataReport: {
+        devId: 'plug-1',
+        status: [
+          { code: 'cur_power', value: 12 },
+          { code: 'cur_current', value: 34 },
+          { code: 'cur_voltage', value: 220 },
+        ],
+      },
+    });
+    dispatchMessage(client, {
+      deviceDataReport: {
+        devId: 'sensor-1',
+        status: [
+          { code: 'va_temperature', value: 235 },
+          { code: 'va_humidity', value: 551 },
+          { code: 'battery', value: 88 },
+        ],
+      },
+    });
+
+    expect(updates).toEqual([
+      {
+        id: 'switch-1',
+        deviceState: {
+          power1: true,
+          power3: false,
+        },
+      },
+      {
+        id: 'curtain-1',
+        deviceState: {
+          percentState: 45,
+          percentControl: 60,
+          control: 'open',
+        },
+      },
+      {
+        id: 'plug-1',
+        deviceState: {
+          curPower: 12,
+          curCurrent: 34,
+          curVoltage: 220,
+        },
+      },
+      {
+        id: 'sensor-1',
+        deviceState: {
+          temperature: 23.5,
+          humidity: 55,
+          battery: 88,
+        },
+      },
+    ]);
+  });
 });
 
 function dispatchMessage(client: HejRealtimeClient, payload: unknown): void {

@@ -9,6 +9,7 @@ export const REQUIRED_DOC_PATHS = [
   'ARCHITECTURE.md',
   'DOCUMENTATION_REFACTORING.md',
   'docs/README.md',
+  'docs/api/README.md',
   'docs/DESIGN.md',
   'docs/FRONTEND.md',
   'docs/PRODUCT_SENSE.md',
@@ -44,6 +45,10 @@ export const FORBIDDEN_DOC_PATTERNS = [
   { name: 'raw access token parameter', pattern: /\baccessToken\s*=/i },
   { name: 'raw basic authorization header', pattern: /\bAuthorization:\s*Basic\s+[A-Za-z0-9+/=._-]+/i },
   { name: 'raw bearer authorization header', pattern: /\bAuthorization:\s*Bearer\s+[A-Za-z0-9._~+/=-]+/i },
+  { name: 'analysis source path', pattern: /\brestored-from(?:-sourcemaps|-source)?\b/i },
+  { name: 'source map reference', pattern: /\bsource\s*map\b|\bsourcemap\b/i },
+  { name: 'raw UI component extension', pattern: /\.jsx\b/i },
+  { name: 'raw UI source snippet reference', pattern: /\bJSX\b/i },
 ];
 
 const IGNORED_DIRS = new Set([

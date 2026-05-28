@@ -1,12 +1,17 @@
-import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
+import type { PlatformAccessory, Service as HomebridgeService, WithUUID } from 'homebridge';
 
 import type { HejRestClient } from './hej/rest.js';
 import type { HejhomePlatform } from './platform.js';
-import type { HejDevice } from './types.js';
+import type { HejDevice, HejDeviceState } from './types.js';
+import { getDeviceCapability, type DeviceCapability } from './devices/capabilities.js';
+
+type PowerKey = `power${number}` | 'power';
+type ServiceType = WithUUID<typeof HomebridgeService>;
+type ServiceRegistry = Record<string, ServiceType | undefined>;
+type AddServiceByType = (serviceType: ServiceType, name: string, subtype?: string) => HomebridgeService;
 
 export class HejhomePlatformAccessory {
-  private readonly service: Service;
-  private readonly serviceKind: 'color-light' | 'motion-sensor' | 'switch';
+  private readonly capability: DeviceCapability;
 
   constructor(
     private readonly platform: HejhomePlatform,
@@ -15,293 +20,671 @@ export class HejhomePlatformAccessory {
     private readonly client: HejRestClient | null,
   ) {
     this.accessory.context.device = device;
+    this.capability = getDeviceCapability(device.deviceType) ?? {
+      deviceType: device.deviceType,
+      label: '지원 확인 필요',
+      serviceKind: 'relay-switch',
+      supportStatus: 'partial',
+      homeKitServices: ['Switch'],
+    };
 
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Hejhome')
       .setCharacteristic(this.platform.Characteristic.Model, device.modelName ?? device.deviceType)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, device.id);
 
-    this.serviceKind = getServiceKind(device);
-    this.removeStaleServices();
-    this.service = this.getPrimaryService();
-    this.service.setCharacteristic(this.platform.Characteristic.Name, device.name);
-
-    if (this.serviceKind === 'motion-sensor') {
-      this.service.getCharacteristic(this.platform.Characteristic.MotionDetected)
-        .onGet(this.handleMotionGet.bind(this));
-    } else {
-      this.service.getCharacteristic(this.platform.Characteristic.On)
-        .onGet(this.handleOnGet.bind(this))
-        .onSet(this.handleOnSet.bind(this));
-
-      if (this.serviceKind === 'color-light') {
-        this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-          .onGet(this.handleBrightnessGet.bind(this))
-          .onSet(this.handleBrightnessSet.bind(this));
-        this.service.getCharacteristic(this.platform.Characteristic.Hue)
-          .onGet(this.handleHueGet.bind(this))
-          .onSet(this.handleHueSet.bind(this));
-        this.service.getCharacteristic(this.platform.Characteristic.Saturation)
-          .onGet(this.handleSaturationGet.bind(this))
-          .onSet(this.handleSaturationSet.bind(this));
-      }
-    }
+    this.removeStaleBaseServices();
+    this.configureServices();
+    this.updateDevice(device);
   }
 
   updateDevice(device: HejDevice): void {
     this.accessory.context.device = device;
-    if (this.serviceKind === 'motion-sensor') {
-      this.service.updateCharacteristic(this.platform.Characteristic.MotionDetected, readMotionState(device));
+    switch (this.capability.serviceKind) {
+      case 'color-light':
+        this.updateColorLight(device);
+        break;
+      case 'white-light':
+        this.updateWhiteLight(device);
+        break;
+      case 'multi-switch':
+        this.updatePowerServices(device, this.switchPowerKeys(device), this.platform.Service.Switch);
+        break;
+      case 'relay-switch':
+      case 'ir-switch':
+        this.updatePowerService(device, 'power', this.platform.Service.Switch);
+        break;
+      case 'outlet':
+        this.updateOutlet(device);
+        break;
+      case 'power-strip':
+        this.updatePowerServices(device, this.powerStripKeys(device), this.platform.Service.Outlet);
+        break;
+      case 'window-covering':
+        this.updateWindowCovering(device);
+        break;
+      case 'motion-sensor':
+        this.updateMotionSensor(device);
+        this.updateBatteryService(device);
+        break;
+      case 'contact-sensor':
+        this.updateContactSensor(device);
+        this.updateBatteryService(device);
+        break;
+      case 'temperature-humidity-sensor':
+        this.updateTemperatureHumiditySensor(device);
+        this.updateBatteryService(device);
+        break;
+      case 'leak-sensor':
+        this.updateLeakSensor(device);
+        this.updateBatteryService(device);
+        break;
+      case 'smoke-sensor':
+        this.updateSmokeSensor(device);
+        this.updateBatteryService(device);
+        break;
+      case 'ir-thermostat':
+        this.updateThermostat(device);
+        break;
+      case 'ir-fan':
+        this.updateFan(device);
+        break;
+      case 'stateless-button':
+      case 'camera':
+      case 'unsupported':
+        this.updateBatteryService(device);
+        break;
+    }
+  }
+
+  private configureServices(): void {
+    switch (this.capability.serviceKind) {
+      case 'color-light':
+        this.configureColorLight();
+        break;
+      case 'white-light':
+        this.configureWhiteLight();
+        break;
+      case 'multi-switch':
+        this.configurePowerServices(this.switchPowerKeys(this.device), this.platform.Service.Switch, '스위치');
+        break;
+      case 'relay-switch':
+      case 'ir-switch':
+        this.configurePowerService(this.platform.Service.Switch, 'power', this.device.name);
+        break;
+      case 'outlet':
+        this.configureOutlet();
+        break;
+      case 'power-strip':
+        this.configurePowerServices(this.powerStripKeys(this.device), this.platform.Service.Outlet, '콘센트');
+        break;
+      case 'window-covering':
+        this.configureWindowCovering();
+        break;
+      case 'motion-sensor':
+        this.service(this.platform.Service.MotionSensor, this.device.name)
+          .getCharacteristic(this.platform.Characteristic.MotionDetected)
+          .onGet(() => readMotionState(this.currentDevice()));
+        this.configureBatteryService();
+        break;
+      case 'contact-sensor':
+        this.service(this.platform.Service.ContactSensor, this.device.name)
+          .getCharacteristic(this.platform.Characteristic.ContactSensorState)
+          .onGet(() => readContactState(this.platform, this.currentDevice()));
+        this.configureBatteryService();
+        break;
+      case 'temperature-humidity-sensor':
+        this.service(this.platform.Service.TemperatureSensor, this.device.name)
+          .getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+          .onGet(() => readNumberState(this.currentDevice(), 'temperature', 0));
+        this.service(this.platform.Service.HumiditySensor, `${this.device.name} 습도`)
+          .getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
+          .onGet(() => readNumberState(this.currentDevice(), 'humidity', 0));
+        this.configureBatteryService();
+        break;
+      case 'leak-sensor':
+        this.service(this.platform.Service.LeakSensor, this.device.name)
+          .getCharacteristic(this.platform.Characteristic.LeakDetected)
+          .onGet(() => readLeakState(this.platform, this.currentDevice()));
+        this.configureBatteryService();
+        break;
+      case 'smoke-sensor':
+        this.service(this.platform.Service.SmokeSensor, this.device.name)
+          .getCharacteristic(this.platform.Characteristic.SmokeDetected)
+          .onGet(() => readSmokeState(this.platform, this.currentDevice()));
+        this.configureBatteryService();
+        break;
+      case 'stateless-button':
+        this.configureSmartButton();
+        this.configureBatteryService();
+        break;
+      case 'ir-thermostat':
+        this.configureThermostat();
+        break;
+      case 'ir-fan':
+        this.configureFan();
+        break;
+      case 'camera':
+      case 'unsupported':
+        this.configureBatteryService();
+        break;
+    }
+  }
+
+  private configureColorLight(): void {
+    const light = this.service(this.platform.Service.Lightbulb, this.device.name);
+    light.getCharacteristic(this.platform.Characteristic.On)
+      .onGet(() => readPowerState(this.currentDevice()) ?? false)
+      .onSet((value) => this.handleControlSet({ power: Boolean(value) }, 'on'));
+    light.getCharacteristic(this.platform.Characteristic.Brightness)
+      .onGet(() => readHsvState(this.currentDevice()).brightness)
+      .onSet((value) => this.handleHsvSet({ brightness: Number(value) }, false));
+    light.getCharacteristic(this.platform.Characteristic.Hue)
+      .onGet(() => readHsvState(this.currentDevice()).hue)
+      .onSet((value) => this.handleHsvSet({ hue: Number(value) }, true));
+    light.getCharacteristic(this.platform.Characteristic.Saturation)
+      .onGet(() => readHsvState(this.currentDevice()).saturation)
+      .onSet((value) => this.handleHsvSet({ saturation: Number(value) }, true));
+  }
+
+  private configureWhiteLight(): void {
+    const light = this.service(this.platform.Service.Lightbulb, this.device.name);
+    light.getCharacteristic(this.platform.Characteristic.On)
+      .onGet(() => readPowerState(this.currentDevice()) ?? false)
+      .onSet((value) => this.handleControlSet({ power: Boolean(value) }, 'white-light.on'));
+    light.getCharacteristic(this.platform.Characteristic.Brightness)
+      .onGet(() => readNumberState(this.currentDevice(), 'brightness', 100))
+      .onSet((value) => this.handleControlSet({ brightness: clampNumber(Number(value), 0, 100) }, 'white-light.brightness'));
+    light.getCharacteristic(this.platform.Characteristic.ColorTemperature)
+      .onGet(() => temperaturePercentToMired(readNumberState(this.currentDevice(), 'temperature', 100)))
+      .onSet((value) => this.handleControlSet({ temperature: miredToTemperaturePercent(Number(value)) }, 'white-light.temperature'));
+  }
+
+  private configurePowerServices(keys: PowerKey[], serviceType: ServiceType, label: string): void {
+    keys.forEach((key, index) => {
+      const name = keys.length === 1 ? this.device.name : `${this.device.name} ${label} ${index + 1}`;
+      this.configurePowerService(serviceType, key, name, key);
+    });
+  }
+
+  private configurePowerService(serviceType: ServiceType, key: PowerKey, name: string, subtype?: string): void {
+    this.service(serviceType, name, subtype)
+      .getCharacteristic(this.platform.Characteristic.On)
+      .onGet(() => readPowerStateByKey(this.currentDevice(), key))
+      .onSet((value) => this.handlePowerSet(key, Boolean(value)));
+  }
+
+  private configureOutlet(): void {
+    const outlet = this.service(this.platform.Service.Outlet, this.device.name);
+    outlet.getCharacteristic(this.platform.Characteristic.On)
+      .onGet(() => readPowerState(this.currentDevice()) ?? false)
+      .onSet((value) => this.handleControlSet({ power: Boolean(value) }, 'outlet.on'));
+    outlet.getCharacteristic(this.platform.Characteristic.OutletInUse)
+      .onGet(() => readPowerState(this.currentDevice()) ?? false);
+  }
+
+  private configureWindowCovering(): void {
+    const covering = this.service(this.platform.Service.WindowCovering, this.device.name);
+    covering.getCharacteristic(this.platform.Characteristic.CurrentPosition)
+      .onGet(() => readPosition(this.currentDevice()));
+    covering.getCharacteristic(this.platform.Characteristic.TargetPosition)
+      .onGet(() => readTargetPosition(this.currentDevice()))
+      .onSet((value) => this.handleControlSet({ percentControl: clampNumber(Number(value), 0, 100) }, 'window-covering.target-position'));
+    covering.getCharacteristic(this.platform.Characteristic.PositionState)
+      .onGet(() => readPositionState(this.platform, this.currentDevice()));
+  }
+
+  private configureSmartButton(): void {
+    const service = this.service(this.platform.Service.StatelessProgrammableSwitch, this.device.name, 'button1');
+    service.setCharacteristic(this.platform.Characteristic.ServiceLabelIndex, 1);
+    service.getCharacteristic(this.platform.Characteristic.ProgrammableSwitchEvent)
+      .setProps?.({
+        validValues: [
+          this.platform.Characteristic.ProgrammableSwitchEvent.SINGLE_PRESS,
+          this.platform.Characteristic.ProgrammableSwitchEvent.DOUBLE_PRESS,
+          this.platform.Characteristic.ProgrammableSwitchEvent.LONG_PRESS,
+        ],
+      });
+  }
+
+  private configureThermostat(): void {
+    const thermostat = this.service(this.platform.Service.Thermostat, this.device.name);
+    thermostat.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      .onGet(() => readNumberState(this.currentDevice(), 'temperature', 23));
+    thermostat.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .onGet(() => readNumberState(this.currentDevice(), 'temperature', 23))
+      .onSet((value) => this.handleControlSet({ temperature: clampNumber(Number(value), 16, 30) }, 'thermostat.temperature'));
+    thermostat.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
+      .onGet(() => readCurrentHeatingCoolingState(this.platform, this.currentDevice()));
+    thermostat.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+      .onGet(() => readTargetHeatingCoolingState(this.platform, this.currentDevice()))
+      .onSet((value) => this.handleControlSet({ mode: String(value) }, 'thermostat.mode'));
+  }
+
+  private configureFan(): void {
+    const fanService = this.service(this.fanServiceType(), this.device.name);
+    fanService.getCharacteristic(this.platform.Characteristic.Active ?? this.platform.Characteristic.On)
+      .onGet(() => readPowerState(this.currentDevice()) ? 1 : 0)
+      .onSet((value) => this.handleControlSet({ power: Number(value) === 1 || value === true }, 'fan.active'));
+  }
+
+  private configureBatteryService(): void {
+    const state = this.currentDevice().deviceState;
+    if (state?.battery === undefined && !this.capability.homeKitServices.includes('BatteryService')) {
       return;
     }
-
-    const powerValue = readPowerState(device);
-    if (powerValue !== undefined) {
-      this.service.updateCharacteristic(this.platform.Characteristic.On, powerValue);
-    }
-
-    if (this.serviceKind === 'color-light') {
-      const hsv = readHsvState(device);
-      this.service.updateCharacteristic(this.platform.Characteristic.Brightness, hsv.brightness);
-      this.service.updateCharacteristic(this.platform.Characteristic.Hue, hsv.hue);
-      this.service.updateCharacteristic(this.platform.Characteristic.Saturation, hsv.saturation);
-    }
+    const battery = this.service(this.batteryServiceType(), `${this.device.name} 배터리`);
+    battery.getCharacteristic(this.platform.Characteristic.BatteryLevel)
+      .onGet(() => clampNumber(readNumberState(this.currentDevice(), 'battery', 100), 0, 100));
+    battery.getCharacteristic(this.platform.Characteristic.StatusLowBattery)
+      .onGet(() => readNumberState(this.currentDevice(), 'battery', 100) <= 20
+        ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW
+        : this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
   }
 
-  private getPrimaryService(): Service {
-    const serviceType = this.serviceKind === 'motion-sensor'
-      ? this.platform.Service.MotionSensor
-      : this.serviceKind === 'color-light'
-        ? this.platform.Service.Lightbulb
-        : this.platform.Service.Switch;
-
-    return this.accessory.getService(serviceType)
-      ?? this.accessory.addService(serviceType, this.device.name);
+  private async handlePowerSet(key: PowerKey, value: boolean): Promise<void> {
+    await this.handleControlSet({ [key]: value }, `power.${key}`);
   }
 
-  private removeStaleServices(): void {
-    const staleServiceTypes = this.serviceKind === 'motion-sensor'
-      ? [this.platform.Service.Lightbulb, this.platform.Service.Switch]
-      : this.serviceKind === 'color-light'
-        ? [this.platform.Service.MotionSensor, this.platform.Service.Switch]
-        : [this.platform.Service.Lightbulb, this.platform.Service.MotionSensor];
-
-    for (const serviceType of staleServiceTypes) {
-      const service = this.accessory.getService(serviceType);
-      if (service) {
-        this.accessory.removeService(service);
-      }
-    }
-  }
-
-  private async handleOnGet(): Promise<CharacteristicValue> {
-    const value = readPowerState(this.accessory.context.device as HejDevice) ?? false;
-    this.platform.debug('accessory.on.get', {
-      deviceId: this.device.id,
-      name: this.device.name,
-      value,
-    });
-    return value;
-  }
-
-  private async handleOnSet(value: CharacteristicValue): Promise<void> {
+  private async handleControlSet(requirements: Record<string, unknown>, event: string): Promise<void> {
     if (!this.client) {
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
 
-    const powerKey = primaryPowerKey(this.device);
-    const nextValue = Boolean(value);
-    this.platform.info('accessory.on.set.requested', {
+    this.platform.info('accessory.control.set.requested', {
       deviceId: this.device.id,
       name: this.device.name,
-      powerKey,
-      value: nextValue,
+      event,
+      stateKeys: Object.keys(requirements),
     });
     try {
-      await this.client.controlDevice(this.device.id, { [powerKey]: nextValue });
-      const nextDevice = {
-        ...(this.accessory.context.device as HejDevice),
-        deviceState: {
-          ...((this.accessory.context.device as HejDevice).deviceState ?? {}),
-          [powerKey]: nextValue,
-        },
-      };
-      this.updateDevice(nextDevice);
-      this.platform.info('accessory.on.set.succeeded', {
+      await this.client.controlDevice(this.device.id, requirements);
+      const next = mergeDeviceState(this.currentDevice(), requirements);
+      this.updateDevice(next);
+      this.platform.info('accessory.control.set.succeeded', {
         deviceId: this.device.id,
         name: this.device.name,
-        powerKey,
-        value: nextValue,
+        event,
+        stateKeys: Object.keys(requirements),
       });
     } catch (error) {
-      this.platform.error('accessory.on.set.failed', {
+      this.platform.error('accessory.control.set.failed', {
         deviceId: this.device.id,
         name: this.device.name,
-        powerKey,
-        value: nextValue,
+        event,
+        stateKeys: Object.keys(requirements),
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
-  }
-
-  private async handleBrightnessGet(): Promise<CharacteristicValue> {
-    const value = readHsvState(this.accessory.context.device as HejDevice).brightness;
-    this.platform.debug('accessory.brightness.get', {
-      deviceId: this.device.id,
-      name: this.device.name,
-      value,
-    });
-    return value;
-  }
-
-  private async handleBrightnessSet(value: CharacteristicValue): Promise<void> {
-    await this.handleHsvSet({ brightness: Number(value) }, false);
-  }
-
-  private async handleHueGet(): Promise<CharacteristicValue> {
-    const value = readHsvState(this.accessory.context.device as HejDevice).hue;
-    this.platform.debug('accessory.hue.get', {
-      deviceId: this.device.id,
-      name: this.device.name,
-      value,
-    });
-    return value;
-  }
-
-  private async handleHueSet(value: CharacteristicValue): Promise<void> {
-    await this.handleHsvSet({ hue: Number(value) }, true);
-  }
-
-  private async handleSaturationGet(): Promise<CharacteristicValue> {
-    const value = readHsvState(this.accessory.context.device as HejDevice).saturation;
-    this.platform.debug('accessory.saturation.get', {
-      deviceId: this.device.id,
-      name: this.device.name,
-      value,
-    });
-    return value;
-  }
-
-  private async handleSaturationSet(value: CharacteristicValue): Promise<void> {
-    await this.handleHsvSet({ saturation: Number(value) }, true);
   }
 
   private async handleHsvSet(
     partial: Partial<{ hue: number; saturation: number; brightness: number }>,
     forceColorMode: boolean,
   ): Promise<void> {
-    if (!this.client) {
-      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-    }
-
-    const currentDevice = this.accessory.context.device as HejDevice;
+    const currentDevice = this.currentDevice();
     const nextHsv = {
       ...readHsvState(currentDevice),
       ...partial,
     };
-    this.platform.info('accessory.hsv.set.requested', {
-      deviceId: this.device.id,
-      name: this.device.name,
-      forceColorMode,
-      stateKeys: Object.keys(partial),
-      value: nextHsv,
-    });
+    if (forceColorMode && currentDevice.deviceState?.lightMode !== 'COLOR') {
+      await this.handleControlSet({ lightMode: 'colour' }, 'light.mode');
+    }
+    await this.handleControlSet({ hsvColor: nextHsv }, 'light.hsv');
+  }
 
-    try {
-      if (forceColorMode && currentDevice.deviceState?.lightMode !== 'COLOR') {
-        await this.client.controlDevice(this.device.id, { lightMode: 'colour' });
+  private updateColorLight(device: HejDevice): void {
+    const light = this.accessory.getService(this.platform.Service.Lightbulb);
+    if (!light) {
+      return;
+    }
+    const power = readPowerState(device);
+    if (power !== undefined) {
+      light.updateCharacteristic(this.platform.Characteristic.On, power);
+    }
+    const hsv = readHsvState(device);
+    light.updateCharacteristic(this.platform.Characteristic.Brightness, hsv.brightness);
+    light.updateCharacteristic(this.platform.Characteristic.Hue, hsv.hue);
+    light.updateCharacteristic(this.platform.Characteristic.Saturation, hsv.saturation);
+  }
+
+  private updateWhiteLight(device: HejDevice): void {
+    const light = this.accessory.getService(this.platform.Service.Lightbulb);
+    if (!light) {
+      return;
+    }
+    const power = readPowerState(device);
+    if (power !== undefined) {
+      light.updateCharacteristic(this.platform.Characteristic.On, power);
+    }
+    light.updateCharacteristic(this.platform.Characteristic.Brightness, readNumberState(device, 'brightness', 100));
+    light.updateCharacteristic(
+      this.platform.Characteristic.ColorTemperature,
+      temperaturePercentToMired(readNumberState(device, 'temperature', 100)),
+    );
+  }
+
+  private updatePowerServices(device: HejDevice, keys: PowerKey[], serviceType: ServiceType): void {
+    keys.forEach((key) => {
+      this.updatePowerService(device, key, serviceType);
+    });
+  }
+
+  private updatePowerService(device: HejDevice, key: PowerKey, serviceType: ServiceType): void {
+    const service = this.accessory.getServiceById?.(serviceType, key)
+      ?? this.accessory.getService(serviceType);
+    if (!service) {
+      return;
+    }
+    service.updateCharacteristic(this.platform.Characteristic.On, readPowerStateByKey(device, key));
+  }
+
+  private updateOutlet(device: HejDevice): void {
+    const outlet = this.accessory.getService(this.platform.Service.Outlet);
+    if (!outlet) {
+      return;
+    }
+    const power = readPowerState(device) ?? false;
+    outlet.updateCharacteristic(this.platform.Characteristic.On, power);
+    outlet.updateCharacteristic(this.platform.Characteristic.OutletInUse, power);
+  }
+
+  private updateWindowCovering(device: HejDevice): void {
+    const covering = this.accessory.getService(this.platform.Service.WindowCovering);
+    if (!covering) {
+      return;
+    }
+    covering.updateCharacteristic(this.platform.Characteristic.CurrentPosition, readPosition(device));
+    covering.updateCharacteristic(this.platform.Characteristic.TargetPosition, readTargetPosition(device));
+    covering.updateCharacteristic(this.platform.Characteristic.PositionState, readPositionState(this.platform, device));
+  }
+
+  private updateMotionSensor(device: HejDevice): void {
+    this.accessory.getService(this.platform.Service.MotionSensor)
+      ?.updateCharacteristic(this.platform.Characteristic.MotionDetected, readMotionState(device));
+  }
+
+  private updateContactSensor(device: HejDevice): void {
+    this.accessory.getService(this.platform.Service.ContactSensor)
+      ?.updateCharacteristic(this.platform.Characteristic.ContactSensorState, readContactState(this.platform, device));
+  }
+
+  private updateTemperatureHumiditySensor(device: HejDevice): void {
+    this.accessory.getService(this.platform.Service.TemperatureSensor)
+      ?.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, readNumberState(device, 'temperature', 0));
+    this.accessory.getService(this.platform.Service.HumiditySensor)
+      ?.updateCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity, readNumberState(device, 'humidity', 0));
+  }
+
+  private updateLeakSensor(device: HejDevice): void {
+    this.accessory.getService(this.platform.Service.LeakSensor)
+      ?.updateCharacteristic(this.platform.Characteristic.LeakDetected, readLeakState(this.platform, device));
+  }
+
+  private updateSmokeSensor(device: HejDevice): void {
+    this.accessory.getService(this.platform.Service.SmokeSensor)
+      ?.updateCharacteristic(this.platform.Characteristic.SmokeDetected, readSmokeState(this.platform, device));
+  }
+
+  private updateBatteryService(device: HejDevice): void {
+    const battery = this.accessory.getService(this.batteryServiceType());
+    if (!battery) {
+      return;
+    }
+    const level = clampNumber(readNumberState(device, 'battery', 100), 0, 100);
+    battery.updateCharacteristic(this.platform.Characteristic.BatteryLevel, level);
+    battery.updateCharacteristic(
+      this.platform.Characteristic.StatusLowBattery,
+      level <= 20
+        ? this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW
+        : this.platform.Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL,
+    );
+  }
+
+  private updateThermostat(device: HejDevice): void {
+    const thermostat = this.accessory.getService(this.platform.Service.Thermostat);
+    if (!thermostat) {
+      return;
+    }
+    thermostat.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, readNumberState(device, 'temperature', 23));
+    thermostat.updateCharacteristic(this.platform.Characteristic.TargetTemperature, readNumberState(device, 'temperature', 23));
+    thermostat.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState, readCurrentHeatingCoolingState(this.platform, device));
+    thermostat.updateCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState, readTargetHeatingCoolingState(this.platform, device));
+  }
+
+  private updateFan(device: HejDevice): void {
+    const fanServiceType = this.fanServiceType();
+    const activeCharacteristic = this.platform.Characteristic.Active ?? this.platform.Characteristic.On;
+    this.accessory.getService(fanServiceType)
+      ?.updateCharacteristic(activeCharacteristic, readPowerState(device) ? 1 : 0);
+  }
+
+  private service(serviceType: ServiceType, name: string, subtype?: string): HomebridgeService {
+    const service = subtype
+      ? this.accessory.getServiceById?.(serviceType, subtype)
+      : this.accessory.getService(serviceType);
+    if (service) {
+      return service;
+    }
+    const addService = this.accessory.addService as unknown as AddServiceByType;
+    return subtype
+      ? addService.call(this.accessory, serviceType, name, subtype)
+      : addService.call(this.accessory, serviceType, name);
+  }
+
+  private batteryServiceType(): ServiceType {
+    const services = this.platform.Service as unknown as ServiceRegistry;
+    const serviceType = services.BatteryService ?? services.Battery;
+    if (!serviceType) {
+      throw new Error('Homebridge Battery service is unavailable');
+    }
+    return serviceType;
+  }
+
+  private fanServiceType(): ServiceType {
+    const services = this.platform.Service as unknown as ServiceRegistry;
+    const serviceType = services.Fanv2 ?? services.Fan;
+    if (!serviceType) {
+      throw new Error('Homebridge Fan service is unavailable');
+    }
+    return serviceType;
+  }
+
+  private currentDevice(): HejDevice {
+    return this.accessory.context.device as HejDevice;
+  }
+
+  private switchPowerKeys(device: HejDevice): PowerKey[] {
+    const match = /(?:Zigbee)?Switch(\d+)/.exec(device.deviceType);
+    const count = match?.[1] ? Number(match[1]) : countPowerKeys(device.deviceState);
+    return powerKeys(Math.max(1, count));
+  }
+
+  private powerStripKeys(device: HejDevice): PowerKey[] {
+    const count = Math.max(4, countPowerKeys(device.deviceState));
+    return powerKeys(count).filter((key) => key !== 'power5');
+  }
+
+  private removeStaleBaseServices(): void {
+    const desired = new Set(this.capability.homeKitServices);
+    const stale = [
+      ['Lightbulb', this.platform.Service.Lightbulb],
+      ['MotionSensor', this.platform.Service.MotionSensor],
+      ['Switch', this.platform.Service.Switch],
+      ['Outlet', this.platform.Service.Outlet],
+      ['WindowCovering', this.platform.Service.WindowCovering],
+      ['ContactSensor', this.platform.Service.ContactSensor],
+      ['TemperatureSensor', this.platform.Service.TemperatureSensor],
+      ['HumiditySensor', this.platform.Service.HumiditySensor],
+      ['LeakSensor', this.platform.Service.LeakSensor],
+      ['SmokeSensor', this.platform.Service.SmokeSensor],
+      ['Thermostat', this.platform.Service.Thermostat],
+      ['Fan', this.fanServiceType()],
+    ] as const;
+
+    for (const [name, serviceType] of stale) {
+      if (desired.has(name) || !serviceType) {
+        continue;
       }
-      await this.client.controlDevice(this.device.id, { hsvColor: nextHsv });
-      const nextDeviceState = {
-        ...(currentDevice.deviceState ?? {}),
-        hsvColor: nextHsv,
-        brightness: nextHsv.brightness,
-      };
-      if (forceColorMode) {
-        nextDeviceState.lightMode = 'COLOR' as const;
+      const service = this.accessory.getService(serviceType);
+      if (service) {
+        this.accessory.removeService(service);
       }
-      const nextDevice = {
-        ...currentDevice,
-        deviceState: nextDeviceState,
-      };
-      this.updateDevice(nextDevice);
-      this.platform.info('accessory.hsv.set.succeeded', {
-        deviceId: this.device.id,
-        name: this.device.name,
-        stateKeys: Object.keys(partial),
-        value: nextHsv,
-      });
-    } catch (error) {
-      this.platform.error('accessory.hsv.set.failed', {
-        deviceId: this.device.id,
-        name: this.device.name,
-        stateKeys: Object.keys(partial),
-        value: nextHsv,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+    }
+
+    if (['multi-switch', 'power-strip'].includes(this.capability.serviceKind)) {
+      const baseServiceType = this.capability.serviceKind === 'multi-switch'
+        ? this.platform.Service.Switch
+        : this.platform.Service.Outlet;
+      const baseService = this.accessory.getService(baseServiceType);
+      if (baseService) {
+        this.accessory.removeService(baseService);
+      }
     }
   }
-
-  private async handleMotionGet(): Promise<CharacteristicValue> {
-    const value = readMotionState(this.accessory.context.device as HejDevice);
-    this.platform.debug('accessory.motion.get', {
-      deviceId: this.device.id,
-      name: this.device.name,
-      value,
-    });
-    return value;
-  }
 }
 
-function getServiceKind(device: HejDevice): 'color-light' | 'motion-sensor' | 'switch' {
-  if (device.deviceType === 'SensorMo') {
-    return 'motion-sensor';
+function mergeDeviceState(device: HejDevice, patch: Record<string, unknown>): HejDevice {
+  const deviceState = {
+    ...(device.deviceState ?? {}),
+    ...patch,
+  };
+  if (typeof patch.hsvColor === 'object' && patch.hsvColor) {
+    const brightness = Number((patch.hsvColor as { brightness?: unknown }).brightness);
+    if (Number.isFinite(brightness)) {
+      deviceState.brightness = brightness;
+    }
   }
-  if (isColorLightDevice(device)) {
-    return 'color-light';
+  if (patch.lightMode === 'colour') {
+    deviceState.lightMode = 'COLOR';
   }
-  return 'switch';
-}
-
-function isColorLightDevice(device: HejDevice): boolean {
-  return ['LightRgbw5', 'LedStripRgbw2'].includes(device.deviceType);
-}
-
-function primaryPowerKey(device: HejDevice): string {
-  if (device.deviceState?.power1 !== undefined) {
-    return 'power1';
+  if (patch.lightMode === 'white') {
+    deviceState.lightMode = 'WHITE';
   }
-  if (device.deviceState?.power2 !== undefined) {
-    return 'power2';
-  }
-  return 'power';
+  return {
+    ...device,
+    deviceState,
+  };
 }
 
 function readPowerState(device: HejDevice): boolean | undefined {
   if (device.deviceState?.power !== undefined) {
-    return device.deviceState.power;
+    return Boolean(device.deviceState.power);
   }
-  if (device.deviceState?.power1 !== undefined) {
-    return device.deviceState.power1;
-  }
-  if (device.deviceState?.power2 !== undefined) {
-    return device.deviceState.power2;
+  for (const key of powerKeys(6)) {
+    if (device.deviceState?.[key] !== undefined) {
+      return Boolean(device.deviceState[key]);
+    }
   }
   return undefined;
 }
 
+function readPowerStateByKey(device: HejDevice, key: PowerKey): boolean {
+  if (key === 'power') {
+    return readPowerState(device) ?? false;
+  }
+  return Boolean(device.deviceState?.[key]);
+}
+
 function readHsvState(device: HejDevice): { hue: number; saturation: number; brightness: number } {
   return {
-    hue: clampNumber(device.deviceState?.hsvColor?.hue ?? 0, 0, 360),
-    saturation: clampNumber(device.deviceState?.hsvColor?.saturation ?? 0, 0, 100),
-    brightness: clampNumber(device.deviceState?.hsvColor?.brightness ?? device.deviceState?.brightness ?? 100, 0, 100),
+    hue: clampNumber(Number(device.deviceState?.hsvColor?.hue ?? 0), 0, 360),
+    saturation: clampNumber(Number(device.deviceState?.hsvColor?.saturation ?? 0), 0, 100),
+    brightness: clampNumber(Number(device.deviceState?.hsvColor?.brightness ?? device.deviceState?.brightness ?? 100), 0, 100),
   };
 }
 
 function readMotionState(device: HejDevice): boolean {
   return Boolean(device.deviceState?.motionDetected);
+}
+
+function readContactState(platform: HejhomePlatform, device: HejDevice): number {
+  const state = String(device.deviceState?.state ?? '').toUpperCase();
+  const opened = state === 'OPEN' || device.deviceState?.doorOpened === true;
+  return opened
+    ? platform.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
+    : platform.Characteristic.ContactSensorState.CONTACT_DETECTED;
+}
+
+function readLeakState(platform: HejhomePlatform, device: HejDevice): number {
+  return device.deviceState?.alarm
+    ? platform.Characteristic.LeakDetected.LEAK_DETECTED
+    : platform.Characteristic.LeakDetected.LEAK_NOT_DETECTED;
+}
+
+function readSmokeState(platform: HejhomePlatform, device: HejDevice): number {
+  return device.deviceState?.alarm
+    ? platform.Characteristic.SmokeDetected.SMOKE_DETECTED
+    : platform.Characteristic.SmokeDetected.SMOKE_NOT_DETECTED;
+}
+
+function readPosition(device: HejDevice): number {
+  return clampNumber(Number(device.deviceState?.percentState ?? device.deviceState?.percentControl ?? 0), 0, 100);
+}
+
+function readTargetPosition(device: HejDevice): number {
+  return clampNumber(Number(device.deviceState?.percentControl ?? device.deviceState?.percentState ?? 0), 0, 100);
+}
+
+function readPositionState(platform: HejhomePlatform, device: HejDevice): number {
+  const workState = String(device.deviceState?.workState ?? device.deviceState?.control ?? '').toLowerCase();
+  if (workState.includes('open')) {
+    return platform.Characteristic.PositionState.INCREASING;
+  }
+  if (workState.includes('close')) {
+    return platform.Characteristic.PositionState.DECREASING;
+  }
+  return platform.Characteristic.PositionState.STOPPED;
+}
+
+function readCurrentHeatingCoolingState(platform: HejhomePlatform, device: HejDevice): number {
+  const power = device.deviceState?.power as unknown;
+  if (power === false || power === 'false' || power === '꺼짐') {
+    return platform.Characteristic.CurrentHeatingCoolingState.OFF;
+  }
+  return platform.Characteristic.CurrentHeatingCoolingState.COOL;
+}
+
+function readTargetHeatingCoolingState(platform: HejhomePlatform, device: HejDevice): number {
+  const power = device.deviceState?.power as unknown;
+  if (power === false || power === 'false' || power === '꺼짐') {
+    return platform.Characteristic.TargetHeatingCoolingState.OFF;
+  }
+  const mode = Number(device.deviceState?.mode ?? 0);
+  if (mode === 1) {
+    return platform.Characteristic.TargetHeatingCoolingState.HEAT;
+  }
+  if (mode === 2) {
+    return platform.Characteristic.TargetHeatingCoolingState.AUTO;
+  }
+  return platform.Characteristic.TargetHeatingCoolingState.COOL;
+}
+
+function readNumberState(device: HejDevice, key: keyof HejDeviceState, fallback: number): number {
+  const value = Number(device.deviceState?.[key] ?? fallback);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function countPowerKeys(state: HejDeviceState | null | undefined): number {
+  if (!state) {
+    return 1;
+  }
+  return Object.keys(state).filter((key) => /^power\d+$/.test(key)).length || 1;
+}
+
+function powerKeys(count: number): PowerKey[] {
+  return Array.from({ length: count }, (_, index) => `power${index + 1}` as PowerKey);
+}
+
+function temperaturePercentToMired(value: number): number {
+  const kelvin = 3000 + (clampNumber(value, 0, 100) / 100 * 3500);
+  return clampNumber(1_000_000 / kelvin, 140, 500);
+}
+
+function miredToTemperaturePercent(value: number): number {
+  const kelvin = 1_000_000 / clampNumber(value, 140, 500);
+  return clampNumber(((kelvin - 3000) / 3500) * 100, 0, 100);
 }
 
 function clampNumber(value: number, min: number, max: number): number {

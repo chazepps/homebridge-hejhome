@@ -18,7 +18,6 @@ test('custom login UI follows Homebridge iframe rules and exposes the sequential
       closeSettings: () => undefined,
       disableSaveButton: () => undefined,
       enableSaveButton: () => undefined,
-      getPluginConfig: async () => [],
       hideSpinner: () => undefined,
       request: async (pathName: string, payload: unknown) => {
         window.__hejhomeRequests.push(pathName);
@@ -122,11 +121,35 @@ test('custom config UI shows the settings dashboard instead of the login form fo
               ],
             },
             supportedModels: [
-              { deviceType: 'LightRgbw5', label: 'RGBW 조명', homeKitService: 'Lightbulb' },
-              { deviceType: 'LedStripRgbw2', label: 'LED 스트립', homeKitService: 'Lightbulb' },
-              { deviceType: 'RelayController', label: '릴레이 컨트롤러', homeKitService: 'Switch' },
-              { deviceType: 'SensorMo', label: '모션 센서', homeKitService: 'MotionSensor' },
+              { deviceType: 'LightRgbw5', label: 'RGBW 조명', homeKitService: 'Lightbulb', supportStatus: 'supported' },
+              { deviceType: 'LedStripRgbw2', label: 'LED 스트립', homeKitService: 'Lightbulb', supportStatus: 'supported' },
+              { deviceType: 'RelayController', label: '릴레이 컨트롤러', homeKitService: 'Switch', supportStatus: 'supported' },
+              { deviceType: 'SensorMo', label: '모션 센서', homeKitService: 'MotionSensor', supportStatus: 'supported' },
+              { deviceType: 'IrTv', label: 'IR TV', homeKitService: 'Switch', supportStatus: 'partial' },
+              { deviceType: 'HomeCamera', label: '홈 카메라', homeKitService: 'Camera', supportStatus: 'deferred' },
             ],
+            scopeOptions: {
+              defaultMode: 'first-family',
+              families: [
+                {
+                  familyId: 101,
+                  name: '첫 번째 집',
+                  selected: true,
+                  rooms: [
+                    { roomId: 1, name: '거실', selected: true },
+                    { roomId: 2, name: '주방', selected: true },
+                  ],
+                },
+                {
+                  familyId: 202,
+                  name: '두 번째 집',
+                  selected: false,
+                  rooms: [
+                    { roomId: 3, name: '작은방', selected: false },
+                  ],
+                },
+              ],
+            },
             issueTemplate: {
               title: '[Unsupported Device] UnknownHeater / Warm Box',
               body: 'Device type: UnknownHeater\\nModel name: Warm Box',
@@ -138,6 +161,15 @@ test('custom config UI shows the settings dashboard instead of the login form fo
         }
         return { ok: true };
       },
+      getPluginConfig: async () => [
+        {
+          name: 'Hejhome',
+          platform: 'Hejhome',
+          scope: {
+            mode: 'first-family',
+          },
+        },
+      ],
       savePluginConfig: async () => undefined,
       showSpinner: () => undefined,
       toast: {
@@ -167,8 +199,16 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await expect(page.getByText('전구 / 구현 중')).toHaveCount(1);
   await expect(page.getByText('구현 중', { exact: true })).toHaveCount(0);
   await expect(page.getByText('전구', { exact: true })).toBeVisible();
-  await expect(page.getByText('스위치')).toBeVisible();
+  await expect(page.getByText('스위치', { exact: true })).toBeVisible();
   await expect(page.getByText('모션 센서', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '집/방 선택' })).toBeVisible();
+  await expect(page.getByText('처음 로그인하면 첫 번째 집의 모든 방을 사용합니다. 여기서 언제든 바꿀 수 있습니다.')).toBeVisible();
+  await expect(page.getByLabel('첫 번째 집')).toBeChecked();
+  await expect(page.getByLabel('두 번째 집')).not.toBeChecked();
+  await expect(page.getByLabel('거실')).toBeChecked();
+  await expect(page.getByRole('button', { name: '집/방 설정 저장' })).toBeVisible();
+  await expect(page.getByText('부분 지원')).toBeVisible();
+  await expect(page.getByText('카메라는 API 분석 완료, Home 앱 영상 연동은 다음 단계')).toBeVisible();
   await expect(page.getByText('1개 발견')).toBeVisible();
   await expect(page.getByText('[Unsupported Device] UnknownHeater / Warm Box')).toBeVisible();
   await expect(page.getByText('세션')).toHaveCount(0);

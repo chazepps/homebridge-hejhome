@@ -86,17 +86,37 @@ export class HejRealtimeClient {
     for (const status of report.status ?? []) {
       switch (status.code) {
         case 'switch_led':
+        case 'switch_power':
           deviceState.power = status.value;
           break;
-        case 'switch_1':
-          deviceState.power1 = status.value;
+        case 'switch': {
+          deviceState.power = status.value;
+          deviceState.state = status.value ? 'OPEN' : 'CLOSED';
           break;
-        case 'switch_2':
-          deviceState.power2 = status.value;
+        }
+        case 'prm_switch':
+          deviceState.state = status.value ? 'OPEN' : 'CLOSED';
           break;
+        case 'switch_usb1':
+          deviceState.power4 = status.value;
+          break;
+        default: {
+          const powerKey = parseSwitchPowerKey(status.code);
+          if (powerKey) {
+            deviceState[powerKey] = status.value;
+            break;
+          }
+          deviceState[status.code] = status.value;
+          break;
+        }
         case 'bright_value':
           if (typeof status.value === 'number') {
             deviceState.brightness = percentFromByte(status.value);
+          }
+          break;
+        case 'temp_value':
+          if (typeof status.value === 'number') {
+            deviceState.temperature = percentFromByte(status.value);
           }
           break;
         case 'work_mode':
@@ -120,8 +140,46 @@ export class HejRealtimeClient {
           }
           break;
         }
-        default:
-          deviceState[status.code] = status.value;
+        case 'percent_state':
+          deviceState.percentState = toNumberOrValue(status.value);
+          break;
+        case 'percent_control':
+          deviceState.percentControl = toNumberOrValue(status.value);
+          break;
+        case 'control':
+          deviceState.control = String(status.value ?? '');
+          break;
+        case 'wind':
+          deviceState.fanSpeed = toNumberOrValue(status.value);
+          break;
+        case 'temp':
+          deviceState.temperature = toNumberOrValue(status.value);
+          break;
+        case 'cur_power':
+          deviceState.curPower = toNumber(status.value);
+          break;
+        case 'cur_current':
+          deviceState.curCurrent = toNumber(status.value);
+          break;
+        case 'cur_voltage':
+          deviceState.curVoltage = toNumber(status.value);
+          break;
+        case 'va_temperature':
+        case 'prm_temperature':
+          deviceState.temperature = decimalFromTenths(status.value);
+          break;
+        case 'va_humidity':
+        case 'prm_content':
+          deviceState.humidity = percentFromTenths(status.value);
+          break;
+        case 'battery':
+          deviceState.battery = toNumber(status.value);
+          break;
+        case 'alarm_switch':
+          deviceState.alarmSwitch = Boolean(status.value);
+          break;
+        case 'alarm_state':
+          deviceState.alarm = status.value === 'alarm' || status.value === '1' || status.value === true;
           break;
       }
     }
@@ -135,6 +193,32 @@ export class HejRealtimeClient {
       deviceState,
     });
   }
+}
+
+function parseSwitchPowerKey(code: string): `power${number}` | null {
+  const match = /^switch_(\d+)$/.exec(code);
+  if (!match?.[1]) {
+    return null;
+  }
+  return `power${Number(match[1])}`;
+}
+
+function toNumber(value: unknown): number {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function toNumberOrValue(value: unknown): number | string {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : String(value ?? '');
+}
+
+function decimalFromTenths(value: unknown): number {
+  return Math.round(toNumber(value)) / 10;
+}
+
+function percentFromTenths(value: unknown): number {
+  return Math.round(toNumber(value) / 10);
 }
 
 function parseLightMode(value: unknown): 'WHITE' | 'COLOR' | 'SCENE' | undefined {

@@ -33,6 +33,57 @@
           }
         }
       },
+      "scope": {
+        "title": "집/방 선택",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "title": "장비를 불러올 범위",
+            "type": "string",
+            "default": "first-family",
+            "oneOf": [
+              {
+                "title": "첫 번째 집",
+                "enum": [
+                  "first-family"
+                ]
+              },
+              {
+                "title": "모든 집",
+                "enum": [
+                  "all"
+                ]
+              },
+              {
+                "title": "직접 선택",
+                "enum": [
+                  "custom"
+                ]
+              }
+            ]
+          },
+          "includedFamilyIds": {
+            "title": "선택한 집",
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "default": []
+          },
+          "includedRoomsByFamilyId": {
+            "title": "선택한 방",
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "default": {}
+          }
+        }
+      },
       "debug": {
         "title": "Debug Logging",
         "type": "boolean",

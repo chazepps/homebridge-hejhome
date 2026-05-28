@@ -8,17 +8,19 @@ This directory describes the new Homebridge plugin implementation for Hejhome de
 
 1. `../ARCHITECTURE.md`
 2. `DESIGN.md`
-3. `FRONTEND.md`
-4. `SECURITY.md`
-5. `RELIABILITY.md`
-6. `PLANS.md`
-7. `generated/project-structure/`
+3. `api/`
+4. `FRONTEND.md`
+5. `SECURITY.md`
+6. `RELIABILITY.md`
+7. `PLANS.md`
+8. `generated/project-structure/`
 
 ## Map
 
 | File | Purpose |
 | --- | --- |
 | `DESIGN.md` | Runtime and module boundaries |
+| `api/README.md` | Redacted Hejhome Web API analysis |
 | `FRONTEND.md` | Homebridge custom UI behavior |
 | `PRODUCT_SENSE.md` | Product decisions and user expectations |
 | `RELIABILITY.md` | Failure handling and recovery |

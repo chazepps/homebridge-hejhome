@@ -15,6 +15,8 @@ Generated from the current repository tree. The archived `backup/` directory and
 ├── ARCHITECTURE.md
 ├── config.schema.json
 ├── docs
+│   ├── api
+│   │   └── README.md
 │   ├── design-docs
 │   │   └── README.md
 │   ├── DESIGN.md
@@ -59,6 +61,10 @@ Generated from the current repository tree. The archived `backup/` directory and
 ├── playwright.config.ts
 ├── README.md
 ├── src
+│   ├── devices
+│   │   └── capabilities.ts
+│   ├── discovery
+│   │   └── scope.ts
 │   ├── hej
 │   │   ├── auth.ts
 │   │   ├── realtime.ts
@@ -97,8 +103,10 @@ Generated from the current repository tree. The archived `backup/` directory and
 │               ├── commissioning.json
 │               └── credentials.json
 ├── tests
+│   ├── device-capabilities.test.ts
 │   ├── device-snapshot-store.test.ts
 │   ├── device-support.test.ts
+│   ├── discovery-scope.test.ts
 │   ├── hej-auth.test.ts
 │   ├── homebridge-dev-ui.test.ts
 │   ├── log-store.test.ts
