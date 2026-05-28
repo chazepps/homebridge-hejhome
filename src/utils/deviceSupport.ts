@@ -1,4 +1,5 @@
 import type { HejDeviceSnapshot } from '../storage/deviceSnapshotStore.js';
+import type { HejDevice, HejhomePlatformConfig } from '../types.js';
 import {
   getDeviceCapability,
   getSupportedDeviceModels,
@@ -30,7 +31,10 @@ export interface UnsupportedDeviceIssueTemplate {
 
 export const SUPPORTED_DEVICE_MODELS: SupportedDeviceModel[] = getSupportedDeviceModels();
 
-export function createDeviceSupportSummary(snapshot: HejDeviceSnapshot | null | undefined): DeviceSupportSummary {
+export function createDeviceSupportSummary(
+  snapshot: HejDeviceSnapshot | null | undefined,
+  scope?: HejhomePlatformConfig['scope'],
+): DeviceSupportSummary {
   if (!snapshot) {
     return {
       generatedAt: null,
@@ -44,7 +48,7 @@ export function createDeviceSupportSummary(snapshot: HejDeviceSnapshot | null | 
   }
 
   const unsupported = new Map<string, UnsupportedProductSummary>();
-  const devices = snapshot.families.flatMap((entry) => entry.devices);
+  const devices = getScopedSnapshotDevices(snapshot, scope);
   let supportedCount = 0;
   let partialCount = 0;
   let deferredCount = 0;
@@ -93,6 +97,47 @@ export function createDeviceSupportSummary(snapshot: HejDeviceSnapshot | null | 
       return (a.modelName ?? '').localeCompare(b.modelName ?? '');
     }),
   };
+}
+
+function getScopedSnapshotDevices(snapshot: HejDeviceSnapshot, scope?: HejhomePlatformConfig['scope']): HejDevice[] {
+  const families = snapshot.families ?? [];
+  if (families.length === 0) {
+    return [];
+  }
+
+  const resolvedScope = scope ?? { mode: 'first-family' };
+  const mode = resolvedScope.mode ?? 'first-family';
+  if (mode === 'all') {
+    return families.flatMap((entry) => entry.devices);
+  }
+
+  if (mode === 'custom') {
+    const allowedFamilies = new Set((resolvedScope.includedFamilyIds ?? []).map((familyId) => Number(familyId)));
+    if (allowedFamilies.size === 0) {
+      return [];
+    }
+    const roomsByFamily = resolvedScope.includedRoomsByFamilyId ?? {};
+    return families.flatMap((entry) => {
+      const familyId = Number(entry.family.familyId);
+      if (!allowedFamilies.has(familyId)) {
+        return [];
+      }
+
+      const roomKey = String(familyId);
+      const hasRoomScope = Object.hasOwn(roomsByFamily, roomKey);
+      if (!hasRoomScope) {
+        return entry.devices;
+      }
+
+      const allowedRooms = new Set((roomsByFamily[roomKey] ?? []).map((roomId) => Number(roomId)));
+      if (allowedRooms.size === 0) {
+        return [];
+      }
+      return entry.devices.filter((device) => allowedRooms.has(Number(device.roomId)));
+    });
+  }
+
+  return families[0]?.devices ?? [];
 }
 
 export function createUnsupportedDeviceIssueTemplate(summary: DeviceSupportSummary): UnsupportedDeviceIssueTemplate {

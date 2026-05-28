@@ -1,4 +1,5 @@
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
+import fs from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 
 import { HejAuthClient } from '../dist/hej/auth.js';
@@ -30,6 +31,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     this.onRequest('/verify-code', this.handleVerifyCode.bind(this));
     this.onRequest('/login', this.handleLogin.bind(this));
     this.onRequest('/logout', this.handleLogout.bind(this));
+    this.onRequest('/save-scope', this.handleSaveScope.bind(this));
     this.onRequest('/session-status', this.handleSessionStatus.bind(this));
     this.onRequest('/ui-event', this.handleUiEvent.bind(this));
 
@@ -118,8 +120,11 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     return await this.timedRequest('session-status', {}, async () => {
       const session = await this.sessionStore.load();
       const snapshot = await this.snapshotStore.load();
-      const deviceSummary = createDeviceSupportSummary(snapshot);
+      const platformConfig = await this.loadPlatformConfig();
+      const scope = platformConfig.scope ?? { mode: 'first-family' };
+      const deviceSummary = createDeviceSupportSummary(snapshot, scope);
       const baseStatus = {
+        scope,
         deviceSummary,
         issueTemplate: createUnsupportedDeviceIssueTemplate(deviceSummary),
         supportedModels: SUPPORTED_DEVICE_MODELS,
@@ -173,6 +178,64 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       });
       return result;
     }, 'Hejhome 세션 상태 확인에 실패했습니다.');
+  }
+
+  async handleSaveScope(payload) {
+    return await this.timedRequest('scope.save', payload, async () => {
+      const scope = normalizeScope(payload?.scope);
+      await this.savePlatformScope(scope);
+      const snapshot = await this.snapshotStore.load();
+      const deviceSummary = createDeviceSupportSummary(snapshot, scope);
+      this.log('scope.save.persisted', {
+        mode: scope.mode,
+        familyCount: scope.includedFamilyIds?.length ?? 0,
+      });
+      return {
+        ok: true,
+        scope,
+        deviceSummary,
+        issueTemplate: createUnsupportedDeviceIssueTemplate(deviceSummary),
+      };
+    }, '집/방 설정 저장에 실패했습니다.');
+  }
+
+  async loadPlatformConfig() {
+    const config = await this.loadHomebridgeConfig();
+    return findHejhomePlatformConfig(config) ?? { name: 'Hejhome', platform: 'Hejhome' };
+  }
+
+  async savePlatformScope(scope) {
+    const config = await this.loadHomebridgeConfig();
+    const platforms = Array.isArray(config.platforms) ? config.platforms : [];
+    const platformIndex = platforms.findIndex((entry) => entry?.platform === 'Hejhome');
+    const nextPlatform = {
+      ...(platformIndex >= 0 ? platforms[platformIndex] : { name: 'Hejhome', platform: 'Hejhome' }),
+      scope,
+    };
+    const nextPlatforms = platformIndex >= 0
+      ? platforms.map((entry, index) => index === platformIndex ? nextPlatform : entry)
+      : [...platforms, nextPlatform];
+    const nextConfig = {
+      ...config,
+      platforms: nextPlatforms,
+    };
+    await this.saveHomebridgeConfig(nextConfig);
+  }
+
+  async loadHomebridgeConfig() {
+    if (!this.homebridgeConfigPath) {
+      throw new Error('Homebridge config path is not available.');
+    }
+    return JSON.parse(await fs.readFile(this.homebridgeConfigPath, 'utf8'));
+  }
+
+  async saveHomebridgeConfig(config) {
+    if (!this.homebridgeConfigPath) {
+      throw new Error('Homebridge config path is not available.');
+    }
+    const temporaryPath = `${this.homebridgeConfigPath}.hejhome.tmp`;
+    await fs.writeFile(temporaryPath, `${JSON.stringify(config, null, 4)}\n`, { mode: 0o600 });
+    await fs.rename(temporaryPath, this.homebridgeConfigPath);
   }
 
   async buildScopeOptions(restClient, families) {
@@ -249,6 +312,47 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
 function normalizeIdentifier(value) {
   return String(value ?? '').trim();
+}
+
+function findHejhomePlatformConfig(config) {
+  return (Array.isArray(config?.platforms) ? config.platforms : [])
+    .find((entry) => entry?.platform === 'Hejhome');
+}
+
+function normalizeScope(value) {
+  const mode = value?.mode === 'all' || value?.mode === 'custom' || value?.mode === 'first-family'
+    ? value.mode
+    : 'first-family';
+  if (mode !== 'custom') {
+    return { mode };
+  }
+
+  const includedFamilyIds = Array.isArray(value?.includedFamilyIds)
+    ? value.includedFamilyIds
+      .map((familyId) => Number(familyId))
+      .filter((familyId) => Number.isFinite(familyId))
+    : [];
+  const includedRoomsByFamilyId = {};
+  const sourceRooms = value?.includedRoomsByFamilyId && typeof value.includedRoomsByFamilyId === 'object'
+    ? value.includedRoomsByFamilyId
+    : {};
+  for (const familyId of includedFamilyIds) {
+    const key = String(familyId);
+    if (!Object.hasOwn(sourceRooms, key)) {
+      continue;
+    }
+    includedRoomsByFamilyId[key] = Array.isArray(sourceRooms[key])
+      ? sourceRooms[key]
+        .map((roomId) => Number(roomId))
+        .filter((roomId) => Number.isFinite(roomId))
+      : [];
+  }
+
+  return {
+    mode: 'custom',
+    includedFamilyIds,
+    includedRoomsByFamilyId,
+  };
 }
 
 function normalizeEmailIdentifier(value) {

@@ -20,6 +20,9 @@ export function resolveDiscoveryScope(
 
   if (mode === 'custom') {
     const allowedFamilies = new Set(config.scope?.includedFamilyIds ?? []);
+    if (allowedFamilies.size === 0) {
+      return [];
+    }
     const roomsByFamily = config.scope?.includedRoomsByFamilyId ?? {};
     const selected = families
       .filter((family) => allowedFamilies.has(family.familyId))

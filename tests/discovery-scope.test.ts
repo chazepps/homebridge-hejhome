@@ -53,4 +53,16 @@ describe('discovery scope', () => {
       { familyId: 101, roomIds: [] },
     ]);
   });
+
+  test('preserves an explicitly empty custom family selection', () => {
+    const config = {
+      scope: {
+        mode: 'custom',
+        includedFamilyIds: [],
+        includedRoomsByFamilyId: {},
+      },
+    } as HejhomePlatformConfig;
+
+    expect(resolveDiscoveryScope(config, families)).toEqual([]);
+  });
 });

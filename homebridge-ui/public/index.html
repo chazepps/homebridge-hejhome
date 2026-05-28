@@ -566,6 +566,7 @@
   let loginCompleted = false;
   let verificationSent = false;
   let verified = false;
+  let currentStatus = null;
 
   function updateControls() {
     if (loginCompleted) {
@@ -672,6 +673,7 @@
 	  }
 
 	  async function showSettingsView(status) {
+	    currentStatus = status;
 	    loginView.classList.add('is-hidden');
 	    settingsView.classList.remove('is-hidden');
 	    renderSessionStatus(status);
@@ -781,18 +783,8 @@
 	      .join(' + ');
 	  }
 
-	  async function getCurrentPlatformConfig() {
-	    try {
-	      const configs = await window.homebridge.getPluginConfig();
-	      return (configs ?? []).find((config) => config.platform === 'Hejhome') ?? { name: 'Hejhome', platform: 'Hejhome' };
-	    } catch {
-	      return { name: 'Hejhome', platform: 'Hejhome' };
-	    }
-	  }
-
 	  async function renderScopeStatus(status) {
-	    const platformConfig = await getCurrentPlatformConfig();
-	    const scope = platformConfig.scope ?? { mode: 'first-family' };
+	    const scope = status.scope ?? { mode: status.scopeOptions?.defaultMode ?? 'first-family' };
 	    const options = status.scopeOptions ?? { families: [] };
 	    scopeList.replaceChildren();
 	    scopeStatus.textContent = '';
@@ -861,7 +853,6 @@
 	  }
 
 	  async function saveScopeSelection() {
-	    const platformConfig = await getCurrentPlatformConfig();
 	    const familyInputs = [...scopeList.querySelectorAll('input[data-family-id]:not([data-room-id])')];
 	    const roomInputs = [...scopeList.querySelectorAll('input[data-room-id]')];
 	    const selectedFamilyIds = familyInputs
@@ -907,14 +898,16 @@
 	      };
 	    }
 
-	    const configs = await window.homebridge.getPluginConfig();
-	    const nextConfig = { ...platformConfig, scope: nextScope };
-	    const nextConfigs = (configs ?? []).some((config) => config.platform === 'Hejhome')
-	      ? configs.map((config) => config.platform === 'Hejhome' ? nextConfig : config)
-	      : [...(configs ?? []), nextConfig];
-	    await window.homebridge.updatePluginConfig(nextConfigs);
-	    await window.homebridge.savePluginConfig();
-	    scopeStatus.textContent = '집/방 설정을 저장했습니다. Homebridge를 다시 시작하면 장비 목록이 새 설정으로 바뀝니다.';
+	    const result = await requestWithTimeout('/save-scope', { scope: nextScope }, 15000, '집/방 설정 저장');
+	    currentStatus = {
+	      ...(currentStatus ?? {}),
+	      scope: result.scope ?? nextScope,
+	      deviceSummary: result.deviceSummary ?? currentStatus?.deviceSummary,
+	      issueTemplate: result.issueTemplate ?? currentStatus?.issueTemplate,
+	    };
+	    await renderScopeStatus(currentStatus);
+	    renderDeviceStatus(currentStatus);
+	    scopeStatus.textContent = '집/방 설정을 저장했습니다. 아래 현황은 새 선택 기준으로 바뀌었습니다. Homebridge를 다시 시작하면 Home 앱 장비도 새 설정으로 바뀝니다.';
 	    scopeStatus.classList.add('is-visible');
 	    window.homebridge.toast.success('집/방 설정을 저장했습니다.');
 	    await logUiEvent('scope.save.success', { mode: nextScope.mode, familyCount: selectedFamilyIds.length });

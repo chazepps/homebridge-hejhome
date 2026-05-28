@@ -46,6 +46,79 @@ describe('device support summary', () => {
     expect(SUPPORTED_DEVICE_MODELS.map((model) => model.deviceType)).toContain('SensorMo');
   });
 
+  test('counts zero devices for an explicitly empty room selection', () => {
+    const snapshot: HejDeviceSnapshot = {
+      generatedAt: '2026-05-26T01:00:00.000Z',
+      familyCount: 1,
+      deviceCount: 2,
+      families: [
+        {
+          family: { familyId: 101, name: '1203' },
+          devices: [
+            { ...device('light-1', 'LightRgbw5', 'Pendant'), familyId: 101, roomId: 1 },
+            { ...device('motion-1', 'SensorMo', 'GKZ-MO021'), familyId: 101, roomId: 2 },
+          ],
+        },
+      ],
+    };
+
+    const summary = createDeviceSupportSummary(snapshot, {
+      mode: 'custom',
+      includedFamilyIds: [101],
+      includedRoomsByFamilyId: {
+        '101': [],
+      },
+    });
+
+    expect(summary).toMatchObject({
+      generatedAt: '2026-05-26T01:00:00.000Z',
+      registeredCount: 0,
+      supportedCount: 0,
+      partialCount: 0,
+      deferredCount: 0,
+      unsupportedCount: 0,
+      unsupportedProducts: [],
+    });
+  });
+
+  test('filters device support summary by selected room', () => {
+    const snapshot: HejDeviceSnapshot = {
+      generatedAt: '2026-05-26T01:00:00.000Z',
+      familyCount: 1,
+      deviceCount: 2,
+      families: [
+        {
+          family: { familyId: 101, name: '1203' },
+          devices: [
+            { ...device('light-1', 'LightRgbw5', 'Pendant'), familyId: 101, roomId: 1 },
+            { ...device('heater-1', 'UnknownHeater', 'Warm Box'), familyId: 101, roomId: 2 },
+          ],
+        },
+      ],
+    };
+
+    const summary = createDeviceSupportSummary(snapshot, {
+      mode: 'custom',
+      includedFamilyIds: [101],
+      includedRoomsByFamilyId: {
+        '101': [2],
+      },
+    });
+
+    expect(summary).toMatchObject({
+      registeredCount: 1,
+      supportedCount: 0,
+      unsupportedCount: 1,
+      unsupportedProducts: [
+        {
+          deviceType: 'UnknownHeater',
+          modelName: 'Warm Box',
+          count: 1,
+        },
+      ],
+    });
+  });
+
   test('builds a readable Korean support request template with KST dates', () => {
     const template = createUnsupportedDeviceIssueTemplate({
       generatedAt: '2026-05-26T01:00:00.000Z',
