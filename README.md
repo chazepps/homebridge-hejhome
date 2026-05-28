@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/latest/branding/logo.png" alt="Hejhome logo" height="150">
+  <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/main/branding/logo.png" alt="Hejhome logo" height="150">
 </p>
 
 <h1 align="center">Homebridge Hejhome Plugin</h1>

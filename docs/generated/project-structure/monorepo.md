@@ -13,6 +13,9 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── extensions.json
 │   └── settings.json
 ├── ARCHITECTURE.md
+├── branding
+│   ├── icon.png
+│   └── logo.png
 ├── config.schema.json
 ├── docs
 │   ├── api

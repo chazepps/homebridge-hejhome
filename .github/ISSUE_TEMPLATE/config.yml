@@ -1,5 +1,8 @@
-# blank_issues_enabled: false
-# contact_links:
-#   - name: Homebridge Discord Community
-#     url: https://discord.gg/kqNCe2D
-#     about: Ask your questions in the #YOUR_CHANNEL_HERE channel
+blank_issues_enabled: false
+contact_links:
+  - name: Homebridge Discord Community
+    url: https://discord.gg/kqNCe2D
+    about: Ask general Homebridge questions in the Homebridge Discord community.
+  - name: Hejhome Plugin README
+    url: https://github.com/chazepps/homebridge-hejhome#readme
+    about: Read setup, supported devices, and verification guidance before opening a new issue.
