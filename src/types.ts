@@ -31,6 +31,7 @@ export interface HejDeviceState {
   power1?: boolean;
   power2?: boolean;
   battery?: number;
+  motionDetected?: boolean;
   lastMotionAt?: number;
 }
 

@@ -125,6 +125,7 @@ test('custom config UI shows the settings dashboard instead of the login form fo
               { deviceType: 'LightRgbw5', label: 'RGBW 조명', homeKitService: 'Lightbulb' },
               { deviceType: 'LedStripRgbw2', label: 'LED 스트립', homeKitService: 'Lightbulb' },
               { deviceType: 'RelayController', label: '릴레이 컨트롤러', homeKitService: 'Switch' },
+              { deviceType: 'SensorMo', label: '모션 센서', homeKitService: 'MotionSensor' },
             ],
             issueTemplate: {
               title: '[Unsupported Device] UnknownHeater / Warm Box',
@@ -162,15 +163,18 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await expect(page.getByText('LightRgbw5')).toBeVisible();
   await expect(page.getByText('LedStripRgbw2')).toBeVisible();
   await expect(page.getByText('RelayController')).toBeVisible();
-  await expect(page.getByText('전구 / 구현 중')).toHaveCount(2);
+  await expect(page.getByText('SensorMo')).toBeVisible();
+  await expect(page.getByText('전구 / 구현 중')).toHaveCount(1);
   await expect(page.getByText('구현 중', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('전구', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('전구', { exact: true })).toBeVisible();
   await expect(page.getByText('스위치')).toBeVisible();
+  await expect(page.getByText('모션 센서', { exact: true })).toBeVisible();
   await expect(page.getByText('1개 발견')).toBeVisible();
   await expect(page.getByText('[Unsupported Device] UnknownHeater / Warm Box')).toBeVisible();
   await expect(page.getByText('세션')).toHaveCount(0);
   await expect(page.getByText('Lightbulb')).toHaveCount(0);
   await expect(page.getByText('Switch')).toHaveCount(0);
+  await expect(page.getByText('MotionSensor')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
   await expect(page.getByRole('button', { name: '로그인' })).toBeHidden();
 

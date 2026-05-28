@@ -19,6 +19,7 @@ describe('device support summary', () => {
           devices: [
             device('light-1', 'LightRgbw5', 'Pendant'),
             device('relay-1', 'RelayController', 'Relay'),
+            device('motion-1', 'SensorMo', 'GKZ-MO021'),
             device('heater-1', 'UnknownHeater', 'Warm Box'),
           ],
         },
@@ -29,8 +30,8 @@ describe('device support summary', () => {
 
     expect(summary).toMatchObject({
       generatedAt: '2026-05-26T01:00:00.000Z',
-      registeredCount: 3,
-      supportedCount: 2,
+      registeredCount: 4,
+      supportedCount: 3,
       unsupportedCount: 1,
       unsupportedProducts: [
         {
@@ -42,6 +43,7 @@ describe('device support summary', () => {
     });
     expect(SUPPORTED_DEVICE_MODELS.map((model) => model.deviceType)).toContain('LightRgbw5');
     expect(SUPPORTED_DEVICE_MODELS.map((model) => model.deviceType)).toContain('RelayController');
+    expect(SUPPORTED_DEVICE_MODELS.map((model) => model.deviceType)).toContain('SensorMo');
   });
 
   test('builds a readable Korean support request template with KST dates', () => {

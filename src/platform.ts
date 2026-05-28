@@ -126,8 +126,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
         if (existingAccessory) {
           existingAccessory.context.device = device;
-          this.api.updatePlatformAccessories([existingAccessory]);
           this.createAccessoryHandler(existingAccessory, device);
+          this.api.updatePlatformAccessories([existingAccessory]);
           updatedCount += 1;
           this.info('accessory.updated', deviceLogContext(device, uuid));
         } else {

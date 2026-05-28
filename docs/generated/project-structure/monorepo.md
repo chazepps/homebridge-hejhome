@@ -103,7 +103,9 @@ Generated from the current repository tree. The archived `backup/` directory and
 │   ├── homebridge-dev-ui.test.ts
 │   ├── log-store.test.ts
 │   ├── official-gates.test.ts
+│   ├── platform-accessory.test.ts
 │   ├── platform.test.ts
+│   ├── realtime.test.ts
 │   ├── redaction.test.ts
 │   ├── session-diagnostics.test.ts
 │   ├── session-store.test.ts

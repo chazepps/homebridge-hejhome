@@ -32,6 +32,7 @@ export const SUPPORTED_DEVICE_MODELS: SupportedDeviceModel[] = [
   { deviceType: 'ZigbeeSwitch1', label: '1구 스위치', homeKitService: 'Switch' },
   { deviceType: 'ZigbeeSwitch2', label: '2구 스위치', homeKitService: 'Switch' },
   { deviceType: 'RelayController', label: '릴레이 컨트롤러', homeKitService: 'Switch' },
+  { deviceType: 'SensorMo', label: '모션 센서', homeKitService: 'MotionSensor' },
 ];
 
 const SUPPORTED_DEVICE_TYPES = new Set(SUPPORTED_DEVICE_MODELS.map((model) => model.deviceType));

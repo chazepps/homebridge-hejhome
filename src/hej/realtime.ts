@@ -96,9 +96,30 @@ export class HejRealtimeClient {
           break;
         case 'bright_value':
           if (typeof status.value === 'number') {
-            deviceState.brightness = status.value / 256 * 100;
+            deviceState.brightness = percentFromByte(status.value);
           }
           break;
+        case 'work_mode':
+          deviceState.lightMode = parseLightMode(status.value);
+          break;
+        case 'scene_data':
+          deviceState.sceneValues = String(status.value ?? '');
+          break;
+        case 'colour_data': {
+          const hsvColor = parseColourData(status.value);
+          if (hsvColor) {
+            deviceState.hsvColor = hsvColor;
+          }
+          break;
+        }
+        case 'pir': {
+          const motionDetected = status.value === 'pir';
+          deviceState.motionDetected = motionDetected;
+          if (motionDetected) {
+            deviceState.lastMotionAt = Date.now();
+          }
+          break;
+        }
         default:
           deviceState[status.code] = status.value;
           break;
@@ -114,4 +135,49 @@ export class HejRealtimeClient {
       deviceState,
     });
   }
+}
+
+function parseLightMode(value: unknown): 'WHITE' | 'COLOR' | 'SCENE' | undefined {
+  switch (String(value ?? '').toLowerCase()) {
+    case 'white':
+      return 'WHITE';
+    case 'colour':
+    case 'color':
+      return 'COLOR';
+    case 'scene':
+      return 'SCENE';
+    default:
+      return undefined;
+  }
+}
+
+function parseColourData(
+  value: unknown,
+): { hue: number; saturation: number; brightness: number } | null {
+  try {
+    const parsed = typeof value === 'string'
+      ? JSON.parse(value) as { h?: unknown; s?: unknown; v?: unknown }
+      : value as { h?: unknown; s?: unknown; v?: unknown };
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    return {
+      hue: clamp(Number(parsed.h ?? 0), 0, 360),
+      saturation: percentFromByte(Number(parsed.s ?? 0)),
+      brightness: percentFromByte(Number(parsed.v ?? 0)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function percentFromByte(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.round(clamp(value, 0, 255) / 255 * 100);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
