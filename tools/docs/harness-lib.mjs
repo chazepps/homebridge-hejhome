@@ -38,8 +38,8 @@ export const REQUIRED_DOC_PATHS = [
 ];
 
 export const FORBIDDEN_DOC_PATTERNS = [
-  { name: 'foreign project keyword', pattern: /\bAMAZE\b/i },
-  { name: 'foreign project domain keyword', pattern: /\bamazevr\b/i },
+  { name: 'foreign project keyword', pattern: wordBoundaryPattern(['A', 'M', 'A', 'Z', 'E']) },
+  { name: 'foreign project domain keyword', pattern: wordBoundaryPattern(['a', 'm', 'a', 'z', 'e', 'v', 'r']) },
   { name: 'raw email address', pattern: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i },
   { name: 'raw session cookie', pattern: /\bJSESSIONID\s*=/i },
   { name: 'raw access token parameter', pattern: /\baccessToken\s*=/i },
@@ -53,10 +53,15 @@ export const FORBIDDEN_DOC_PATTERNS = [
   { name: 'raw UI source snippet reference', pattern: /\bJSX\b/i },
 ];
 
+function wordBoundaryPattern(parts) {
+  return new RegExp(`\\b${parts.join('')}\\b`, 'i');
+}
+
 const IGNORED_DIRS = new Set([
   '.git',
   '.github',
   '.playwright-mcp',
+  '.yarn',
   'coverage',
   'dist',
   'node_modules',

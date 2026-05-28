@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 import { describe, expect, test } from 'vitest';
@@ -6,6 +7,37 @@ import { describe, expect, test } from 'vitest';
 const root = path.resolve(import.meta.dirname, '..');
 
 describe('public project surface', () => {
+  test('tracked project text does not contain foreign project naming', () => {
+    const forbiddenKeyword = ['a', 'm', 'a', 'z', 'e'].join('');
+    const forbiddenDomainKeyword = `${forbiddenKeyword}vr`;
+    const forbiddenPatterns = [
+      new RegExp(forbiddenKeyword, 'i'),
+      new RegExp(forbiddenDomainKeyword, 'i'),
+    ];
+    const binaryExtensions = new Set([
+      '.ico',
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.webp',
+    ]);
+    const trackedFiles = execFileSync('git', ['ls-files', '-z'], {
+      cwd: root,
+      encoding: 'utf8',
+    }).split('\0').filter(Boolean);
+
+    for (const relativePath of trackedFiles) {
+      if (binaryExtensions.has(path.extname(relativePath).toLowerCase())) {
+        continue;
+      }
+
+      const text = fs.readFileSync(path.join(root, relativePath), 'utf8');
+      for (const pattern of forbiddenPatterns) {
+        expect.soft(text, `${relativePath} contains foreign project naming`).not.toMatch(pattern);
+      }
+    }
+  });
+
   test('production branding metadata and assets are complete', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as {
       name: string;

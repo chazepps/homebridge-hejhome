@@ -7,6 +7,9 @@ describe('documentation project-structure harness', () => {
     const files = listProjectFiles();
 
     expect(files).not.toContain('.git');
+    expect(files).not.toEqual(expect.arrayContaining([
+      expect.stringMatching(/^\.yarn\//),
+    ]));
     expect(files).not.toContain('test/hbConfig/homebridge.log');
     expect(files).not.toContain('test/hbConfig/homebridge-ui.json');
     expect(files).not.toEqual(expect.arrayContaining([
