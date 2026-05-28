@@ -95,14 +95,16 @@ test('custom config UI shows the settings dashboard instead of the login form fo
 
   await page.evaluate(() => {
     window.__hejhomeRequests = [];
+    window.__hejhomePayloads = [];
     window.homebridge = {
       closeSettings: () => undefined,
       disableSaveButton: () => undefined,
       enableSaveButton: () => undefined,
       getPluginConfig: async () => [],
       hideSpinner: () => undefined,
-      request: async (pathName: string) => {
+      request: async (pathName: string, payload: unknown) => {
         window.__hejhomeRequests.push(pathName);
+        window.__hejhomePayloads.push({ pathName, payload });
         if (pathName === '/session-status') {
           return {
             configured: true,
@@ -129,6 +131,9 @@ test('custom config UI shows the settings dashboard instead of the login form fo
               body: 'Device type: UnknownHeater\\nModel name: Warm Box',
             },
           };
+        }
+        if (pathName === '/logout') {
+          return { ok: true };
         }
         return { ok: true };
       },
@@ -166,7 +171,24 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await expect(page.getByText('세션')).toHaveCount(0);
   await expect(page.getByText('Lightbulb')).toHaveCount(0);
   await expect(page.getByText('Switch')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
   await expect(page.getByRole('button', { name: '로그인' })).toBeHidden();
+
+  await page.getByRole('button', { name: '로그아웃' }).click();
+  await expect(page.getByRole('heading', { name: 'Hejhome' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '로그인' })).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/logout');
+  const payloads = await page.evaluate(() => window.__hejhomePayloads);
+  expect(payloads).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      pathName: '/ui-event',
+      payload: expect.objectContaining({ event: 'logout.click' }),
+    }),
+    expect.objectContaining({
+      pathName: '/ui-event',
+      payload: expect.objectContaining({ event: 'logout.success' }),
+    }),
+  ]));
 });
 
 test('custom config UI keeps the settings dashboard for an invalid stored session and offers re-login', async ({ page }) => {

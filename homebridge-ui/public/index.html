@@ -285,6 +285,17 @@
     background: #3a3c42;
   }
 
+  .hej-action.danger {
+    background: #8e3030;
+  }
+
+  .hej-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
   .hej-stats {
     display: grid;
     gap: 12px;
@@ -434,7 +445,10 @@
 	      <span class="hej-badge" id="sessionBadge">확인 중</span>
 	    </div>
 	    <p class="hej-muted" id="sessionDescription">저장된 로그인 정보를 확인하고 있습니다.</p>
-	    <button class="hej-action secondary is-hidden" id="relogin" type="button">다시 로그인</button>
+	    <div class="hej-actions">
+	      <button class="hej-action secondary is-hidden" id="relogin" type="button">다시 로그인</button>
+	      <button class="hej-action danger is-hidden" id="logout" type="button">로그아웃</button>
+	    </div>
 	  </section>
 
   <section class="hej-section" aria-label="Hejhome device support">
@@ -489,6 +503,7 @@
 	  const sessionBadge = document.getElementById('sessionBadge');
 	  const sessionDescription = document.getElementById('sessionDescription');
 	  const relogin = document.getElementById('relogin');
+	  const logout = document.getElementById('logout');
 	  const snapshotBadge = document.getElementById('snapshotBadge');
 	  const registeredCount = document.getElementById('registeredCount');
 	  const supportedCount = document.getElementById('supportedCount');
@@ -600,11 +615,13 @@
 		  function renderSessionStatus(status) {
 		    sessionBadge.className = 'hej-badge';
 		    relogin.classList.add('is-hidden');
+		    logout.classList.add('is-hidden');
 
 		    if (status.sessionValid) {
 		      sessionBadge.textContent = '로그인 정상';
 		      sessionBadge.classList.add('is-good');
 		      sessionDescription.textContent = `현재 로그인은 정상입니다. 만료 예정: ${formatKstDateTime(status.expiresAtIso)}. 권장 재로그인 시각: ${formatKstDateTime(status.refreshRecommendedAtIso)}.`;
+		      logout.classList.remove('is-hidden');
 		      return;
 		    }
 
@@ -618,6 +635,9 @@
 		      sessionDescription.textContent = '저장된 로그인 정보가 만료되었거나 Hejhome Web에서 거부되었습니다. 다시 로그인하면 Homebridge가 장비를 다시 불러옵니다.';
 		    }
 		    relogin.classList.remove('is-hidden');
+		    if (status.configured) {
+		      logout.classList.remove('is-hidden');
+		    }
 		  }
 
 	  function renderDeviceStatus(status) {
@@ -719,6 +739,18 @@
 	    window.homebridge?.fixScrollHeight?.();
 	  }
 
+	  function clearLoginForm() {
+	    identifier.value = '';
+	    authCode.value = '';
+	    password.value = '';
+	    verificationSent = false;
+	    verified = false;
+	    loginCompleted = false;
+	    loginStatus.textContent = '';
+	    loginStatus.classList.remove('is-visible');
+	    updateControls();
+	  }
+
   sendCode.addEventListener('click', () => withSpinner('send-verification', async () => {
     logUiEvent('send-verification.click');
     resetVerification();
@@ -776,6 +808,16 @@
 	    showLoginView();
 	    identifier.focus();
 	  });
+
+	  logout.addEventListener('click', () => withSpinner('logout', async () => {
+	    logUiEvent('logout.click');
+	    await requestWithTimeout('/logout', {}, 10000, '로그아웃');
+	    logUiEvent('logout.success');
+	    window.homebridge.toast.success('로그인 정보를 삭제했습니다.');
+	    clearLoginForm();
+	    showLoginView();
+	    identifier.focus();
+	  }).catch((error) => handleError('logout', error)));
 
 	  identifier.addEventListener('input', resetVerification);
   authCode.addEventListener('input', updateControls);

@@ -107,8 +107,9 @@ Generated from the current repository tree. The archived `backup/` directory and
 │   ├── redaction.test.ts
 │   ├── session-diagnostics.test.ts
 │   ├── session-store.test.ts
-│   └── ui
-│       └── login-ui.spec.ts
+│   ├── ui
+│   │   └── login-ui.spec.ts
+│   └── ui-server-source.test.ts
 ├── tools
 │   ├── docs
 │   │   ├── generate-project-structure.mjs

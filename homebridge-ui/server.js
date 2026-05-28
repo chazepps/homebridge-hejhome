@@ -29,6 +29,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     this.onRequest('/send-verification', this.handleSendVerification.bind(this));
     this.onRequest('/verify-code', this.handleVerifyCode.bind(this));
     this.onRequest('/login', this.handleLogin.bind(this));
+    this.onRequest('/logout', this.handleLogout.bind(this));
     this.onRequest('/session-status', this.handleSessionStatus.bind(this));
     this.onRequest('/ui-event', this.handleUiEvent.bind(this));
 
@@ -100,6 +101,17 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
         refreshRecommendedAtIso: createSessionLogContext(session).refreshRecommendedAtIso,
       };
     }, 'Hejhome 로그인에 실패했습니다.');
+  }
+
+  async handleLogout() {
+    return await this.timedRequest('logout', {}, async () => {
+      await this.sessionStore.clear();
+      this.verifiedIdentifiers.clear();
+      this.log('logout.session-cleared', {
+        storageScope: 'homebridge-storage/hejhome/session.json',
+      });
+      return { ok: true };
+    }, 'Hejhome 로그아웃에 실패했습니다.');
   }
 
   async handleSessionStatus() {
