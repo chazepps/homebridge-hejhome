@@ -75,14 +75,15 @@
   }
 
   .hej-row {
-    align-items: end;
-    display: grid;
-    gap: 18px;
-    grid-template-columns: 1fr auto;
+    display: block;
   }
 
   .hej-field {
     margin-bottom: 28px;
+  }
+
+  .hej-field.has-inline-action {
+    position: relative;
   }
 
   .hej-label {
@@ -98,12 +99,17 @@
     border: 0;
     border-bottom: 2px solid #45474d;
     border-radius: 0;
+    box-sizing: border-box;
     color: #fff;
     font-size: 18px;
     height: 48px;
     outline: 0;
     padding: 0;
     width: 100%;
+  }
+
+  .hej-field.has-inline-action .hej-input {
+    padding-right: min(44%, 160px);
   }
 
   .hej-input:focus {
@@ -114,12 +120,26 @@
   .hej-inline-button {
     background: transparent;
     border: 0;
+    box-sizing: border-box;
     color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
     font-size: 18px;
     font-weight: 700;
     height: 48px;
-    padding: 0 0 8px;
+    padding: 0 0 2px 12px;
     white-space: nowrap;
+  }
+
+  .hej-field.has-inline-action .hej-inline-button {
+    bottom: 0;
+    max-width: min(44%, 160px);
+    min-width: 72px;
+    overflow: hidden;
+    position: absolute;
+    right: 0;
+    text-overflow: ellipsis;
   }
 
   .hej-inline-button:disabled {
@@ -363,15 +383,6 @@
       padding: 32px 24px;
     }
 
-    .hej-row {
-      grid-template-columns: 1fr;
-      gap: 8px;
-    }
-
-    .hej-inline-button {
-      justify-self: start;
-    }
-
     .hej-overview,
     .hej-stats {
       grid-template-columns: 1fr;
@@ -399,19 +410,19 @@
 
   <section class="hej-form" aria-label="Hejhome login">
     <div class="hej-row">
-      <div class="hej-field">
+      <div class="hej-field has-inline-action">
         <label class="hej-label" for="identifier">이메일</label>
         <input class="hej-input" id="identifier" autocomplete="email" inputmode="email">
+        <button class="hej-inline-button" id="sendCode" type="button">인증번호 전송</button>
       </div>
-      <button class="hej-inline-button" id="sendCode" type="button">인증번호 전송</button>
     </div>
 
     <div class="hej-row">
-      <div class="hej-field">
+      <div class="hej-field has-inline-action">
         <label class="hej-label" for="authCode">6자리 인증번호 입력</label>
         <input class="hej-input" id="authCode" autocomplete="one-time-code" inputmode="numeric" maxlength="6" disabled>
+        <button class="hej-inline-button" id="verifyCode" type="button" disabled>확인</button>
       </div>
-      <button class="hej-inline-button" id="verifyCode" type="button" disabled>확인</button>
     </div>
 
     <div class="hej-field">

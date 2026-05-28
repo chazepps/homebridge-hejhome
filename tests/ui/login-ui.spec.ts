@@ -4,6 +4,52 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 
 const uiPath = path.resolve(import.meta.dirname, '../../homebridge-ui/public/index.html');
+const PIXEL_TOLERANCE = 1.5;
+
+async function expectVerificationButtonOverlay(page, inputSelector: string, buttonSelector: string) {
+  const geometry = await page.locator(inputSelector).evaluate((inputElement, selector) => {
+    const input = inputElement.getBoundingClientRect();
+    const field = inputElement.closest('.hej-field')?.getBoundingClientRect();
+    const row = inputElement.closest('.hej-row')?.getBoundingClientRect();
+    const button = document.querySelector(selector as string)?.getBoundingClientRect();
+    return {
+      field: field ? rect(field) : null,
+      input: rect(input),
+      row: row ? rect(row) : null,
+      button: button ? rect(button) : null,
+    };
+
+    function rect(value: DOMRect) {
+      return {
+        bottom: value.bottom,
+        height: value.height,
+        left: value.left,
+        right: value.right,
+        top: value.top,
+        width: value.width,
+      };
+    }
+  }, buttonSelector);
+
+  expect(geometry.row).not.toBeNull();
+  expect(geometry.field).not.toBeNull();
+  expect(geometry.button).not.toBeNull();
+
+  const field = geometry.field!;
+  const row = geometry.row!;
+  const input = geometry.input;
+  const button = geometry.button!;
+
+  expect(Math.abs(input.left - row.left)).toBeLessThanOrEqual(PIXEL_TOLERANCE);
+  expect(Math.abs(input.right - row.right)).toBeLessThanOrEqual(PIXEL_TOLERANCE);
+  expect(Math.abs(input.left - field.left)).toBeLessThanOrEqual(PIXEL_TOLERANCE);
+  expect(Math.abs(input.right - field.right)).toBeLessThanOrEqual(PIXEL_TOLERANCE);
+  expect(button.left).toBeGreaterThanOrEqual(input.left - PIXEL_TOLERANCE);
+  expect(button.right).toBeLessThanOrEqual(input.right + PIXEL_TOLERANCE);
+  expect(Math.abs(button.right - input.right)).toBeLessThanOrEqual(PIXEL_TOLERANCE);
+  expect(Math.abs(button.top - input.top)).toBeLessThanOrEqual(PIXEL_TOLERANCE);
+  expect(Math.abs(button.height - input.height)).toBeLessThanOrEqual(PIXEL_TOLERANCE);
+}
 
 test('custom login UI follows Homebridge iframe rules and exposes the sequential email login steps', async ({ page }) => {
   const source = fs.readFileSync(uiPath, 'utf8');
@@ -134,6 +180,51 @@ test('custom login UI blocks phone numbers before sending a verification request
   await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).not.toContain('/send-verification');
   const events = await page.evaluate(() => window.__hejhomeEvents);
   expect(events).toContain('error:현재는 이메일 로그인만 지원합니다. 헤이홈 앱에 등록한 이메일을 입력해 주세요.');
+});
+
+test('custom login UI keeps verification action buttons overlaid inside full-width inputs on desktop and mobile', async ({ page }) => {
+  const source = fs.readFileSync(uiPath, 'utf8');
+
+  await page.evaluate(() => {
+    window.__hejhomeRequests = [];
+    window.homebridge = {
+      closeSettings: () => undefined,
+      disableSaveButton: () => undefined,
+      enableSaveButton: () => undefined,
+      hideSpinner: () => undefined,
+      request: async (pathName: string) => {
+        window.__hejhomeRequests.push(pathName);
+        if (pathName === '/session-status') {
+          return {
+            configured: false,
+            sessionValid: false,
+          };
+        }
+        return { ok: true };
+      },
+      savePluginConfig: async () => undefined,
+      showSpinner: () => undefined,
+      toast: {
+        error: () => undefined,
+        info: () => undefined,
+        success: () => undefined,
+        warning: () => undefined,
+      },
+      updatePluginConfig: async (config: unknown) => config,
+    };
+  });
+
+  for (const viewport of [
+    { width: 1180, height: 900 },
+    { width: 390, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.setContent(source);
+    await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/session-status');
+
+    await expectVerificationButtonOverlay(page, '#identifier', '#sendCode');
+    await expectVerificationButtonOverlay(page, '#authCode', '#verifyCode');
+  }
 });
 
 test('custom config UI shows the settings dashboard instead of the login form for a valid stored session', async ({ page }) => {
