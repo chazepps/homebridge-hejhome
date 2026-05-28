@@ -23,7 +23,7 @@
         "additionalProperties": false,
         "properties": {
           "identifier": {
-            "title": "전화번호 or 이메일",
+            "title": "이메일",
             "type": "string"
           },
           "sessionConfigured": {

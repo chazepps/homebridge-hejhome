@@ -27,7 +27,7 @@ The plugin handles the full Hejhome Web login flow inside Homebridge Config UI, 
 - Author and maintainer: [Chaz](https://github.com/chazepps).
 - Repository: [chazepps/homebridge-hejhome](https://github.com/chazepps/homebridge-hejhome).
 - Funding: [GitHub Sponsors](https://github.com/sponsors/chazepps).
-- Custom Homebridge Config UI for phone or email verification.
+- Custom Homebridge Config UI for email verification.
 - Session storage isolated from `config.json`.
 - Dynamic accessory registration, update, and stale accessory cleanup.
 - Realtime state updates for discovered devices.

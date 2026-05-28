@@ -26,6 +26,16 @@ describe('HejAuthClient', () => {
     );
   });
 
+  test('rejects phone verification instead of calling the unreliable SMS endpoint', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true }));
+    const client = new HejAuthClient({ fetch: fetchMock });
+
+    await expect(client.sendVerificationCode('010-1234-5678')).rejects.toThrow(
+      'Hejhome SMS verification is not supported',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test('verifies a six digit code with the identifier as username', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ ok: true }));
     const client = new HejAuthClient({ fetch: fetchMock });

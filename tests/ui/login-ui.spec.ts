@@ -45,15 +45,18 @@ test('custom login UI follows Homebridge iframe rules and exposes the sequential
   await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/session-status');
 
   await expect(page.getByRole('heading', { name: 'Hejhome' })).toBeVisible();
-  await expect(page.getByLabel('전화번호 or 이메일')).toBeVisible();
+  await expect(page.getByText('for Homebridge')).toBeVisible();
+  await expect(page.getByText('앱스토어나 플레이스토어에서 헤이홈 어플을 다운 받아 구체적인 설정을 먼저 마친 뒤, 헤이홈 앱에 등록한 이메일로 로그인해 주세요.')).toBeVisible();
+  await expect(page.getByLabel('이메일')).toBeVisible();
   await expect(page.getByRole('button', { name: '인증번호 전송' })).toBeVisible();
   await expect(page.getByLabel('6자리 인증번호 입력')).toBeVisible();
   await expect(page.getByLabel('비밀번호')).toBeVisible();
   await expect(page.getByLabel('자동 로그인')).toBeChecked();
+  await expect(page.getByText('이용 정보나 사용 이력은 보관하지 않으며, 타인이나 개발자에게 전달하지 않습니다.')).toBeVisible();
   await expect(page.getByLabel('비밀번호')).toBeDisabled();
   await expect(page.getByRole('button', { name: '로그인' })).toBeDisabled();
 
-  await page.getByLabel('전화번호 or 이메일').fill('user@example.test');
+  await page.getByLabel('이메일').fill('user@example.test');
   await page.getByRole('button', { name: '인증번호 전송' }).click();
   await expect(page.getByLabel('6자리 인증번호 입력')).toBeEnabled();
   await expect(page.getByRole('button', { name: '확인' })).toBeDisabled();
@@ -87,6 +90,50 @@ test('custom login UI follows Homebridge iframe rules and exposes the sequential
       payload: expect.objectContaining({ event: 'login-ui.opened' }),
     }),
   ]));
+});
+
+test('custom login UI blocks phone numbers before sending a verification request', async ({ page }) => {
+  const source = fs.readFileSync(uiPath, 'utf8');
+
+  await page.evaluate(() => {
+    window.__hejhomeRequests = [];
+    window.__hejhomeEvents = [];
+    window.homebridge = {
+      closeSettings: () => undefined,
+      disableSaveButton: () => undefined,
+      enableSaveButton: () => undefined,
+      hideSpinner: () => undefined,
+      request: async (pathName: string) => {
+        window.__hejhomeRequests.push(pathName);
+        if (pathName === '/session-status') {
+          return {
+            configured: false,
+            sessionValid: false,
+          };
+        }
+        return { ok: true };
+      },
+      savePluginConfig: async () => undefined,
+      showSpinner: () => undefined,
+      toast: {
+        error: (message: string) => window.__hejhomeEvents.push(`error:${message}`),
+        info: () => undefined,
+        success: () => undefined,
+        warning: () => undefined,
+      },
+      updatePluginConfig: async (config: unknown) => config,
+    };
+  });
+  await page.setContent(source);
+  await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/session-status');
+
+  await page.getByLabel('이메일').fill('010-1234-5678');
+  await page.getByRole('button', { name: '인증번호 전송' }).click();
+
+  await expect(page.getByRole('status')).toContainText('현재는 이메일 로그인만 지원합니다');
+  await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).not.toContain('/send-verification');
+  const events = await page.evaluate(() => window.__hejhomeEvents);
+  expect(events).toContain('error:현재는 이메일 로그인만 지원합니다. 헤이홈 앱에 등록한 이메일을 입력해 주세요.');
 });
 
 test('custom config UI shows the settings dashboard instead of the login form for a valid stored session', async ({ page }) => {
@@ -426,7 +473,7 @@ test('custom login UI shows completion without writing session data into plugin 
   await page.setContent(source);
   await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/session-status');
 
-  await page.getByLabel('전화번호 or 이메일').fill('user@example.test');
+  await page.getByLabel('이메일').fill('user@example.test');
   await page.getByRole('button', { name: '인증번호 전송' }).click();
   await page.getByLabel('6자리 인증번호 입력').fill('123456');
   await page.getByRole('button', { name: '확인' }).click();

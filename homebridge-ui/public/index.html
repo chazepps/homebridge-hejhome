@@ -385,23 +385,23 @@
 </style>
 
 <div class="hej-shell is-hidden" id="loginView">
-  <section class="hej-brand" aria-label="Hejhome for Web">
+  <section class="hej-brand" aria-label="Hejhome for Homebridge">
     <div class="hej-mark" aria-hidden="true">
       <div class="hej-smile"></div>
     </div>
     <h1 class="hej-title">Hejhome</h1>
-    <span class="hej-pill">for Web</span>
+    <span class="hej-pill">for Homebridge</span>
     <p class="hej-copy">
-      회원가입은 앱스토어나 플레이스토어에서 헤이홈 어플을 다운 받아 가능합니다.
-      헤이홈 for Web은 구글 크롬 브라우저 전용 서비스입니다.
+      앱스토어나 플레이스토어에서 헤이홈 어플을 다운 받아 구체적인 설정을 먼저 마친 뒤,
+      헤이홈 앱에 등록한 이메일로 로그인해 주세요.
     </p>
   </section>
 
   <section class="hej-form" aria-label="Hejhome login">
     <div class="hej-row">
       <div class="hej-field">
-        <label class="hej-label" for="identifier">전화번호 or 이메일</label>
-        <input class="hej-input" id="identifier" autocomplete="username" inputmode="email">
+        <label class="hej-label" for="identifier">이메일</label>
+        <input class="hej-input" id="identifier" autocomplete="email" inputmode="email">
       </div>
       <button class="hej-inline-button" id="sendCode" type="button">인증번호 전송</button>
     </div>
@@ -429,6 +429,7 @@
 	  <p class="hej-note">
 	      로그인 정보는 Homebridge 저장 공간에 저장되며 비밀번호는 저장하지 않습니다.
 	      자동 로그인은 오래 로그인된 상태를 유지하기 위해 항상 켜집니다.
+	      이용 정보나 사용 이력은 보관하지 않으며, 타인이나 개발자에게 전달하지 않습니다.
 	    </p>
     <p class="hej-status" id="loginStatus" role="status"></p>
   </section>
@@ -508,6 +509,7 @@
 <script>
   (() => {
 	  const IN_PROGRESS_DEVICE_TYPES = new Set(['LedStripRgbw2']);
+	  const EMAIL_ONLY_MESSAGE = '현재는 이메일 로그인만 지원합니다. 헤이홈 앱에 등록한 이메일을 입력해 주세요.';
 	  const HOMEKIT_SERVICE_LABELS = {
 	    BatteryService: '배터리',
 	    Camera: '카메라',
@@ -586,6 +588,22 @@
     authCode.value = '';
     password.value = '';
     updateControls();
+  }
+
+  function isEmailIdentifier(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value ?? '').trim());
+  }
+
+  function requireEmailIdentifier() {
+    const value = identifier.value.trim();
+    if (isEmailIdentifier(value)) {
+      return value;
+    }
+
+    loginStatus.textContent = EMAIL_ONLY_MESSAGE;
+    loginStatus.classList.add('is-visible');
+    window.homebridge.toast.error(EMAIL_ONLY_MESSAGE);
+    return null;
   }
 
   async function withSpinner(action, fn) {
@@ -946,9 +964,13 @@
 	  }
 
   sendCode.addEventListener('click', () => withSpinner('send-verification', async () => {
+    const email = requireEmailIdentifier();
+    if (!email) {
+      return;
+    }
     logUiEvent('send-verification.click');
     resetVerification();
-    await requestWithTimeout('/send-verification', { identifier: identifier.value.trim() }, 15000, '인증번호 전송');
+    await requestWithTimeout('/send-verification', { identifier: email }, 15000, '인증번호 전송');
     logUiEvent('send-verification.success');
     verificationSent = true;
     updateControls();
@@ -961,9 +983,13 @@
       logUiEvent('verify-code.ignored', { reason: 'already-verified' });
       return;
     }
+    const email = requireEmailIdentifier();
+    if (!email) {
+      return;
+    }
     logUiEvent('verify-code.click', { authCodeLength: authCode.value.trim().length });
     await requestWithTimeout('/verify-code', {
-      identifier: identifier.value.trim(),
+      identifier: email,
       authCode: authCode.value.trim(),
     }, 15000, '인증번호 확인');
     logUiEvent('verify-code.success');
@@ -978,10 +1004,14 @@
       window.homebridge.toast.error('이메일 인증을 먼저 완료해야 합니다.');
       return;
     }
+    const email = requireEmailIdentifier();
+    if (!email) {
+      return;
+    }
     const startedAt = nowMs();
     logUiEvent('login.click', { passwordPresent: password.value.length > 0 });
     const result = await requestWithTimeout('/login', {
-      identifier: identifier.value.trim(),
+      identifier: email,
       password: password.value,
       autoLogin: true,
 	    }, 45000, '로그인');

@@ -41,15 +41,14 @@ export class HejAuthClient {
   }
 
   async sendVerificationCode(identifier: string): Promise<void> {
-    const endpoint = verificationEndpoint(identifier);
-    const payload = isEmail(identifier)
-      ? { email: identifier }
-      : { phone: normalizePhone(identifier) };
+    if (!isEmail(identifier)) {
+      throw new Error('Hejhome SMS verification is not supported. Use the email address registered in the Hejhome app.');
+    }
 
-    const response = await this.fetchWithTiming('2fa.send', endpoint, {
+    const response = await this.fetchWithTiming('2fa.send', verificationEndpoint(), {
       method: 'POST',
       headers: jsonHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ email: identifier }),
     });
 
     await ensureOk(response, 'Failed to send Hejhome verification code');
@@ -208,19 +207,12 @@ export class HejAuthClient {
   }
 }
 
-function verificationEndpoint(identifier: string): string {
-  if (isEmail(identifier)) {
-    return `${TWO_FACTOR_ORIGIN}/api/2factor/send/email?vendor=web`;
-  }
-  return `${TWO_FACTOR_ORIGIN}/api/2factor/send/sms?vendor=web`;
+function verificationEndpoint(): string {
+  return `${TWO_FACTOR_ORIGIN}/api/2factor/send/email?vendor=web`;
 }
 
 function isEmail(identifier: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
-}
-
-function normalizePhone(identifier: string): string {
-  return identifier.replace(/[^\d+]/g, '');
 }
 
 function jsonHeaders(): HeadersInit {

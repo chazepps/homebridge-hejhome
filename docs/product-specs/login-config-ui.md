@@ -6,7 +6,7 @@ Allow a Homebridge user to authenticate with Hejhome Web from the plugin setting
 
 ## Flow
 
-1. User enters email or phone identifier.
+1. User enters the email address registered in the Hejhome app.
 2. User requests a verification code.
 3. UI waits for code entry.
 4. UI submits code verification.
@@ -20,5 +20,6 @@ Allow a Homebridge user to authenticate with Hejhome Web from the plugin setting
 - Password is disabled until verification succeeds.
 - Login is disabled until password is present.
 - Auto-login is checked and cannot be unchecked.
+- Phone/SMS login is not shown because the current Homebridge flow uses the verified email endpoint.
 - Request order is send, verify, login.
 - Password is not persisted in config or session storage.

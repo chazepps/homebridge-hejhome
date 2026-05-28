@@ -43,7 +43,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleSendVerification(payload) {
     return await this.timedRequest('send-verification', payload, async () => {
-      const identifier = normalizeIdentifier(payload?.identifier);
+      const identifier = normalizeEmailIdentifier(payload?.identifier);
       this.log('send-verification.identifier', describeIdentifier(identifier));
       this.verifiedIdentifiers.delete(identifier);
       await this.authClient.sendVerificationCode(identifier);
@@ -53,7 +53,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleVerifyCode(payload) {
     return await this.timedRequest('verify-code', payload, async () => {
-      const identifier = normalizeIdentifier(payload?.identifier);
+      const identifier = normalizeEmailIdentifier(payload?.identifier);
       this.log('verify-code.identifier', {
         ...describeIdentifier(identifier),
         authCodeLength: String(payload?.authCode ?? '').length,
@@ -71,7 +71,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleLogin(payload) {
     return await this.timedRequest('login', payload, async () => {
-      const identifier = normalizeIdentifier(payload?.identifier);
+      const identifier = normalizeEmailIdentifier(payload?.identifier);
       const password = String(payload?.password ?? '');
       this.log('login.input', {
         ...describeIdentifier(identifier),
@@ -251,11 +251,23 @@ function normalizeIdentifier(value) {
   return String(value ?? '').trim();
 }
 
+function normalizeEmailIdentifier(value) {
+  const identifier = normalizeIdentifier(value);
+  if (!isEmailIdentifier(identifier)) {
+    throw new Error('현재 Homebridge 로그인은 이메일 인증만 지원합니다. 헤이홈 앱에 등록한 이메일을 입력해 주세요.');
+  }
+  return identifier;
+}
+
 function describeIdentifier(identifier) {
   return {
-    identifierType: identifier.includes('@') ? 'email' : 'phone',
+    identifierType: isEmailIdentifier(identifier) ? 'email' : 'unsupported',
     identifierLength: identifier.length,
   };
+}
+
+function isEmailIdentifier(identifier) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier);
 }
 
 function summarizePayload(payload) {
