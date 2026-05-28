@@ -324,7 +324,7 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/session-status');
 
   await expect(page.getByRole('heading', { name: 'Hejhome 설정' })).toBeVisible();
-  await expect(page.getByText('Homebridge 플러그인 · 개발자 Chaz · 패키지 @chazepps/homebridge-hejhome')).toBeVisible();
+  await expect(page.getByText('Homebridge 플러그인 · 개발자 Chaz · 패키지 @chazepps/homebridge-hejhome')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '로그인 상태' })).toBeVisible();
   await expect(page.getByText('로그인 정상')).toBeVisible();
   await expect(page.getByText('현재 로그인은 정상입니다. 만료 예정: 2026-06-21 21:41:31 (KST). 권장 재로그인 시각: 2026-06-20 21:41:31 (KST).')).toBeVisible();
