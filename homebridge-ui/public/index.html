@@ -632,16 +632,15 @@
 	      item.className = 'hej-list-item';
 	      const label = document.createElement('span');
 	      label.textContent = `${model.deviceType} · ${model.label}`;
-		      const service = document.createElement('span');
-		      service.className = 'hej-badge';
-		      service.textContent = formatHomeKitService(model.homeKitService);
-		      item.append(label, service);
-		      if (IN_PROGRESS_DEVICE_TYPES.has(model.deviceType)) {
-		        const status = document.createElement('span');
-		        status.className = 'hej-badge is-warn';
-		        status.textContent = '구현 중';
-		        item.append(status);
-		      }
+	      const service = document.createElement('span');
+	      service.className = 'hej-badge';
+	      const serviceLabel = formatHomeKitService(model.homeKitService);
+	      const isInProgress = IN_PROGRESS_DEVICE_TYPES.has(model.deviceType);
+	      service.textContent = isInProgress ? `${serviceLabel} / 구현 중` : serviceLabel;
+	      if (isInProgress) {
+	        service.classList.add('is-warn');
+	      }
+	      item.append(label, service);
 		      return item;
 		    }, '사용할 수 있는 모델 정보가 없습니다.');
 
@@ -652,7 +651,7 @@
 	      label.textContent = `${product.deviceType}${product.modelName ? ` · ${product.modelName}` : ''}`;
 	      const count = document.createElement('span');
 	      count.className = 'hej-badge is-warn';
-	      count.textContent = `${product.count}`;
+	      count.textContent = `${product.count}개 발견`;
 	      item.append(label, count);
 	      return item;
 	    }, '감지된 미지원 제품이 없습니다.');

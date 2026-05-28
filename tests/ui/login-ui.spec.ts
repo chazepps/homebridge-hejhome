@@ -157,9 +157,11 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await expect(page.getByText('LightRgbw5')).toBeVisible();
   await expect(page.getByText('LedStripRgbw2')).toBeVisible();
   await expect(page.getByText('RelayController')).toBeVisible();
-  await expect(page.getByText('구현 중')).toHaveCount(2);
-  await expect(page.getByText('전구')).toHaveCount(2);
+  await expect(page.getByText('전구 / 구현 중')).toHaveCount(2);
+  await expect(page.getByText('구현 중', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('전구', { exact: true })).toHaveCount(0);
   await expect(page.getByText('스위치')).toBeVisible();
+  await expect(page.getByText('1개 발견')).toBeVisible();
   await expect(page.getByText('[Unsupported Device] UnknownHeater / Warm Box')).toBeVisible();
   await expect(page.getByText('세션')).toHaveCount(0);
   await expect(page.getByText('Lightbulb')).toHaveCount(0);
