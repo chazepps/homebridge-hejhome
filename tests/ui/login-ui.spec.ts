@@ -235,6 +235,106 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   ]));
 });
 
+test('custom config UI saves a first-home room subset as a custom scope', async ({ page }) => {
+  const source = fs.readFileSync(uiPath, 'utf8');
+
+  await page.evaluate(() => {
+    window.__hejhomeRequests = [];
+    window.__hejhomeUpdatedConfig = null;
+    window.__hejhomeSaveCount = 0;
+    window.homebridge = {
+      closeSettings: () => undefined,
+      disableSaveButton: () => undefined,
+      enableSaveButton: () => undefined,
+      getPluginConfig: async () => [
+        {
+          name: 'Hejhome',
+          platform: 'Hejhome',
+          scope: {
+            mode: 'first-family',
+          },
+        },
+      ],
+      hideSpinner: () => undefined,
+      request: async (pathName: string) => {
+        window.__hejhomeRequests.push(pathName);
+        if (pathName === '/session-status') {
+          return {
+            configured: true,
+            sessionValid: true,
+            sessionCheckStatus: 'valid',
+            expiresAtIso: '2026-06-21T12:41:31.692Z',
+            refreshRecommendedAtIso: '2026-06-20T12:41:31.692Z',
+            deviceSummary: {
+              generatedAt: '2026-05-26T01:00:00.000Z',
+              registeredCount: 2,
+              supportedCount: 2,
+              unsupportedCount: 0,
+              unsupportedProducts: [],
+            },
+            supportedModels: [],
+            scopeOptions: {
+              defaultMode: 'first-family',
+              families: [
+                {
+                  familyId: 101,
+                  name: '첫 번째 집',
+                  selected: true,
+                  rooms: [
+                    { roomId: 1, name: '거실', selected: true },
+                    { roomId: 2, name: '주방', selected: true },
+                  ],
+                },
+              ],
+            },
+            issueTemplate: {
+              title: '[Unsupported Device]',
+              body: 'None',
+            },
+          };
+        }
+        return { ok: true };
+      },
+      savePluginConfig: async () => {
+        window.__hejhomeSaveCount += 1;
+      },
+      showSpinner: () => undefined,
+      toast: {
+        error: () => undefined,
+        info: () => undefined,
+        success: () => undefined,
+        warning: () => undefined,
+      },
+      updatePluginConfig: async (config: unknown) => {
+        window.__hejhomeUpdatedConfig = config;
+        return config;
+      },
+    };
+  });
+
+  await page.setContent(source);
+  await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/session-status');
+
+  await page.getByLabel('주방').uncheck();
+  await page.getByRole('button', { name: '집/방 설정 저장' }).click();
+
+  await expect.poll(async () => page.evaluate(() => window.__hejhomeSaveCount)).toBe(1);
+  await expect(page.getByText('집/방 설정을 저장했습니다. Homebridge를 다시 시작하면 장비 목록이 새 설정으로 바뀝니다.')).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => window.__hejhomeUpdatedConfig)).toEqual([
+    expect.objectContaining({
+      name: 'Hejhome',
+      platform: 'Hejhome',
+      scope: {
+        mode: 'custom',
+        includedFamilyIds: [101],
+        includedRoomsByFamilyId: {
+          '101': [1],
+        },
+      },
+    }),
+  ]);
+});
+
 test('custom config UI keeps the settings dashboard for an invalid stored session and offers re-login', async ({ page }) => {
   const source = fs.readFileSync(uiPath, 'utf8');
 

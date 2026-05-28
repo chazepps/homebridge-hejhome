@@ -832,20 +832,35 @@
 	      .map((input) => Number(input.dataset.familyId));
 	    const selectedRoomsByFamily = {};
 	    for (const familyId of selectedFamilyIds) {
-	      const selectedRooms = roomInputs
-	        .filter((input) => Number(input.dataset.familyId) === familyId && input.checked)
+	      const roomsForFamily = roomInputs
+	        .filter((input) => Number(input.dataset.familyId) === familyId);
+	      const selectedRooms = roomsForFamily
+	        .filter((input) => input.checked)
 	        .map((input) => Number(input.dataset.roomId));
-	      if (selectedRooms.length > 0) {
+	      if (roomsForFamily.length > 0 && selectedRooms.length !== roomsForFamily.length) {
 	        selectedRoomsByFamily[String(familyId)] = selectedRooms;
 	      }
 	    }
 
 	    const allFamilyIds = familyInputs.map((input) => Number(input.dataset.familyId));
 	    const firstFamilyId = allFamilyIds[0];
+	    const hasAllSelectedRooms = (familyId) => {
+	      const roomsForFamily = roomInputs
+	        .filter((input) => Number(input.dataset.familyId) === familyId);
+	      return roomsForFamily.every((input) => input.checked);
+	    };
 	    let nextScope;
-	    if (selectedFamilyIds.length === allFamilyIds.length && allFamilyIds.length > 0) {
+	    if (
+	      selectedFamilyIds.length === allFamilyIds.length
+	      && allFamilyIds.length > 0
+	      && selectedFamilyIds.every((familyId) => hasAllSelectedRooms(familyId))
+	    ) {
 	      nextScope = { mode: 'all' };
-	    } else if (selectedFamilyIds.length === 1 && selectedFamilyIds[0] === firstFamilyId) {
+	    } else if (
+	      selectedFamilyIds.length === 1
+	      && selectedFamilyIds[0] === firstFamilyId
+	      && hasAllSelectedRooms(firstFamilyId)
+	    ) {
 	      nextScope = { mode: 'first-family' };
 	    } else {
 	      nextScope = {

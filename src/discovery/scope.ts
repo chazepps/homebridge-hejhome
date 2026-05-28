@@ -24,10 +24,12 @@ export function resolveDiscoveryScope(
     const selected = families
       .filter((family) => allowedFamilies.has(family.familyId))
       .map((family) => {
-        const roomIds = roomsByFamily[String(family.familyId)]?.filter((roomId) => Number.isFinite(roomId));
+        const roomKey = String(family.familyId);
+        const hasExplicitRoomScope = Object.hasOwn(roomsByFamily, roomKey);
+        const roomIds = roomsByFamily[roomKey]?.filter((roomId) => Number.isFinite(roomId));
         const scope: ResolvedDiscoveryScope = { familyId: family.familyId };
-        if (roomIds && roomIds.length > 0) {
-          scope.roomIds = roomIds;
+        if (hasExplicitRoomScope) {
+          scope.roomIds = roomIds ?? [];
         }
         return scope;
       });

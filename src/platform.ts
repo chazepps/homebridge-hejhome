@@ -196,8 +196,11 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     if (!this.client) {
       return [];
     }
-    if (!roomIds?.length) {
+    if (roomIds === undefined) {
       return await this.client.getDevices(familyId);
+    }
+    if (roomIds.length === 0) {
+      return [];
     }
     const byId = new Map<string, HejDevice>();
     for (const roomId of roomIds) {
