@@ -74,12 +74,17 @@ const unscopedLinkedPluginPath = run('readlink', ['${UNSCOPED_NODE_MODULE_PATH}'
 const packageJson = scopedPackageJson || unscopedPackageJson;
 const linkedPluginPath = scopedLinkedPluginPath || unscopedLinkedPluginPath;
 const pluginPath = linkedPluginPath || (devPluginJson ? '/var/lib/homebridge/dev-plugins/homebridge-hejhome' : '');
+const homebridgeConfig = readJson('/var/lib/homebridge/config.json');
+const hejhomeConfig = Array.isArray(homebridgeConfig?.platforms)
+  ? homebridgeConfig.platforms.find((entry) => entry?.platform === 'Hejhome')
+  : null;
 
 console.log(JSON.stringify({
   nodeVersion: process.version,
   serviceActive: run('systemctl', ['is-active', 'homebridge']),
   linkedPluginPath: pluginPath,
   packageVersion: packageJson?.version ?? devPluginJson?.version ?? '',
+  scope: hejhomeConfig?.scope ?? null,
   snapshot: readJson('/var/lib/homebridge/hejhome/devices-snapshot.json'),
   logTail: run('sudo', ['tail', '-c', '60000', '/var/lib/homebridge/hejhome/hejhome.log'])
     || readTail('/var/lib/homebridge/hejhome/hejhome.log', 60000),
@@ -111,6 +116,9 @@ function main() {
   console.log(`Linked plugin: ${summary.linkedPluginPath}`);
   console.log(`Plugin version: ${summary.packageVersion}`);
   console.log(`Families: ${summary.familyCount}, devices: ${summary.deviceCount}`);
+  if (summary.emptyScope) {
+    console.log('Device scope: intentionally empty');
+  }
   console.log(`Core types: ${summary.coreTypes.join(', ')}`);
   console.log(`Log events: ${summary.logEvents.join(', ')}`);
 }
@@ -176,16 +184,17 @@ function verifyPayload(payload, host) {
   const switchType = SWITCH_DEVICE_TYPES.find((deviceType) => deviceTypes.has(deviceType));
   const missingTypes = REQUIRED_DEVICE_TYPES.filter((deviceType) => !deviceTypes.has(deviceType));
   const missingEvents = REQUIRED_LOG_EVENTS.filter((eventName) => !String(payload.logTail ?? '').includes(eventName));
+  const emptyScope = isIntentionallyEmptyScope(payload.scope);
 
   const checks = [
     [isSupportedNodeVersion(payload.nodeVersion), `Pi Homebridge Node must be v22 or v24, got ${payload.nodeVersion || 'unknown'}`],
     [String(payload.serviceActive ?? '').trim() === 'active', `Homebridge service must be active, got ${payload.serviceActive || 'unknown'}`],
     [isExpectedPluginPath(payload.linkedPluginPath), `plugin path must point at ${EXPECTED_LINK_PATH}`],
     [Boolean(payload.packageVersion), 'linked plugin package version is missing'],
-    [familyCount >= 1, 'device snapshot must contain at least one family'],
-    [deviceCount >= 1, 'device snapshot must contain at least one device'],
-    [missingTypes.length === 0, `snapshot is missing required device types: ${missingTypes.join(', ')}`],
-    [Boolean(switchType), `snapshot is missing one of: ${SWITCH_DEVICE_TYPES.join(', ')}`],
+    [emptyScope || familyCount >= 1, 'device snapshot must contain at least one family'],
+    [emptyScope || deviceCount >= 1, 'device snapshot must contain at least one device'],
+    [emptyScope || missingTypes.length === 0, `snapshot is missing required device types: ${missingTypes.join(', ')}`],
+    [emptyScope || Boolean(switchType), `snapshot is missing one of: ${SWITCH_DEVICE_TYPES.join(', ')}`],
     [missingEvents.length === 0, `plugin log is missing events: ${missingEvents.join(', ')}`],
   ];
 
@@ -202,7 +211,8 @@ function verifyPayload(payload, host) {
     packageVersion: String(payload.packageVersion),
     familyCount,
     deviceCount,
-    coreTypes: [
+    emptyScope,
+    coreTypes: emptyScope ? [] : [
       'LightRgbw5',
       'SensorMo',
       'LightWw3',
@@ -233,6 +243,25 @@ function isExpectedPluginPath(pluginPath) {
   return String(pluginPath ?? '') === EXPECTED_LINK_PATH
     || String(pluginPath ?? '') === SCOPED_NODE_MODULE_PATH
     || String(pluginPath ?? '').endsWith('/dev-plugins/homebridge-hejhome');
+}
+
+function isIntentionallyEmptyScope(scope) {
+  if (!scope || scope.mode !== 'custom') {
+    return false;
+  }
+  const familyIds = Array.isArray(scope.includedFamilyIds) ? scope.includedFamilyIds : [];
+  if (familyIds.length === 0) {
+    return true;
+  }
+  const roomsByFamily = scope.includedRoomsByFamilyId && typeof scope.includedRoomsByFamilyId === 'object'
+    ? scope.includedRoomsByFamilyId
+    : {};
+  return familyIds.every((familyId) => {
+    const key = String(Number(familyId));
+    return Object.hasOwn(roomsByFamily, key)
+      && Array.isArray(roomsByFamily[key])
+      && roomsByFamily[key].length === 0;
+  });
 }
 
 function sanitizeSummary(summary) {
