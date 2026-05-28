@@ -50,6 +50,8 @@ describe('public project surface', () => {
     expect(fs.existsSync(path.join(root, 'branding/icon.png'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'branding/logo.png'))).toBe(true);
     expect(readme).toContain('https://raw.githubusercontent.com/chazepps/homebridge-hejhome/main/branding/logo.png');
+    expect(readme).toContain('v1에서 v2로 업그레이드되면서 변화가 많습니다.');
+    expect(readme).toContain('액세서리 초기화');
     expect(issueTemplateConfig).not.toMatch(/YOUR_CHANNEL_HERE|blank_issues_enabled:\s*#/);
   });
 

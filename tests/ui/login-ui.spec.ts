@@ -323,6 +323,7 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await page.setContent(source);
   await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/session-status');
 
+  await expect(page.getByText('v1에서 v2로 업그레이드되면서 변화가 많습니다. 문제가 있다면 Homebridge 플러그인 메뉴에서 액세서리 초기화를 실행한 뒤 다시 로그인해 주세요.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Hejhome 설정' })).toBeVisible();
   await expect(page.getByText('Homebridge 플러그인 · 개발자 Chaz · 패키지 @chazepps/homebridge-hejhome')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '로그인 상태' })).toBeVisible();

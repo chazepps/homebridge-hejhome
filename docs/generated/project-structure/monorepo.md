@@ -91,29 +91,13 @@ Generated from the current repository tree. Generated project-structure snapshot
 │       └── sessionDiagnostics.ts
 ├── test
 │   └── hbConfig
-│       ├── config.json
-│       ├── homebridge.log
-│       └── matter
-│           └── 0ECCA155E336
-│               ├── 0ECCA155E336
-│               │   ├── driver.json
-│               │   ├── events.lastEventNumber
-│               │   ├── matter.lock
-│               │   ├── matter.pid
-│               │   ├── root.__nextNumber__
-│               │   ├── root.__number__
-│               │   ├── root.basicInformation.uniqueId
-│               │   ├── root.generalDiagnostics.__features__
-│               │   ├── root.generalDiagnostics.rebootCount
-│               │   ├── root.generalDiagnostics.totalOperationalHoursCounter
-│               │   └── root.parts.homebridge-aggregator.__number__
-│               ├── commissioning.json
-│               └── credentials.json
+│       └── config.json
 ├── tests
 │   ├── device-capabilities.test.ts
 │   ├── device-snapshot-store.test.ts
 │   ├── device-support.test.ts
 │   ├── discovery-scope.test.ts
+│   ├── docs-harness.test.ts
 │   ├── fixtures
 │   │   └── pi-devices-snapshot.json
 │   ├── hej-auth.test.ts

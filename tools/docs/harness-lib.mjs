@@ -71,7 +71,9 @@ const IGNORED_PATH_PREFIXES = [
   'test/hbConfig/auth.json',
   'test/hbConfig/backups/',
   'test/hbConfig/hejhome/',
+  'test/hbConfig/homebridge.log',
   'test/hbConfig/homebridge-ui.',
+  'test/hbConfig/matter/',
   'test/plugins/',
 ];
 
@@ -107,6 +109,7 @@ export function listMarkdownFiles() {
 export function listProjectFiles() {
   return listFiles(ROOT)
     .map((filePath) => path.relative(ROOT, filePath))
+    .filter((relativePath) => relativePath !== '.git')
     .filter((relativePath) => relativePath !== '.DS_Store')
     .filter((relativePath) => !IGNORED_PATH_PREFIXES.some((prefix) => relativePath.startsWith(prefix)))
     .sort();

@@ -223,6 +223,16 @@
     padding: 22px;
   }
 
+  .hej-upgrade-warning {
+    background: #2f2a1f;
+    border-color: #a88632;
+    color: #ffe6ad;
+  }
+
+  .hej-upgrade-warning strong {
+    color: #fff3cc;
+  }
+
   .hej-section-head {
     align-items: center;
     display: flex;
@@ -451,6 +461,14 @@
 </div>
 
 <div class="hej-settings is-hidden" id="settingsView" aria-live="polite">
+    <section class="hej-section hej-upgrade-warning" aria-label="Hejhome v2 upgrade notice">
+      <p>
+        <strong>업그레이드 안내:</strong>
+        v1에서 v2로 업그레이드되면서 변화가 많습니다. 문제가 있다면 Homebridge 플러그인 메뉴에서
+        <strong>액세서리 초기화</strong>를 실행한 뒤 다시 로그인해 주세요.
+      </p>
+    </section>
+
 	  <section class="hej-section hej-overview" aria-label="Hejhome plugin overview">
 	    <div class="hej-mark" aria-hidden="true">
 	      <div class="hej-smile"></div>
