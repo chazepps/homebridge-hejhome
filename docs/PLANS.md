@@ -8,6 +8,10 @@
 4. Add device capability mappings one device class at a time.
 5. Publish through npm Trusted Publishing after CI is stable.
 
+## Active Execution Plan
+
+`docs/exec-plans/2026-05-28-production-hardening-and-device-expansion.md` tracks the current product hardening batch: public documentation cleanup, Trusted Publishing alignment, Pi runtime regression verification, and realtime/device-state normalization tests.
+
 ## Test Plan
 
 - `npm run lint`

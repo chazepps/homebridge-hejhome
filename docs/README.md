@@ -1,6 +1,6 @@
 # Hejhome Plugin Documentation
 
-> Status: source-derived draft
+> Status: maintained documentation set
 
 This directory describes the new Homebridge plugin implementation for Hejhome devices.
 

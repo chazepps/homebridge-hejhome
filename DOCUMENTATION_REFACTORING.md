@@ -1,6 +1,6 @@
 # Documentation Refactoring
 
-> Status: source-derived scaffold
+> Status: maintained documentation harness
 
 This ledger tracks the documentation harness for the Hejhome Homebridge plugin. The shape follows the requested documentation information architecture, but all content is specific to this plugin.
 
@@ -23,8 +23,7 @@ git diff --check
 
 ## Documentation Rules
 
-- Do not copy archived implementation text into new docs.
+- Do not copy private implementation text into new docs.
 - Do not include raw credentials, raw cookies, raw tokens, raw authorization headers, or raw user identifiers.
-- Treat `backup/` as reference material only.
 - Treat `docs/generated/` as generated output.
 - Update this file before claiming documentation work is complete.

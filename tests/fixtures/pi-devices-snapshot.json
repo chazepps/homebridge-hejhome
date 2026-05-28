@@ -1,0 +1,100 @@
+{
+  "generatedAt": "2026-05-28T05:00:00.000Z",
+  "familyCount": 1,
+  "deviceCount": 8,
+  "families": [
+    {
+      "family": {
+        "familyId": 1,
+        "name": "Home"
+      },
+      "devices": [
+        {
+          "id": "fixture-light-ww",
+          "name": "White Light",
+          "deviceType": "LightWw3",
+          "modelName": "GKW-LB031-WW",
+          "deviceState": {
+            "brightness": 100,
+            "power": false,
+            "temperature": 50
+          }
+        },
+        {
+          "id": "fixture-light-rgbw",
+          "name": "RGBW Light",
+          "deviceType": "LightRgbw5",
+          "modelName": "GKW-MD081",
+          "deviceState": {
+            "brightness": 67,
+            "hsvColor": {
+              "hue": 306,
+              "saturation": 100,
+              "brightness": 67
+            },
+            "lightMode": "COLOR",
+            "power": true,
+            "sceneValues": ""
+          }
+        },
+        {
+          "id": "fixture-relay",
+          "name": "Relay",
+          "deviceType": "RelayController",
+          "modelName": "Relay Controller",
+          "deviceState": {
+            "power1": false
+          }
+        },
+        {
+          "id": "fixture-switch-2-a",
+          "name": "Two Gang Switch A",
+          "deviceType": "ZigbeeSwitch2",
+          "modelName": "2-gang Switch",
+          "deviceState": {
+            "power1": false,
+            "power2": true
+          }
+        },
+        {
+          "id": "fixture-switch-2-b",
+          "name": "Two Gang Switch B",
+          "deviceType": "ZigbeeSwitch2",
+          "modelName": "2-gang Switch",
+          "deviceState": {
+            "power1": true,
+            "power2": false
+          }
+        },
+        {
+          "id": "fixture-motion",
+          "name": "Motion Sensor",
+          "deviceType": "SensorMo",
+          "modelName": "GKZ-MO021",
+          "deviceState": {
+            "battery": 91,
+            "motionDetected": false
+          }
+        },
+        {
+          "id": "fixture-switch-1-a",
+          "name": "One Gang Switch A",
+          "deviceType": "ZigbeeSwitch1",
+          "modelName": "1-gang Switch",
+          "deviceState": {
+            "power1": false
+          }
+        },
+        {
+          "id": "fixture-switch-1-b",
+          "name": "One Gang Switch B",
+          "deviceType": "ZigbeeSwitch1",
+          "modelName": "1-gang Switch",
+          "deviceState": {
+            "power1": true
+          }
+        }
+      ]
+    }
+  ]
+}

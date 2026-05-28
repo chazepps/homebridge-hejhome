@@ -69,6 +69,16 @@ Camera devices use a separate discovery endpoint and WebRTC signaling flow. The 
 
 HomeKit camera streaming is not implemented in this phase. The plugin records the endpoint and signaling contract so the next phase can design a proper Homebridge `CameraController` bridge, media relay, and FFmpeg or WebRTC-to-RTP pipeline without mixing camera risk into the general device rollout.
 
+## Current Support Backlog
+
+| Area | Current Status | Next Evidence Needed |
+| --- | --- | --- |
+| Camera | Deferred | Streaming lifecycle, snapshot command, HomeKit media relay design, reconnect behavior. |
+| IR remote devices | Partial | Device-specific command field names and safe HomeKit meaning for non-power keys. |
+| Air purifier | Partial | Fan speed, mode, filter, air-quality state semantics. |
+| Door lock and alarm-like devices | Partial | Secure lock-state semantics, alarm trigger semantics, and user notification behavior. |
+| Raw realtime datapoints | Normalized before HomeKit update | Regression tests prevent raw keys such as `colour_data`, `work_mode`, and `pir` from leaking into accessory state. |
+
 ## Home And Room Selection
 
 The first-login default is the first home with all of its rooms. Users can later change this in the Homebridge settings UI.

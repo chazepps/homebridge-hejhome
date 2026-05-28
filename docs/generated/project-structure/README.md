@@ -5,4 +5,4 @@ This directory is generated from the repository file tree. Do not edit these fil
 
 ## Files
 
-- `monorepo.md` - current source tree snapshot excluding dependencies, build output, reports, and archived backup code.
+- `monorepo.md` - current source tree snapshot excluding dependencies, build output, and reports.

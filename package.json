@@ -65,6 +65,7 @@
     "homebridge:ui": "node tools/homebridge/run-dev-ui.mjs",
     "homebridge:ui:tmux": "tmux kill-session -t homebridge-hejhome 2>/dev/null || true; tmux new-session -d -s homebridge-hejhome -c \"$PWD\" 'unset npm_config_prefix; export NVM_DIR=\"$HOME/.nvm\"; if [ -s \"$NVM_DIR/nvm.sh\" ]; then . \"$NVM_DIR/nvm.sh\" && nvm use --silent >/dev/null; fi; npm run build && npm run homebridge:ui'",
     "homebridge:ui:stop": "tmux kill-session -t homebridge-hejhome",
+    "homebridge:pi:verify": "node tools/homebridge/verify-pi-runtime.mjs",
     "lint": "eslint . --max-warnings=0",
     "prepublishOnly": "npm run verify",
     "test": "vitest run",

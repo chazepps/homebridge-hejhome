@@ -17,7 +17,7 @@
 
 ## Overview
 
-`homebridge-hejhome` is a dynamic platform plugin that connects Hejhome devices to HomeKit. It keeps the original Hejhome plugin branding while using a fresh Homebridge implementation built around the official platform model. Archived source-derived material under `backup/` is reference-only and is not part of the runtime.
+`homebridge-hejhome` is a dynamic platform plugin that connects Hejhome devices to HomeKit. It keeps the Hejhome plugin branding while using a fresh Homebridge implementation built around the official platform model.
 
 The plugin handles the full Hejhome Web login flow inside Homebridge Config UI, stores session material under the Homebridge storage path, discovers devices from the Hejhome cloud, and keeps HomeKit accessories updated through REST and realtime events. Passwords and verification codes are not persisted.
 
@@ -106,9 +106,7 @@ npm pack --dry-run
 
 ## Release
 
-Releases are published by GitHub Actions from `v*` tags. The release workflow installs dependencies, runs the same verification gate used by `prepublishOnly`, checks the package with `npm pack --dry-run`, and publishes to npm with provenance.
-
-Configure the repository secret `NPM_TOKEN` with npm publish access before pushing a release tag:
+Releases are published by GitHub Actions from `v*` tags. The release workflow installs dependencies, runs the same verification gate used by `prepublishOnly`, checks the package with `npm pack --dry-run`, and publishes to npm through npm Trusted Publishing with provenance. Configure the repository as a trusted publisher in npm before pushing a release tag:
 
 ```sh
 git tag v2.0.0
@@ -124,7 +122,6 @@ git push origin v2.0.0
 | `src/storage/` | Session, device snapshot, and log storage |
 | `homebridge-ui/` | Custom Homebridge Config UI and UI server |
 | `docs/` | Product, frontend, reliability, security, and architecture notes |
-| `backup/` | Archived reference material only; not part of the runtime |
 
 ## Contributing
 

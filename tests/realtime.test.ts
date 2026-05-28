@@ -45,6 +45,41 @@ describe('HejRealtimeClient message mapping', () => {
     ]);
   });
 
+  test('does not leak raw realtime status codes into HomeKit-facing state', () => {
+    const updates: Array<Partial<HejDevice> & { id: string }> = [];
+    const client = new HejRealtimeClient(session, {
+      onDeviceUpdate: (device) => updates.push(device),
+      onError: () => undefined,
+    });
+
+    dispatchMessage(client, {
+      deviceDataReport: {
+        devId: 'mixed-1',
+        status: [
+          { code: 'work_mode', value: 'white' },
+          { code: 'colour_data', value: '{"h":120,"s":255,"v":127}' },
+          { code: 'pir', value: 'pir' },
+        ],
+      },
+    });
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0].deviceState).toMatchObject({
+      lightMode: 'WHITE',
+      hsvColor: {
+        hue: 120,
+        saturation: 100,
+        brightness: 50,
+      },
+      motionDetected: true,
+    });
+    expect(Object.keys(updates[0].deviceState ?? {})).not.toEqual(expect.arrayContaining([
+      'work_mode',
+      'colour_data',
+      'pir',
+    ]));
+  });
+
   test('maps motion sensor pir realtime payloads into MotionDetected state', () => {
     const updates: Array<Partial<HejDevice> & { id: string }> = [];
     const client = new HejRealtimeClient(session, {

@@ -46,7 +46,7 @@ This directory is generated from the repository file tree. Do not edit these fil
 
 ## Files
 
-- \`monorepo.md\` - current source tree snapshot excluding dependencies, build output, reports, and archived backup code.
+- \`monorepo.md\` - current source tree snapshot excluding dependencies, build output, and reports.
 `;
 }
 
@@ -57,7 +57,7 @@ function renderMonorepo() {
   return `${GENERATED_MARKER}
 # Repository Structure
 
-Generated from the current repository tree. The archived \`backup/\` directory and generated project-structure snapshots are intentionally excluded.
+Generated from the current repository tree. Generated project-structure snapshots are intentionally excluded.
 
 \`\`\`text
 ${tree}\`\`\`
