@@ -16,7 +16,7 @@ describe('Pi runtime verification script', () => {
         HEJHOME_PI_VERIFY_REMOTE_JSON: JSON.stringify({
           nodeVersion: 'v22.14.0',
           serviceActive: 'active',
-          linkedPluginPath: '/var/lib/homebridge/dev-plugins/homebridge-hejhome',
+          linkedPluginPath: '/var/lib/homebridge/node_modules/@chazepps/homebridge-hejhome',
           packageVersion: '2.0.0',
           logTail: [
             '[Hejhome] platform.session.loaded',

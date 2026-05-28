@@ -17,13 +17,13 @@
 
 ## 🎉 버전 2가 드디어 출시되었습니다
 
-`homebridge-hejhome` v2는 기존 구현을 버리고 Homebridge 공식 Dynamic Platform Plugin 구조로 새로 만든 릴리스입니다.
+`@chazepps/homebridge-hejhome` v2는 기존 구현을 버리고 Homebridge 공식 Dynamic Platform Plugin 구조로 새로 만든 릴리스입니다.
 
 이번 프로젝트는 **100% Codex로 개발**되었고, [Hejhome for Web](https://square.hej.so/) 사이트의 로그인, 장비 목록 조회, 제어 요청, 실시간 상태 갱신 흐름을 Homebridge 환경에서 유사하게 따라가도록 제작했습니다. Homebridge 설정 화면에서 로그인하고, 발견된 헤이홈 장비를 Home 앱 액세서리로 사용할 수 있게 만드는 것이 목표입니다.
 
 ## 개요
 
-`homebridge-hejhome`은 헤이홈 클라우드 장비를 HomeKit 액세서리로 노출하는 Dynamic Platform Plugin입니다. Homebridge 공식 플러그인 규칙에 맞춰 TypeScript, Custom Config UI, 세션 저장소, 장비 스냅샷, 실시간 상태 갱신 구조를 갖추고 있습니다.
+`@chazepps/homebridge-hejhome`은 헤이홈 클라우드 장비를 HomeKit 액세서리로 노출하는 Dynamic Platform Plugin입니다. Homebridge 공식 플러그인 규칙에 맞춰 TypeScript, Custom Config UI, 세션 저장소, 장비 스냅샷, 실시간 상태 갱신 구조를 갖추고 있습니다.
 
 로그인은 Homebridge 설정 화면 안에서 진행됩니다. 이메일 인증번호 확인 후 비밀번호를 한 번 입력하면, 자동 로그인 세션을 Homebridge 저장 공간에 저장합니다. 비밀번호와 인증번호는 저장하지 않습니다.
 
@@ -82,7 +82,7 @@
 Homebridge UI에서 플러그인을 설치하거나 npm으로 설치합니다.
 
 ```sh
-npm install -g homebridge-hejhome
+npm install -g @chazepps/homebridge-hejhome
 ```
 
 Homebridge 설정에는 platform만 추가하면 됩니다.

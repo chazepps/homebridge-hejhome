@@ -18,6 +18,8 @@ const REQUIRED_DEVICE_TYPES = [
 
 const SWITCH_DEVICE_TYPES = ['ZigbeeSwitch1', 'ZigbeeSwitch2'];
 const EXPECTED_LINK_PATH = '/var/lib/homebridge/dev-plugins/homebridge-hejhome';
+const SCOPED_NODE_MODULE_PATH = '/var/lib/homebridge/node_modules/@chazepps/homebridge-hejhome';
+const UNSCOPED_NODE_MODULE_PATH = '/var/lib/homebridge/node_modules/homebridge-hejhome';
 
 const REMOTE_NODE_SCRIPT = `PATH=/opt/homebridge/bin:$PATH node --input-type=module <<'NODE'
 import fs from 'node:fs';
@@ -64,9 +66,13 @@ function readText(filePath) {
   }
 }
 
-const packageJson = readLocalJson('/var/lib/homebridge/node_modules/homebridge-hejhome/package.json');
+const scopedPackageJson = readLocalJson('${SCOPED_NODE_MODULE_PATH}/package.json');
+const unscopedPackageJson = readLocalJson('${UNSCOPED_NODE_MODULE_PATH}/package.json');
 const devPluginJson = readLocalJson('/var/lib/homebridge/dev-plugins/homebridge-hejhome/package.json');
-const linkedPluginPath = run('readlink', ['/var/lib/homebridge/node_modules/homebridge-hejhome']);
+const scopedLinkedPluginPath = run('readlink', ['${SCOPED_NODE_MODULE_PATH}']);
+const unscopedLinkedPluginPath = run('readlink', ['${UNSCOPED_NODE_MODULE_PATH}']);
+const packageJson = scopedPackageJson || unscopedPackageJson;
+const linkedPluginPath = scopedLinkedPluginPath || unscopedLinkedPluginPath;
 const pluginPath = linkedPluginPath || (devPluginJson ? '/var/lib/homebridge/dev-plugins/homebridge-hejhome' : '');
 
 console.log(JSON.stringify({
@@ -225,6 +231,7 @@ function isSupportedNodeVersion(version) {
 
 function isExpectedPluginPath(pluginPath) {
   return String(pluginPath ?? '') === EXPECTED_LINK_PATH
+    || String(pluginPath ?? '') === SCOPED_NODE_MODULE_PATH
     || String(pluginPath ?? '').endsWith('/dev-plugins/homebridge-hejhome');
 }
 

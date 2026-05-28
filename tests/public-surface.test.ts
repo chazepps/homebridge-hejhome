@@ -23,11 +23,12 @@ describe('public project surface', () => {
     const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
     const issueTemplateConfig = fs.readFileSync(path.join(root, '.github/ISSUE_TEMPLATE/config.yml'), 'utf8');
 
-    expect(pkg.name).toBe('homebridge-hejhome');
+    expect(pkg.name).toBe('@chazepps/homebridge-hejhome');
     expect(pkg.displayName).toBe('Hejhome');
     expect(pkg.description).toContain('Hejhome');
     expect(pkg.author).toEqual({
       name: 'Chaz',
+      email: 'chaz.epps@gmail.com',
       url: 'https://github.com/chazepps',
     });
     expect(pkg.contributors).toContainEqual({
