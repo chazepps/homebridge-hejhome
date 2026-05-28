@@ -478,6 +478,7 @@ test('custom config UI saves a first-home room subset as a custom scope', async 
 
   await expect.poll(async () => page.evaluate(() => window.__hejhomeRequests)).toContain('/save-scope');
   await expect(page.getByText('집/방 설정을 저장했습니다. 아래 현황은 새 선택 기준으로 바뀌었습니다. Homebridge를 다시 시작하면 Home 앱 장비도 새 설정으로 바뀝니다.')).toBeVisible();
+  await expect(page.locator('#scopeStatus')).toHaveCSS('margin-top', '10px');
   await expect(page.locator('#registeredCount')).toHaveText('1');
   await expect(page.locator('#supportedCount')).toHaveText('1');
   await expect.poll(async () => page.evaluate(() => window.__hejhomePayloads)).toEqual(expect.arrayContaining([

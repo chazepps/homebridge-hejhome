@@ -15,7 +15,10 @@ Generated from the current repository tree. Generated project-structure snapshot
 ├── ARCHITECTURE.md
 ├── branding
 │   ├── icon.png
-│   └── logo.png
+│   ├── logo.png
+│   └── screenshots
+│       ├── hejhome-plugin-login.png
+│       └── hejhome-plugin-settings.png
 ├── config.schema.json
 ├── docs
 │   ├── api

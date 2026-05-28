@@ -21,6 +21,18 @@
 
 이번 프로젝트는 **100% Codex로 개발**되었고, [Hejhome for Web](https://square.hej.so/) 사이트의 로그인, 장비 목록 조회, 제어 요청, 실시간 상태 갱신 흐름을 Homebridge 환경에서 유사하게 따라가도록 제작했습니다. Homebridge 설정 화면에서 로그인하고, 발견된 헤이홈 장비를 Home 앱 액세서리로 사용할 수 있게 만드는 것이 목표입니다.
 
+## 스크린샷
+
+아래는 Homebridge UI 안에서 열리는 Hejhome 플러그인 설정 화면 스크린샷입니다. 이렇게 생겼습니다.
+
+<p align="center">
+  <img src="./branding/screenshots/hejhome-plugin-settings.png" alt="Hejhome 플러그인 로그인 후 설정 화면 스크린샷" width="720">
+</p>
+
+<p align="center">
+  <img src="./branding/screenshots/hejhome-plugin-login.png" alt="Hejhome 플러그인 로그인 화면 스크린샷" width="720">
+</p>
+
 ## 개요
 
 `@chazepps/homebridge-hejhome`은 헤이홈 클라우드 장비를 HomeKit 액세서리로 노출하는 Dynamic Platform Plugin입니다. Homebridge 공식 플러그인 규칙에 맞춰 TypeScript, Custom Config UI, 세션 저장소, 장비 스냅샷, 실시간 상태 갱신 구조를 갖추고 있습니다.
