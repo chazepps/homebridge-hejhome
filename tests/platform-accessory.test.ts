@@ -9,58 +9,206 @@ import type { HejDevice } from '../src/types.js';
 
 describe('HejhomePlatformAccessory', () => {
   test('exposes LightRgbw5 as a color light and sends Hej RGBW control payloads', async () => {
-    const platform = createPlatformMock();
-    const accessory = createAccessoryMock('거실 스탠드', 'uuid:light-1', platform);
-    const client = createClientMock();
-    const device = deviceFixture({
-      id: 'light-1',
-      name: '거실 스탠드',
-      deviceType: 'LightRgbw5',
-      modelName: 'GKW-MD081',
-      deviceState: {
-        power: true,
-        lightMode: 'WHITE',
-        hsvColor: {
-          hue: 10,
-          saturation: 20,
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('거실 스탠드', 'uuid:light-1', platform);
+      const client = createClientMock();
+      const device = deviceFixture({
+        id: 'light-1',
+        name: '거실 스탠드',
+        deviceType: 'LightRgbw5',
+        modelName: 'GKW-MD081',
+        deviceState: {
+          power: true,
+          lightMode: 'WHITE',
+          hsvColor: {
+            hue: 10,
+            saturation: 20,
+            brightness: 30,
+          },
           brightness: 30,
         },
-        brightness: 30,
-      },
-    });
+      });
 
-    new HejhomePlatformAccessory(platform, accessory, device, client);
+      new HejhomePlatformAccessory(platform, accessory, device, client);
 
-    const lightService = accessory.service('Lightbulb');
-    expect(lightService).toBeDefined();
-    expect(accessory.service('Switch')).toBeUndefined();
-    expect(lightService?.characteristics.has('On')).toBe(true);
-    expect(lightService?.characteristics.has('Brightness')).toBe(true);
-    expect(lightService?.characteristics.has('Hue')).toBe(true);
-    expect(lightService?.characteristics.has('Saturation')).toBe(true);
+      const lightService = accessory.service('Lightbulb');
+      expect(lightService).toBeDefined();
+      expect(accessory.service('Switch')).toBeUndefined();
+      expect(lightService?.characteristics.has('On')).toBe(true);
+      expect(lightService?.characteristics.has('Brightness')).toBe(true);
+      expect(lightService?.characteristics.has('Hue')).toBe(true);
+      expect(lightService?.characteristics.has('Saturation')).toBe(true);
 
-    await lightService?.characteristic('Hue').setValue(120);
+      await lightService?.characteristic('Hue').setValue(120);
 
-    expect(client.controlDevice).toHaveBeenNthCalledWith(1, 'light-1', { lightMode: 'colour' });
-    expect(client.controlDevice).toHaveBeenNthCalledWith(2, 'light-1', {
-      hsvColor: {
-        hue: 120,
-        saturation: 20,
-        brightness: 30,
-      },
-    });
-    expect((accessory.context.device as HejDevice).deviceState?.lightMode).toBe('COLOR');
-    expect((accessory.context.device as HejDevice).deviceState?.hsvColor?.hue).toBe(120);
+      expect(client.controlDevice).toHaveBeenNthCalledWith(1, 'light-1', { lightMode: 'colour' });
+      expect(client.controlDevice).toHaveBeenCalledTimes(1);
 
-    await lightService?.characteristic('Brightness').setValue(44);
+      await vi.advanceTimersByTimeAsync(500);
 
-    expect(client.controlDevice).toHaveBeenLastCalledWith('light-1', {
-      hsvColor: {
-        hue: 120,
-        saturation: 20,
-        brightness: 44,
-      },
-    });
+      expect(client.controlDevice).toHaveBeenNthCalledWith(2, 'light-1', {
+        hsvColor: {
+          hue: 120,
+          saturation: 100,
+          brightness: 30,
+        },
+      });
+      expect((accessory.context.device as HejDevice).deviceState?.lightMode).toBe('COLOR');
+      expect((accessory.context.device as HejDevice).deviceState?.hsvColor?.hue).toBe(120);
+
+      await lightService?.characteristic('Brightness').setValue(44);
+      expect(client.controlDevice).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(client.controlDevice).toHaveBeenLastCalledWith('light-1', {
+        hsvColor: {
+          hue: 120,
+          saturation: 100,
+          brightness: 44,
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('debounces rapid RGBW color brightness changes into one Hej request', async () => {
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('거실 스탠드', 'uuid:light-1', platform);
+      const client = createClientMock();
+      const device = deviceFixture({
+        id: 'light-1',
+        name: '거실 스탠드',
+        deviceType: 'LightRgbw5',
+        modelName: 'GKW-MD081',
+        deviceState: {
+          power: true,
+          lightMode: 'COLOR',
+          hsvColor: {
+            hue: 120,
+            saturation: 80,
+            brightness: 30,
+          },
+        },
+      });
+
+      new HejhomePlatformAccessory(platform, accessory, device, client);
+
+      const lightService = accessory.service('Lightbulb');
+      await lightService?.characteristic('Brightness').setValue(40);
+      await lightService?.characteristic('Brightness').setValue(55);
+      await lightService?.characteristic('Brightness').setValue(70);
+
+      expect(client.controlDevice).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(client.controlDevice).toHaveBeenCalledTimes(1);
+      expect(client.controlDevice).toHaveBeenCalledWith('light-1', {
+        hsvColor: {
+          hue: 120,
+          saturation: 80,
+          brightness: 70,
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('treats HomeKit zero saturation as RGBW white mode and debounces white brightness', async () => {
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('거실 스탠드', 'uuid:light-1', platform);
+      const client = createClientMock();
+      const device = deviceFixture({
+        id: 'light-1',
+        name: '거실 스탠드',
+        deviceType: 'LightRgbw5',
+        modelName: 'GKW-MD081',
+        deviceState: {
+          power: true,
+          lightMode: 'COLOR',
+          hsvColor: {
+            hue: 120,
+            saturation: 80,
+            brightness: 55,
+          },
+        },
+      });
+
+      new HejhomePlatformAccessory(platform, accessory, device, client);
+
+      const lightService = accessory.service('Lightbulb');
+      await lightService?.characteristic('Saturation').setValue(0);
+
+      expect(client.controlDevice).toHaveBeenCalledTimes(1);
+      expect(client.controlDevice).toHaveBeenCalledWith('light-1', { lightMode: 'white' });
+      expect((accessory.context.device as HejDevice).deviceState?.lightMode).toBe('WHITE');
+      await expect(lightService?.characteristic('Saturation').getValue()).resolves.toBe(0);
+
+      await lightService?.characteristic('Brightness').setValue(72);
+      expect(client.controlDevice).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(client.controlDevice).toHaveBeenCalledTimes(2);
+      expect(client.controlDevice).toHaveBeenLastCalledWith('light-1', { brightness: 72 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('switches RGBW white mode back to colour before sending debounced HSV color', async () => {
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('거실 스탠드', 'uuid:light-1', platform);
+      const client = createClientMock();
+      const device = deviceFixture({
+        id: 'light-1',
+        name: '거실 스탠드',
+        deviceType: 'LightRgbw5',
+        modelName: 'GKW-MD081',
+        deviceState: {
+          power: true,
+          lightMode: 'WHITE',
+          brightness: 64,
+          hsvColor: {
+            hue: 0,
+            saturation: 0,
+            brightness: 64,
+          },
+        },
+      });
+
+      new HejhomePlatformAccessory(platform, accessory, device, client);
+
+      const lightService = accessory.service('Lightbulb');
+      await lightService?.characteristic('Hue').setValue(240);
+
+      expect(client.controlDevice).toHaveBeenCalledTimes(1);
+      expect(client.controlDevice).toHaveBeenCalledWith('light-1', { lightMode: 'colour' });
+
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(client.controlDevice).toHaveBeenCalledTimes(2);
+      expect(client.controlDevice).toHaveBeenLastCalledWith('light-1', {
+        hsvColor: {
+          hue: 240,
+          saturation: 100,
+          brightness: 64,
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('exposes SensorMo as a motion sensor and updates MotionDetected from device state', async () => {
@@ -100,33 +248,41 @@ describe('HejhomePlatformAccessory', () => {
   });
 
   test('exposes white lights with brightness and color temperature controls', async () => {
-    const platform = createPlatformMock();
-    const accessory = createAccessoryMock('전구 (WW)', 'uuid:white-1', platform);
-    const client = createClientMock();
-    const device = deviceFixture({
-      id: 'white-1',
-      name: '전구 (WW)',
-      deviceType: 'LightWw3',
-      modelName: 'GKW-LB031-WW',
-      deviceState: {
-        power: true,
-        brightness: 75,
-        temperature: 100,
-      },
-    });
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('전구 (WW)', 'uuid:white-1', platform);
+      const client = createClientMock();
+      const device = deviceFixture({
+        id: 'white-1',
+        name: '전구 (WW)',
+        deviceType: 'LightWw3',
+        modelName: 'GKW-LB031-WW',
+        deviceState: {
+          power: true,
+          brightness: 75,
+          temperature: 100,
+        },
+      });
 
-    new HejhomePlatformAccessory(platform, accessory, device, client);
+      new HejhomePlatformAccessory(platform, accessory, device, client);
 
-    const lightService = accessory.service('Lightbulb');
-    expect(lightService?.characteristics.has('On')).toBe(true);
-    expect(lightService?.characteristics.has('Brightness')).toBe(true);
-    expect(lightService?.characteristics.has('ColorTemperature')).toBe(true);
+      const lightService = accessory.service('Lightbulb');
+      expect(lightService?.characteristics.has('On')).toBe(true);
+      expect(lightService?.characteristics.has('Brightness')).toBe(true);
+      expect(lightService?.characteristics.has('ColorTemperature')).toBe(true);
 
-    await lightService?.characteristic('ColorTemperature').setValue(250);
+      await lightService?.characteristic('ColorTemperature').setValue(250);
+      expect(client.controlDevice).not.toHaveBeenCalled();
 
-    expect(client.controlDevice).toHaveBeenLastCalledWith('white-1', {
-      temperature: expect.any(Number),
-    });
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(client.controlDevice).toHaveBeenLastCalledWith('white-1', {
+        temperature: expect.any(Number),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('exposes multi-gang switches as separate switch services', async () => {

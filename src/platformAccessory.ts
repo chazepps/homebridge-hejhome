@@ -10,8 +10,13 @@ type ServiceType = WithUUID<typeof HomebridgeService>;
 type ServiceRegistry = Record<string, ServiceType | undefined>;
 type AddServiceByType = (serviceType: ServiceType, name: string, subtype?: string) => HomebridgeService;
 
+const ANALOG_CONTROL_DEBOUNCE_MS = 350;
+
 export class HejhomePlatformAccessory {
   private readonly capability: DeviceCapability;
+  private analogControlTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingAnalogControlRequirements: Record<string, unknown> | null = null;
+  private readonly pendingAnalogControlEvents = new Set<string>();
 
   constructor(
     private readonly platform: HejhomePlatform,
@@ -178,13 +183,13 @@ export class HejhomePlatformAccessory {
       .onSet((value) => this.handleControlSet({ power: Boolean(value) }, 'on'));
     light.getCharacteristic(this.platform.Characteristic.Brightness)
       .onGet(() => readHsvState(this.currentDevice()).brightness)
-      .onSet((value) => this.handleHsvSet({ brightness: Number(value) }, false));
+      .onSet((value) => this.handleColorLightBrightnessSet(Number(value)));
     light.getCharacteristic(this.platform.Characteristic.Hue)
       .onGet(() => readHsvState(this.currentDevice()).hue)
       .onSet((value) => this.handleHsvSet({ hue: Number(value) }, true));
     light.getCharacteristic(this.platform.Characteristic.Saturation)
       .onGet(() => readHsvState(this.currentDevice()).saturation)
-      .onSet((value) => this.handleHsvSet({ saturation: Number(value) }, true));
+      .onSet((value) => this.handleSaturationSet(Number(value)));
   }
 
   private configureWhiteLight(): void {
@@ -194,10 +199,10 @@ export class HejhomePlatformAccessory {
       .onSet((value) => this.handleControlSet({ power: Boolean(value) }, 'white-light.on'));
     light.getCharacteristic(this.platform.Characteristic.Brightness)
       .onGet(() => readNumberState(this.currentDevice(), 'brightness', 100))
-      .onSet((value) => this.handleControlSet({ brightness: clampNumber(Number(value), 0, 100) }, 'white-light.brightness'));
+      .onSet((value) => this.scheduleAnalogControlSet({ brightness: clampNumber(Number(value), 0, 100) }, 'white-light.brightness'));
     light.getCharacteristic(this.platform.Characteristic.ColorTemperature)
       .onGet(() => temperaturePercentToMired(readNumberState(this.currentDevice(), 'temperature', 100)))
-      .onSet((value) => this.handleControlSet({ temperature: miredToTemperaturePercent(Number(value)) }, 'white-light.temperature'));
+      .onSet((value) => this.scheduleAnalogControlSet({ temperature: miredToTemperaturePercent(Number(value)) }, 'white-light.temperature'));
   }
 
   private configurePowerServices(keys: PowerKey[], serviceType: ServiceType, label: string): void {
@@ -287,6 +292,11 @@ export class HejhomePlatformAccessory {
   }
 
   private async handleControlSet(requirements: Record<string, unknown>, event: string): Promise<void> {
+    this.requireClient();
+    await this.sendControlSet(requirements, event);
+  }
+
+  private async sendControlSet(requirements: Record<string, unknown>, event: string): Promise<void> {
     if (!this.client) {
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
@@ -319,6 +329,93 @@ export class HejhomePlatformAccessory {
     }
   }
 
+  private scheduleAnalogControlSet(requirements: Record<string, unknown>, event: string): void {
+    this.requireClient();
+    this.pendingAnalogControlRequirements = {
+      ...(this.pendingAnalogControlRequirements ?? {}),
+      ...requirements,
+    };
+    this.pendingAnalogControlEvents.add(event);
+    this.updateDevice(mergeDeviceState(this.currentDevice(), requirements));
+    this.platform.info('accessory.control.set.debounce.queued', {
+      deviceId: this.device.id,
+      name: this.device.name,
+      event,
+      delayMs: ANALOG_CONTROL_DEBOUNCE_MS,
+      stateKeys: Object.keys(this.pendingAnalogControlRequirements),
+    });
+    if (this.analogControlTimer) {
+      clearTimeout(this.analogControlTimer);
+    }
+    this.analogControlTimer = setTimeout(() => {
+      void this.flushAnalogControlSet().catch((error) => {
+        this.platform.error('accessory.control.set.debounce.failed', {
+          deviceId: this.device.id,
+          name: this.device.name,
+          event,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }, ANALOG_CONTROL_DEBOUNCE_MS);
+  }
+
+  private async flushAnalogControlSet(): Promise<void> {
+    const requirements = this.pendingAnalogControlRequirements;
+    if (!requirements || Object.keys(requirements).length === 0) {
+      return;
+    }
+    const event = [...this.pendingAnalogControlEvents].join('+') || 'analog';
+    this.pendingAnalogControlRequirements = null;
+    this.pendingAnalogControlEvents.clear();
+    this.analogControlTimer = null;
+    await this.sendControlSet(requirements, `debounced.${event}`);
+  }
+
+  private cancelAnalogControlSet(reason: string): void {
+    if (this.analogControlTimer) {
+      clearTimeout(this.analogControlTimer);
+      this.analogControlTimer = null;
+    }
+    if (!this.pendingAnalogControlRequirements) {
+      return;
+    }
+    this.platform.info('accessory.control.set.debounce.cancelled', {
+      deviceId: this.device.id,
+      name: this.device.name,
+      reason,
+      stateKeys: Object.keys(this.pendingAnalogControlRequirements),
+    });
+    this.pendingAnalogControlRequirements = null;
+    this.pendingAnalogControlEvents.clear();
+  }
+
+  private requireClient(): HejRestClient {
+    if (!this.client) {
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+    return this.client;
+  }
+
+  private async handleColorLightBrightnessSet(value: number): Promise<void> {
+    const currentDevice = this.currentDevice();
+    const brightness = clampNumber(value, 0, 100);
+    if (currentDevice.deviceState?.lightMode === 'WHITE') {
+      this.scheduleAnalogControlSet({ brightness }, 'light.white.brightness');
+      return;
+    }
+    await this.handleHsvSet({ brightness }, false);
+  }
+
+  private async handleSaturationSet(value: number): Promise<void> {
+    const saturation = clampNumber(value, 0, 100);
+    if (saturation === 0) {
+      this.cancelAnalogControlSet('light.mode.white');
+      await this.handleControlSet({ lightMode: 'white' }, 'light.mode.white');
+      return;
+    }
+    await this.handleHsvSet({ saturation }, true);
+  }
+
   private async handleHsvSet(
     partial: Partial<{ hue: number; saturation: number; brightness: number }>,
     forceColorMode: boolean,
@@ -328,10 +425,14 @@ export class HejhomePlatformAccessory {
       ...readHsvState(currentDevice),
       ...partial,
     };
+    if (forceColorMode && nextHsv.saturation === 0) {
+      nextHsv.saturation = 100;
+    }
     if (forceColorMode && currentDevice.deviceState?.lightMode !== 'COLOR') {
+      this.cancelAnalogControlSet('light.mode.colour');
       await this.handleControlSet({ lightMode: 'colour' }, 'light.mode');
     }
-    await this.handleControlSet({ hsvColor: nextHsv }, 'light.hsv');
+    this.scheduleAnalogControlSet({ hsvColor: nextHsv }, 'light.hsv');
   }
 
   private updateColorLight(device: HejDevice): void {
@@ -588,10 +689,19 @@ function readPowerStateByKey(device: HejDevice, key: PowerKey): boolean {
 }
 
 function readHsvState(device: HejDevice): { hue: number; saturation: number; brightness: number } {
+  const isWhiteMode = device.deviceState?.lightMode === 'WHITE';
   return {
     hue: clampNumber(Number(device.deviceState?.hsvColor?.hue ?? 0), 0, 360),
-    saturation: clampNumber(Number(device.deviceState?.hsvColor?.saturation ?? 0), 0, 100),
-    brightness: clampNumber(Number(device.deviceState?.hsvColor?.brightness ?? device.deviceState?.brightness ?? 100), 0, 100),
+    saturation: isWhiteMode
+      ? 0
+      : clampNumber(Number(device.deviceState?.hsvColor?.saturation ?? 0), 0, 100),
+    brightness: clampNumber(
+      Number(isWhiteMode
+        ? device.deviceState?.brightness ?? device.deviceState?.hsvColor?.brightness ?? 100
+        : device.deviceState?.hsvColor?.brightness ?? device.deviceState?.brightness ?? 100),
+      0,
+      100,
+    ),
   };
 }
 
