@@ -285,6 +285,29 @@ describe('HejhomePlatformAccessory', () => {
     }
   });
 
+  test('controls RelayController devices with the observed power1 datapoint', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('렉 환풍기', 'uuid:relay-1', platform);
+    const client = createClientMock();
+    const device = deviceFixture({
+      id: 'relay-1',
+      name: '렉 환풍기',
+      deviceType: 'RelayController',
+      modelName: 'LKW-RC031',
+      deviceState: {
+        power1: false,
+      },
+    });
+
+    new HejhomePlatformAccessory(platform, accessory, device, client);
+
+    const relayService = accessory.service('Switch');
+    await expect(relayService?.characteristic('On').getValue()).resolves.toBe(false);
+    await relayService?.characteristic('On').setValue(true);
+
+    expect(client.controlDevice).toHaveBeenCalledWith('relay-1', { power1: true });
+  });
+
   test('exposes multi-gang switches as separate switch services', async () => {
     const platform = createPlatformMock();
     const accessory = createAccessoryMock('거실 스위치', 'uuid:switch-1', platform);
