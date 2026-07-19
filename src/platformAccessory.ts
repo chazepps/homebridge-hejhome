@@ -56,6 +56,8 @@ export class HejhomePlatformAccessory {
         this.updatePowerServices(device, this.switchPowerKeys(device), this.platform.Service.Switch);
         break;
       case 'relay-switch':
+        this.updatePowerService(device, this.relayPowerKey(device), this.platform.Service.Switch);
+        break;
       case 'ir-switch':
         this.updatePowerService(device, 'power', this.platform.Service.Switch);
         break;
@@ -114,6 +116,8 @@ export class HejhomePlatformAccessory {
         this.configurePowerServices(this.switchPowerKeys(this.device), this.platform.Service.Switch, '스위치');
         break;
       case 'relay-switch':
+        this.configurePowerService(this.platform.Service.Switch, this.relayPowerKey(this.device), this.device.name);
+        break;
       case 'ir-switch':
         this.configurePowerService(this.platform.Service.Switch, 'power', this.device.name);
         break;
@@ -600,6 +604,10 @@ export class HejhomePlatformAccessory {
     const match = /(?:Zigbee)?Switch(\d+)/.exec(device.deviceType);
     const count = match?.[1] ? Number(match[1]) : countPowerKeys(device.deviceState);
     return powerKeys(Math.max(1, count));
+  }
+
+  private relayPowerKey(device: HejDevice): PowerKey {
+    return device.deviceState?.power !== undefined ? 'power' : 'power1';
   }
 
   private powerStripKeys(device: HejDevice): PowerKey[] {
