@@ -2,9 +2,11 @@ import type { HejSession } from '../types.js';
 
 export const HEJ_CLIENT_ID = '62f4020744ca4510827d3b4a4d2c7e7f';
 export const HEJ_CLIENT_SECRET = 'fcd4302cece447a9ab009296f649d2c0';
+export const GOQUAL_ORIGIN = 'https://goqual.io';
+export const SQUARE_ORIGIN = 'https://square.hej.so';
 
-const SQUARE_ORIGIN = 'https://square.hej.so';
 const TWO_FACTOR_ORIGIN = 'https://2factor.goqual.com';
+const AUTHORIZE_REDIRECT_URI = `${SQUARE_ORIGIN}/list`;
 
 export interface LoginRequest {
   identifier: string;
@@ -76,19 +78,18 @@ export class HejAuthClient {
       throw new Error('Hejhome password is required');
     }
 
-    const loginResponse = await this.fetchWithTiming('oauth.login', `${SQUARE_ORIGIN}/oauth/login?vendor=shop`, {
+    const loginResponse = await this.fetchWithTiming('oauth.login', `${GOQUAL_ORIGIN}/oauth/login?vendor=openapi`, {
       method: 'POST',
       headers: {
-        accept: 'text/plain, */*; q=0.01',
-        'accept-language': 'ko-kr',
+        accept: 'application/json, text/plain, */*',
         authorization: makeBasicAuth(request.identifier, request.password),
-        'content-type': 'application/x-www-form-urlencoded',
-        'x-requested-with': 'XMLHttpRequest, XMLHttpRequest',
+        'content-type': 'application/json',
       },
+      body: '{}',
     });
     await ensureOk(loginResponse, 'Failed to login to Hejhome');
 
-    const jsessionId = parseJSessionId(loginResponse.headers.get('set-cookie'));
+    const jsessionId = parseJSessionId(loginResponse.headers);
     if (!jsessionId) {
       throw new Error('Hejhome login did not return a session cookie');
     }
@@ -108,9 +109,9 @@ export class HejAuthClient {
   }
 
   private async getAuthorizationCode(usernameCookie: string, jsessionId: string): Promise<string> {
-    const authorizeUrl = `${SQUARE_ORIGIN}/oauth/authorize?${new URLSearchParams({
+    const authorizeUrl = `${GOQUAL_ORIGIN}/oauth/authorize?${new URLSearchParams({
       client_id: HEJ_CLIENT_ID,
-      redirect_uri: `${SQUARE_ORIGIN}/list`,
+      redirect_uri: AUTHORIZE_REDIRECT_URI,
       response_type: 'code',
       scope: 'shop',
     }).toString()}`;
@@ -121,10 +122,13 @@ export class HejAuthClient {
         cookie: `username=${usernameCookie}; JSESSIONID=${jsessionId}; autoLogin=true`,
       },
     });
-    const location = response.headers.get('location') ?? response.url;
-    const code = location ? new URL(location, SQUARE_ORIGIN).searchParams.get('code') : null;
+    const bodyText = await response.text().catch(() => '');
+    const code = extractAuthorizationCode(response, bodyText);
     if (!code) {
-      throw new Error('Hejhome authorization did not return an OAuth code');
+      const snippet = bodyText.replace(/\s+/g, ' ').trim().slice(0, 160);
+      throw new Error(
+        `Hejhome authorization did not return an OAuth code (HTTP ${response.status}${snippet ? ` ${snippet}` : ''})`,
+      );
     }
     return code;
   }
@@ -134,20 +138,19 @@ export class HejAuthClient {
     usernameCookie: string,
     jsessionId: string,
   ): Promise<{ accessToken: string; expiresIn: number }> {
-    const response = await this.fetchWithTiming('oauth.token', `${SQUARE_ORIGIN}/oauth/token`, {
+    const response = await this.fetchWithTiming('oauth.token', `${GOQUAL_ORIGIN}/oauth/token`, {
       method: 'POST',
       headers: {
         accept: 'application/json, text/javascript, */*; q=0.01',
         authorization: makeBasicAuth(HEJ_CLIENT_ID, HEJ_CLIENT_SECRET),
         'content-type': 'application/x-www-form-urlencoded',
         cookie: `username=${usernameCookie}; JSESSIONID=${jsessionId}; autoLogin=true`,
-        'x-requested-with': 'XMLHttpRequest',
       },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
         client_id: HEJ_CLIENT_ID,
-        redirect_uri: `${SQUARE_ORIGIN}/list`,
+        redirect_uri: AUTHORIZE_REDIRECT_URI,
       }),
     });
     await ensureOk(response, 'Failed to exchange Hejhome OAuth code');
@@ -179,7 +182,7 @@ export class HejAuthClient {
       });
       this.emitLog({
         phase,
-        status: 'success',
+        status: response.status >= 400 ? 'error' : 'success',
         durationMs: this.now() - startedAt,
         httpStatus: response.status,
       });
@@ -226,8 +229,51 @@ function makeBasicAuth(id: string, password: string): string {
   return `Basic ${Buffer.from(`${id}:${password}`, 'utf8').toString('base64')}`;
 }
 
-function parseJSessionId(setCookie: string | null): string | null {
-  return setCookie?.match(/JSESSIONID=([^;]+)/)?.[1] ?? null;
+function parseJSessionId(headers: Headers): string | null {
+  const cookies = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : [];
+  for (const cookie of cookies) {
+    const match = cookie.match(/JSESSIONID=([^;]+)/i);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+  return headers.get('set-cookie')?.match(/JSESSIONID=([^;]+)/i)?.[1] ?? null;
+}
+
+function extractAuthorizationCode(response: Response, bodyText: string): string | null {
+  const candidates = [response.headers.get('location'), response.url];
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    try {
+      const code = new URL(candidate, SQUARE_ORIGIN).searchParams.get('code');
+      if (code) {
+        return code;
+      }
+    } catch {
+      // Ignore values that are not URLs.
+    }
+  }
+
+  if (response.status >= 400) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(bodyText) as { code?: unknown };
+    if (typeof parsed.code === 'string' && parsed.code) {
+      return parsed.code;
+    }
+  } catch {
+    // Body is not JSON.
+  }
+
+  const trimmed = bodyText.trim().replace(/^"|"$/g, '');
+  if (trimmed && /^[A-Za-z0-9._~+/-]+=*$/.test(trimmed) && trimmed.length <= 256 && !trimmed.includes('{')) {
+    return trimmed;
+  }
+  return null;
 }
 
 async function ensureOk(response: Response, message: string): Promise<void> {

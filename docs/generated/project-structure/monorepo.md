@@ -101,6 +101,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── fixtures
 │   │   └── pi-devices-snapshot.json
 │   ├── hej-auth.test.ts
+│   ├── hej-rest.test.ts
 │   ├── homebridge-dev-ui.test.ts
 │   ├── log-store.test.ts
 │   ├── official-gates.test.ts

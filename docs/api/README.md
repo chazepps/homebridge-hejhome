@@ -14,13 +14,11 @@ This directory records the Hejhome Web API behavior used by the plugin. It inten
 
 | Purpose | Method | Endpoint Pattern | Notes |
 | --- | --- | --- | --- |
-| User profile | GET | `dashboard/config/user` | Used to confirm account identity and camera access metadata. |
-| Home list | GET | `dashboard/family` | Returns homes with numeric `familyId` and display name. |
-| Room list | GET | `dashboard/rooms/{familyId}` | Returns rooms for a home. |
-| Device state | GET | `dashboard/{familyId}/devices-state?scope=shop` | Returns all devices for a home. |
-| Room device state | GET | `dashboard/{familyId}/room/{roomId}/devices-state?scope=shop` | Returns devices scoped to one room. |
-| Device command | POST | `dashboard/control/{deviceId}` | Body contains `requirments`, matching the web API spelling. |
-| Camera list | GET | `dashboard/devices/camera` | Returns camera devices separately from normal device state discovery. |
+| Device list | GET | `openapi/devices` | Returns the account device list. Home and room membership are derived from `familyId` / `roomId` when present. |
+| Home list | derived | `openapi/devices` | Numeric homes are grouped from device `familyId`. A single virtual home is used when those fields are absent. |
+| Room list | derived | `openapi/devices` | Rooms are grouped from device `roomId` within a home. |
+| Device command | POST | `openapi/control/{deviceId}` | Body contains `requirments`, matching the upstream API spelling. |
+| Camera list | GET | `dashboard/devices/camera` | Deferred camera discovery path. Not used by current accessory discovery. |
 | Camera WebRTC config | GET | `dashboard/webrtc/configs/{deviceId}` | Returns ICE/auth/signaling metadata for a camera. |
 | Camera access config | POST | `dashboard/webrtc/access-config` | Creates short-lived MQTT/WebRTC signaling access data. |
 

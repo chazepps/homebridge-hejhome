@@ -5,9 +5,11 @@
 | Flow | Endpoint Pattern | Notes |
 | --- | --- | --- |
 | Email verification send | `2factor.goqual.com` email send path | Captured from Hejhome Web traffic and stored only as redacted flow |
-| Password login | `square.hej.so` OAuth login path | Uses request-time OAuth authorization headers |
-| Authorization code | `square.hej.so` OAuth authorize path | Auto-login cookie state is included |
-| Token exchange | `square.hej.so` OAuth token path | Access token is parsed and persisted through `SessionStore` |
+| Password login | `goqual.io` OAuth login path with `vendor=openapi` | Uses request-time Basic authorization and an empty JSON body |
+| Authorization code | `goqual.io` OAuth authorize path | Session cookie from login is included; `redirect_uri` is `square.hej.so/list` and scope is `shop` |
+| Token exchange | `goqual.io` OAuth token path | Uses the same `redirect_uri` as authorize; access token is persisted through `SessionStore` |
+| Device list | `goqual.io` OpenAPI devices path | Homes and rooms are derived from the device list when family endpoints are absent |
+| Device command | `goqual.io` OpenAPI control path | Body contains `requirments`, matching the upstream spelling |
 
 ## Inferred
 

@@ -27,6 +27,7 @@
 | --- | --- |
 | `tests/official-gates.test.ts` | Homebridge package and schema gates |
 | `tests/hej-auth.test.ts` | Authentication request flow |
+| `tests/hej-rest.test.ts` | OpenAPI device list, home/room derivation, and control |
 | `tests/session-store.test.ts` | Storage persistence |
 | `tests/redaction.test.ts` | Secret masking |
 | `tests/platform.test.ts` | Unconfigured platform behavior |

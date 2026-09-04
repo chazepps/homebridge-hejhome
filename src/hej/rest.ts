@@ -1,7 +1,9 @@
 import type { HejDevice, HejFamily, HejRoom, HejSession } from '../types.js';
+import { GOQUAL_ORIGIN } from './auth.js';
 import { sanitizeForLog } from '../utils/redact.js';
 
-const SQUARE_ORIGIN = 'https://square.hej.so';
+export const HEJ_VIRTUAL_FAMILY_ID = 1;
+const HEJ_VIRTUAL_FAMILY_NAME = 'Hejhome';
 
 export interface HejRestLogEvent {
   path: string;
@@ -17,16 +19,6 @@ export interface HejRestClientOptions {
   logger?: (event: HejRestLogEvent) => void;
   now?: () => number;
   requestTimeoutMs?: number;
-}
-
-interface FamilyListResponse {
-  result: HejFamily[];
-}
-
-interface RoomListResponse {
-  result: {
-    rooms: HejRoom[];
-  };
 }
 
 export class HejRestClient {
@@ -46,18 +38,27 @@ export class HejRestClient {
   }
 
   async getFamilies(): Promise<HejFamily[]> {
-    const response = await this.request<FamilyListResponse>('dashboard/family');
-    return response.result;
+    return familiesFromDevices(await this.listDevices());
   }
 
   async getRooms(familyId: number): Promise<HejRoom[]> {
-    const response = await this.request<RoomListResponse>(`dashboard/rooms/${familyId}`);
-    return response.result.rooms;
+    return roomsFromDevices(await this.listDevices(), familyId);
   }
 
   async getDevices(familyId: number, roomId?: number | 'all'): Promise<HejDevice[]> {
-    const roomSegment = roomId === undefined ? '' : `/room/${roomId}`;
-    return this.request<HejDevice[]>(`dashboard/${familyId}${roomSegment}/devices-state?scope=shop`);
+    const devices = await this.listDevices();
+    return devices.filter((device) => {
+      if (assignedFamilyId(device) !== familyId) {
+        return false;
+      }
+      if (roomId === undefined || roomId === 'all') {
+        return true;
+      }
+      return device.roomId === roomId;
+    }).map((device) => ({
+      ...device,
+      familyId: assignedFamilyId(device),
+    }));
   }
 
   async getCameraDevices(): Promise<unknown[]> {
@@ -76,10 +77,15 @@ export class HejRestClient {
   }
 
   async controlDevice(deviceId: string, requirements: Record<string, unknown>): Promise<void> {
-    await this.requestText(`dashboard/control/${deviceId}`, {
+    await this.requestText(`openapi/control/${deviceId}`, {
       method: 'POST',
       body: JSON.stringify({ requirments: requirements }),
     });
+  }
+
+  private async listDevices(): Promise<HejDevice[]> {
+    const text = await this.requestText('openapi/devices', { method: 'GET' });
+    return normalizeOpenApiDevices(JSON.parse(text || 'null'));
   }
 
   private async request<T>(path: string): Promise<T> {
@@ -97,7 +103,7 @@ export class HejRestClient {
 
     this.emitLog({ path, method, status: 'start' });
     try {
-      const response = await this.fetchImpl(`${SQUARE_ORIGIN}/${path}`, {
+      const response = await this.fetchImpl(`${GOQUAL_ORIGIN}/${path}`, {
         ...init,
         signal: controller.signal,
         headers: {
@@ -105,7 +111,7 @@ export class HejRestClient {
           authorization: `Bearer ${this.session.accessToken}`,
           'content-type': 'application/json;charset=UTF-8',
           cookie: `username=${this.session.usernameCookie}; autoLogin=true; JSESSIONID=${this.session.jsessionId}; accessToken=${this.session.accessToken}`,
-          Referer: `${SQUARE_ORIGIN}/list`,
+          Referer: `${GOQUAL_ORIGIN}/`,
           'x-requested-with': 'XMLHttpRequest',
           ...init.headers,
         },
@@ -143,4 +149,122 @@ export class HejRestClient {
   private emitLog(event: HejRestLogEvent): void {
     this.logger?.(event);
   }
+}
+
+function normalizeOpenApiDevices(payload: unknown): HejDevice[] {
+  return unwrapDeviceList(payload)
+    .map((entry) => normalizeDevice(entry))
+    .filter((device): device is HejDevice => device !== null);
+}
+
+function unwrapDeviceList(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    for (const key of ['result', 'devices', 'data']) {
+      if (Array.isArray(record[key])) {
+        return record[key];
+      }
+    }
+  }
+  return [];
+}
+
+function normalizeDevice(raw: unknown): HejDevice | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const entry = raw as Record<string, unknown>;
+  const id = stringValue(entry.id) ?? stringValue(entry.deviceId) ?? stringValue(entry.devId);
+  if (!id) {
+    return null;
+  }
+  const familyId = numberValue(entry.familyId) ?? numberValue(entry.family_id);
+  const roomId = numberValue(entry.roomId) ?? numberValue(entry.room_id);
+  const device: HejDevice = {
+    id,
+    name: stringValue(entry.name) ?? id,
+    deviceType: stringValue(entry.deviceType) ?? 'Unknown',
+    modelName: stringValue(entry.modelName) ?? null,
+    deviceState: isRecord(entry.deviceState) ? entry.deviceState : null,
+  };
+  if (typeof entry.hasSubDevices === 'boolean') {
+    device.hasSubDevices = entry.hasSubDevices;
+  }
+  if (familyId !== undefined) {
+    device.familyId = familyId;
+  }
+  const category = stringValue(entry.category);
+  if (category) {
+    device.category = category;
+  }
+  if (typeof entry.online === 'boolean') {
+    device.online = entry.online;
+  }
+  if (roomId !== undefined) {
+    device.roomId = roomId;
+  }
+  return device;
+}
+
+function familiesFromDevices(devices: HejDevice[]): HejFamily[] {
+  const families = new Map<number, HejFamily>();
+  for (const device of devices) {
+    const familyId = assignedFamilyId(device);
+    if (!families.has(familyId)) {
+      families.set(familyId, {
+        familyId,
+        name: familyId === HEJ_VIRTUAL_FAMILY_ID && device.familyId === undefined
+          ? HEJ_VIRTUAL_FAMILY_NAME
+          : `Home ${familyId}`,
+      });
+    }
+  }
+  if (families.size === 0) {
+    return [{ familyId: HEJ_VIRTUAL_FAMILY_ID, name: HEJ_VIRTUAL_FAMILY_NAME }];
+  }
+  return [...families.values()];
+}
+
+function roomsFromDevices(devices: HejDevice[], familyId: number): HejRoom[] {
+  const rooms = new Map<number, HejRoom>();
+  for (const device of devices) {
+    if (assignedFamilyId(device) !== familyId || typeof device.roomId !== 'number') {
+      continue;
+    }
+    if (!rooms.has(device.roomId)) {
+      rooms.set(device.roomId, {
+        room_id: device.roomId,
+        name: `Room ${device.roomId}`,
+      });
+    }
+  }
+  return [...rooms.values()];
+}
+
+function assignedFamilyId(device: HejDevice): number {
+  return typeof device.familyId === 'number' && Number.isFinite(device.familyId)
+    ? device.familyId
+    : HEJ_VIRTUAL_FAMILY_ID;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 
-import { HejAuthClient } from '../src/hej/auth.js';
+import { HejAuthClient, SQUARE_ORIGIN } from '../src/hej/auth.js';
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
@@ -55,7 +55,11 @@ describe('HejAuthClient', () => {
     const events: unknown[] = [];
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       const href = String(url);
-      if (href.endsWith('/oauth/login?vendor=shop')) {
+      if (href.endsWith('/oauth/login?vendor=openapi')) {
+        expect(init?.body).toBe('{}');
+        expect(init?.headers).toEqual(expect.objectContaining({
+          'content-type': 'application/json',
+        }));
         return new Response('', {
           status: 200,
           headers: {
@@ -64,17 +68,21 @@ describe('HejAuthClient', () => {
         });
       }
 
-      if (href.startsWith('https://square.hej.so/oauth/authorize')) {
+      if (href.startsWith('https://goqual.io/oauth/authorize')) {
+        expect(href).toContain('scope=shop');
+        expect(href).toContain(encodeURIComponent(`${SQUARE_ORIGIN}/list`));
+        expect(href).not.toContain('vendor=');
         return new Response('', {
           status: 302,
           headers: {
-            location: 'https://square.hej.so/list?code=auth-code',
+            location: `${SQUARE_ORIGIN}/list?code=auth-code`,
           },
         });
       }
 
       if (href.endsWith('/oauth/token')) {
         expect(init?.body?.toString()).toContain('grant_type=authorization_code');
+        expect(init?.body?.toString()).toContain(encodeURIComponent(`${SQUARE_ORIGIN}/list`));
         return jsonResponse({ access_token: 'access-token', expires_in: 86400 });
       }
 
@@ -104,5 +112,36 @@ describe('HejAuthClient', () => {
     ]));
     expect(JSON.stringify(events)).not.toContain('secret-password');
     expect(JSON.stringify(events)).not.toContain('user@example.test');
+  });
+
+  test('accepts an authorization code returned in the authorize response body', async () => {
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const href = String(url);
+      if (href.endsWith('/oauth/login?vendor=openapi')) {
+        return new Response('', {
+          status: 200,
+          headers: {
+            'set-cookie': `${'JSESSION'}ID=session-id; Path=/; HttpOnly`,
+          },
+        });
+      }
+      if (href.startsWith('https://goqual.io/oauth/authorize')) {
+        expect(href).toContain('scope=shop');
+        return new Response('auth-code', { status: 200 });
+      }
+      if (href.endsWith('/oauth/token')) {
+        return jsonResponse({ access_token: 'access-token', expires_in: 86400 });
+      }
+      throw new Error(`Unexpected request: ${href}`);
+    });
+    const client = new HejAuthClient({ fetch: fetchMock });
+
+    const session = await client.loginWithPassword({
+      identifier: 'user@example.test',
+      password: 'secret-password',
+    });
+
+    expect(session.accessToken).toBe('access-token');
+    expect(session.jsessionId).toBe('session-id');
   });
 });
