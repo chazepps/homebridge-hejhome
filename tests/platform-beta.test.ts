@@ -22,7 +22,7 @@ async function fixture(adaptiveLighting = false, cachedAdaptive = false) {
     user: { storagePath: () => dir }, updatePlatformAccessories: vi.fn() } as unknown as API;
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as unknown as Logging;
   const platform = new HejhomePlatform(log, { platform: 'Hejhome', features: { adaptiveLighting } }, api);
-  const client = { controlDevice: vi.fn().mockResolvedValue(undefined) };
+  const client = { dispose: vi.fn(), controlDevice: vi.fn().mockResolvedValue(undefined) };
   const device: HejDevice = { id: 'w1', name: 'White light', deviceType: 'LightWw1', deviceState: { power: true, brightness: 50, temperature: 30 } };
   const accessory = new host.platformAccessory(device.name, host.hap.uuid.generate(device.id));
   if (cachedAdaptive) {

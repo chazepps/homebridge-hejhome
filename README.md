@@ -1,120 +1,89 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/main/branding/logo.png" alt="Hejhome 로고" height="150">
+  <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/main/branding/logo.png" alt="Hejhome 로고" height="110">
 </p>
 
-<h1 align="center">Homebridge Hejhome Plugin</h1>
+<h1 align="center">Homebridge Hejhome</h1>
 
 <p align="center">
-  헤이홈 장비를 Apple Home 앱과 HomeKit에서 사용할 수 있게 연결하는 Homebridge 플러그인입니다.
+  <strong>헤이홈 기기를 Apple Home으로 연결하고, 지원 기기를 Matter로 확장하세요.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/homebridge/homebridge/wiki/Verified-Plugins"><img alt="Homebridge verified" src="https://img.shields.io/badge/homebridge-verified-491F59?style=for-the-badge&logo=homebridge&logoColor=white"></a>
-  <img alt="Node.js 22, 24 or 26" src="https://img.shields.io/badge/node.js-22.12%2B%20%7C%2024.x%20%7C%2026.x-339933?style=for-the-badge&logo=node.js&logoColor=white">
   <img alt="Homebridge 2.4+" src="https://img.shields.io/badge/homebridge-2.4%2B-491F59?style=for-the-badge">
+  <img alt="Node.js 22, 24 or 26" src="https://img.shields.io/badge/node.js-22.12%2B%20%7C%2024.x%20%7C%2026.x-339933?style=for-the-badge&logo=node.js&logoColor=white">
   <img alt="License ISC" src="https://img.shields.io/badge/license-ISC-0f766e?style=for-the-badge">
 </p>
 
-## 2.1 베타 준비 중
+## 헤이홈 기기를 익숙한 스마트홈에서
 
-이 브랜치는 **2.1.0-beta.0** 출시 후보이며 아직 게시되지 않았습니다.
-Matter 장치 노출, 색온도 조명의 Adaptive Lighting, 모델별 단위를 지정하는 전력 측정,
-Node 26 및 Homebridge 정식·베타 호환성 검증을 추가합니다.
+`@chazepps/homebridge-hejhome`은 헤이홈 앱에 등록한 조명, 스위치, 플러그와 센서를 Homebridge에 연결하는 **비공식 오픈소스 플러그인**입니다. Apple Home에서 지원 기기를 조작하고, Siri와 Home 앱 자동화에 활용할 수 있습니다. 2.1 베타에서는 Matter를 통해 Google Home·SmartThings 등으로 연결할 수 있는 범위도 넓힙니다.
 
-게시 후에도 사용자가 `@chazepps/homebridge-hejhome@beta`를 명시적으로 설치해야 합니다.
-일반 설치·업데이트가 사용하는 `latest`는 기존 정식 버전을 유지합니다.
-Matter와 적응형 조명은 설정 화면에서 각각 켜야 하며 기본값은 꺼짐입니다.
-이 플러그인 베타에는 Homebridge **정식 2.4+**를 사용할 수 있습니다.
+- **설정 화면에서 시작:** 이메일 인증과 로그인 후 사용할 집과 방을 선택합니다.
+- **필요한 장치만 연결:** 장치별로 Apple Home·Matter 연결, 표시 이름과 지원되는 장치 형태를 설정합니다.
+- **문제가 생기면 상태부터 확인:** 로그인, 장치 발견, 연결 준비, 최근 상태 수신과 명령 결과를 한 화면에서 확인합니다.
 
-[베타 설치·기능별 지원 범위·계측 설정·복귀 절차](docs/product-specs/2.1-beta-guide.md)
+헤이홈 클라우드를 이용하므로 헤이홈 계정과 인터넷 연결이 필요합니다. 플러그인을 설치해도 기기에 로컬 통신이나 Thread 기능이 생기는 것은 아닙니다. 헤이홈 제조사와 독립적으로 유지보수합니다.
 
-## 🎉 버전 2가 드디어 출시되었습니다
+> **베타 릴리스:** **2.1.0-beta.1**은 npm의 `beta` 채널로 배포되었습니다. 베타를 사용하려면 Homebridge UI에서 베타 버전을 선택하거나 `@chazepps/homebridge-hejhome@beta`를 명시적으로 설치하세요. 정식 버전의 `latest` 채널과 구분됩니다. [베타 사용 안내](docs/product-specs/2.1-beta-guide.md)에서 상세 범위를 확인하세요.
 
-`@chazepps/homebridge-hejhome` v2는 기존 구현을 버리고 Homebridge 공식 Dynamic Platform Plugin 구조로 새로 만든 릴리스입니다.
+[설치·로그인](#시작하기) · [지원 기기](#지원-기기와-기능) · [문제 해결](#연결이-안-될-때) · [검증 기록](docs/exec-plans/2026-09-30-feature-implementation-status.md)
 
-이번 프로젝트는 **100% Codex로 개발**되었고, [Hejhome for Web](https://square.hej.so/) 사이트의 로그인, 장비 목록 조회, 제어 요청, 실시간 상태 갱신 흐름을 Homebridge 환경에서 유사하게 따라가도록 제작했습니다. Homebridge 설정 화면에서 로그인하고, 발견된 헤이홈 장비를 Home 앱 액세서리로 사용할 수 있게 만드는 것이 목표입니다.
+## 2.1 업데이트: 연결 확장과 일상 사용의 신뢰성 개선
 
-> **업그레이드 안내**
->
-> v1에서 v2로 업그레이드되면서 변화가 많습니다. 문제가 있다면 Homebridge 플러그인 메뉴에서 **액세서리 초기화**를 실행한 뒤 다시 로그인해 주세요.
+이번 업데이트는 **최신 Homebridge 환경에 대응하고, 여러 앱에서 같은 기기를 사용할 때 상태와 제어가 일관되도록 연동 기반을 개선한 릴리스**입니다. Matter, 적응형 조명, 전력 측정과 함께 재로그인·재연결·동시 조작·설정 저장 과정도 점검했습니다.
 
-## 스크린샷
-
-아래는 Homebridge UI 안에서 열리는 Hejhome 플러그인 설정 화면 스크린샷입니다. 이렇게 생겼습니다.
-
-<p align="center">
-  <img src="./branding/screenshots/hejhome-plugin-settings.png" alt="Hejhome 플러그인 로그인 후 설정 화면 스크린샷" width="720">
-</p>
-
-<p align="center">
-  <img src="./branding/screenshots/hejhome-plugin-login.png" alt="Hejhome 플러그인 로그인 화면 스크린샷" width="720">
-</p>
-
-## 개요
-
-`@chazepps/homebridge-hejhome`은 헤이홈 클라우드 장비를 HomeKit 액세서리로 노출하는 Dynamic Platform Plugin입니다. Homebridge 공식 플러그인 규칙에 맞춰 TypeScript, Custom Config UI, 세션 저장소, 장비 스냅샷, 실시간 상태 갱신 구조를 갖추고 있습니다.
-
-로그인은 Homebridge 설정 화면 안에서 진행됩니다. 이메일 인증번호 확인 후 비밀번호를 한 번 입력하면, 자동 로그인 세션을 Homebridge 저장 공간에 저장합니다. 비밀번호와 인증번호는 저장하지 않습니다.
-
-## 주요 기능
-
-- Homebridge 공식 Dynamic Platform Plugin 구조 사용
-- Homebridge Config UI 안에서 Hejhome 이메일 로그인 지원
-- 세션 정보는 `config.json`이 아니라 Homebridge 저장 공간에 분리 저장
-- Hejhome 장비 목록 스냅샷 저장
-- 장비 추가, 갱신, 제거를 Homebridge 캐시 액세서리와 동기화
-- REST 제어 요청과 realtime 상태 갱신 지원
-- 설정 화면에서 로그인 상태, 장비 수, 지원/부분 지원/보류 제품군 표시
-- 미지원 장비를 발견하면 GitHub 이슈용 템플릿 제공
-- lint, typecheck, unit test, UI test, build, docs check, npm pack 검증 포함
-
-## 현재 지원 제품군
-
-아래 목록은 `src/devices/capabilities.ts`의 capability registry를 기준으로 다시 점검한 현재 지원 범위입니다. HomeKit 의미가 명확한 장비만 안정 지원으로 분류하고, 불명확한 장비는 부분 지원 또는 후속 구현 대상으로 둡니다.
-
-### 안정 지원
-
-| 제품군 | Hejhome 타입 | HomeKit 표시 |
+| 개선 영역 | 이번 대응 | 사용자가 체감하는 변화 |
 | --- | --- | --- |
-| RGB/RGBW 조명, LED 스트립 | `LightRgbw1`, `LightRgbw2`, `LightRgbw3`, `LightRgbw4`, `LightRgbw5`, `LightRgb4`, `LightRgb5`, `LedStripRgb`, `LedStripRgbw1`, `LedStripRgbw2` | 전구 |
-| 색온도 조명 | `LightWw1`, `LightWw2`, `LightWw3` | 전구 |
-| 벽 스위치 | `Switch1`, `Switch2`, `Switch3`, `Switch4`, `Switch5`, `Switch6`, `ZigbeeSwitch1`, `ZigbeeSwitch2`, `ZigbeeSwitch3` | 스위치 |
-| 릴레이 | `Relay`, `RelayController`, `RelayController2`, `RelayControllerDc`, `RelayControllerDc2` | 스위치 |
-| 플러그 | `Plug`, `SmartPlug`, `BruntPlug` | 콘센트 |
-| 멀티탭 | `PowerStrip`, `PowerStrip2` | 콘센트 |
-| 커튼/블라인드 | `Curtain`, `Blind`, `Blind2` | 커튼/블라인드 |
-| 모션 센서 | `SensorMo`, `SensorRadar` | 모션 센서, 배터리 |
-| 문 열림 센서 | `SensorDo` | 문 열림 센서, 배터리 |
-| 온습도 센서 | `SensorTh`, `SensorTh2`, `SensorRefTh`, `SensorRefTh2` | 온도 센서, 습도 센서, 배터리 |
-| 누수 센서 | `SensorWater2`, `SensorWater3` | 누수 센서, 배터리 |
-| 연기 센서 | `SensorSmoke3`, `SensorSmoke4` | 연기 센서, 배터리 |
-| 스마트 버튼 | `SmartButton` | 버튼, 배터리 |
+| 스마트홈 연결 확장 | Homebridge 2.4+의 HAP·Matter API와 Node 22·24·26 대응 | 지원 장치를 사용할 앱에 맞춰 연결 |
+| 제어 순서와 상태 동기화 | 장치별 명령 처리, 최신 수신 상태 보호, 요청 제한 | 늦게 도착한 응답으로 새 상태가 되돌아가는 문제를 방지하도록 개선 |
+| 로그인·연결 복구 | 새 로그인 정보 감지, 재연결 후 재탐색, 불완전한 조회 결과 보호 | 재로그인 뒤 연결을 다시 준비하고, 일시적인 조회 실패로 장치를 지우지 않음 |
+| 확인 가능한 상태 표시 | 현재값·설정값·이전 기록과 명령 전송 결과를 구분 | 측정되지 않은 값을 정상값으로 오인하지 않고 문제 위치를 확인 |
+| 설정 화면 사용성 | 장치별 설정, 실시간 진단, 입력 중 내용 보존, 한영·테마 대응 | 연결을 점검하면서 설정을 편집하고 모바일에서도 사용 |
 
-### 부분 지원
+이 과정에서 실제 Homebridge HAP 객체와 Matter endpoint를 사용하는 테스트, 장애·재시작·동시 제어 회귀 테스트, 브라우저 테스트를 보강했습니다. 코드·인터페이스 검증과 실제 기기 검증은 별도로 기록합니다. **지원 범위를 명확히 하고, 실패 상황까지 확인하는 것이 이 프로젝트의 개발 기준입니다.**
 
-| 제품군 | Hejhome 타입 | 현재 상태 |
-| --- | --- | --- |
-| IR TV/셋톱박스/프로젝터/램프/스피커/DVD/카메라/DIY 리모컨 | `IrTv`, `IrSettopbox`, `IrProjector`, `IrLamp`, `IrSpeaker`, `IrDvd`, `IrTvbox`, `IrCamera`, `IrDIY` | 전원처럼 의미가 명확한 명령만 스위치로 보수 지원 |
-| IR 에어컨 | `IrAirconditioner` | 전원, 온도, 운전 모드 중심으로 보수 지원 |
-| IR 선풍기 | `IrFan` | 전원과 바람 세기 중심으로 보수 지원 |
-| 센서/알림/도어락 계열 | `AudibleAlarm`, `SensorGas2`, `SensorSmoke`, `SensorSos`, `SensorWater`, `Siren`, `SmartDoorLock`, `ZigbeeDoorlock` | 상태값 의미를 더 확인한 뒤 HomeKit 매핑 확장 예정 |
-| 공기 관리 장비 | `Airpurifier`, `IrAirpurifier` | 전원과 모드 상태는 확인됐지만 HomeKit 매핑 추가 검증 필요 |
+베타는 `beta` 채널로 분리하며, 사용자가 직접 선택해야 설치됩니다. Matter와 적응형 조명도 기본값은 꺼짐입니다. Hejhome 베타를 사용하기 위해 Homebridge core 베타나 UI 알파를 설치할 필요는 없습니다.
 
-### 후속 구현 대상
+## 시작하기
 
-| 제품군 | Hejhome 타입 | 현재 상태 |
-| --- | --- | --- |
-| 홈 카메라 | `HomeCamera`, `HomeCameraPro`, `HomeCameraProPlus` | API 분석은 진행했지만 HomeKit 영상 스트리밍 연동은 다음 단계 |
+### 1. 실행 환경 확인
 
-## 설치
+아래는 **2.1 베타 릴리스**의 요구사항입니다.
 
-Homebridge UI에서 플러그인을 설치하거나 npm으로 설치합니다.
+| 항목 | 요구사항 |
+| --- | --- |
+| Homebridge | 2.4 이상, 2.x 계열 |
+| Homebridge UI | 5.29 이상 |
+| Node.js | 22.12 이상인 22.x, 24.x 또는 26.x |
+| 헤이홈 | 앱에 기기가 등록된 계정과 이메일 로그인 |
+| 네트워크 | 헤이홈 클라우드 접속. Matter 연결 시 같은 네트워크의 IPv6·mDNS 동작 필요 |
+
+설정 화면의 새 리모컨 기능은 현재 macOS/Linux를 대상으로 합니다. Windows의 해당 기능은 추가 검증 중입니다. 기기별 기능과 운영체제 제한은 [베타 안내](docs/product-specs/2.1-beta-guide.md)를 확인하세요.
+
+### 2. 플러그인 설치
+
+Homebridge UI의 플러그인 메뉴에서 `@chazepps/homebridge-hejhome`을 찾아 설치합니다. npm을 사용한다면 실행 중인 Homebridge와 같은 설치 환경에서 명시적으로 채널을 선택할 수 있습니다.
 
 ```sh
-npm install -g @chazepps/homebridge-hejhome
+# 공개된 정식 버전 설치
+npm install -g @chazepps/homebridge-hejhome@latest
 ```
 
-Homebridge 설정에는 platform만 추가하면 됩니다.
+배포된 **2.1 베타**를 설치하려면 Homebridge UI에서 베타 버전을 선택하거나 다음 명령을 사용합니다. 정식 버전 설치만으로 베타 기능이 활성화되지는 않습니다.
+
+```sh
+npm install -g @chazepps/homebridge-hejhome@beta
+```
+
+### 3. 로그인하고 장치 선택
+
+1. Hejhome 플러그인 설정을 엽니다.
+2. 헤이홈 계정의 이메일로 인증번호를 받고 인증을 완료합니다.
+3. 비밀번호로 로그인합니다. 비밀번호와 인증번호는 저장하지 않습니다.
+4. 사용할 집과 방을 선택합니다. 처음에는 첫 번째 집의 모든 방을 사용합니다.
+5. 연결 설정을 저장하고 안내에 따라 Homebridge를 다시 시작합니다.
+
+직접 `config.json`을 편집한다면 최소 설정은 다음과 같습니다. 로그인 정보는 설정 화면에서 별도로 입력합니다.
 
 ```json
 {
@@ -123,70 +92,167 @@ Homebridge 설정에는 platform만 추가하면 됩니다.
 }
 ```
 
-설치 후 Homebridge UI에서 Hejhome 플러그인 설정을 열고 이메일 인증과 비밀번호 로그인을 진행하세요. 비밀번호 입력 칸은 인증번호 확인이 끝난 뒤에만 활성화되며, 비밀번호는 디스크에 저장하지 않습니다.
+<details>
+<summary>설정 화면 예시 보기</summary>
 
-## 로컬 개발
+기존 로그인·설정 화면의 예시입니다. 2.1 베타에서 추가한 옵션과 배치는 이미지와 다를 수 있습니다.
 
-가능하면 `.nvmrc`의 Node 버전을 사용합니다.
+<p align="center">
+  <img src="./branding/screenshots/hejhome-plugin-settings.png" alt="Hejhome 설정 화면 예시" width="720">
+</p>
+
+<p align="center">
+  <img src="./branding/screenshots/hejhome-plugin-login.png" alt="Hejhome 로그인 화면 예시" width="720">
+</p>
+
+</details>
+
+## 지원 기기와 기능
+
+아래는 **2.1 베타 릴리스의 지원 범위**입니다. 같은 제품군이라도 모델과 제공되는 상태값에 따라 기능이 달라집니다. 모든 모델의 실물 검증이 완료되었다는 뜻은 아닙니다.
+
+| 제품군 | Apple Home | Matter 및 추가 기능 |
+| --- | --- | --- |
+| RGB/RGBW 조명·LED 스트립 | 전원, 밝기, 색상 | 지원 장치의 전원·밝기·색상, 상대·연속 밝기 조절 |
+| 색온도 조명 | 전원, 밝기, 색온도, 적응형 조명 | 전원·밝기·색온도. 적응형 조명은 Apple Home에서 설정 |
+| 벽 스위치·릴레이 | 전원, 다중 스위치의 개별 제어 | 개별 켜기·끄기 |
+| 플러그·멀티탭 | 전원, 개별 콘센트 제어 | 전원, 보정 설정이 있는 모델의 전력 측정 |
+| 커튼·블라인드 | 위치 확인과 목표 위치 제어 | 위치 제어. 정지·각도 조절은 미지원 |
+| 모션·문 열림 센서 | 해당 감지 상태 | 해당 감지 상태 |
+| 온습도 센서 | 온도·습도 | 온도·습도 |
+| 누수·연기 센서 | 해당 경보 상태 | 해당 경보 상태 |
+
+배터리 정보를 제공하는 기기는 배터리 상태도 반영합니다. 센서값이 없거나 확인되지 않으면 정상값을 추정하지 않는 방향으로 처리하며, 상태 정확성과 복구 동작은 회귀 테스트로 점검합니다.
+
+### IR 리모컨 장비
+
+IR 장비는 실제 상태를 돌려주는지에 따라 표현을 구분합니다. 전원 상태를 알 수 없는 기기는 Apple Home에서 **순간 전원 버튼**으로 표시하며, 실제 켜짐·꺼짐을 확정해서 보여주지 않습니다. Matter의 절대 전원 제어는 상태를 확인할 수 있는 지원 장치로 제한합니다.
+
+| 제품군 | 제공 범위 |
+| --- | --- |
+| TV·셋톱박스 | 전원 제어 또는 전원 버튼. 설정 화면에서 음량·채널·음소거 조작 |
+| 선풍기 | 전원 상태가 있으면 선풍기 전원 제어, 없으면 전원 버튼. 설정 화면에서 바람 세기·회전 버튼 |
+| 에어컨 | Apple Home 전원 제어. 설정 화면에서 설정 온도·운전 방식·바람 세기 조작 |
+| 기타 지원 IR 장비 | 확인된 전원 명령 범위 |
+
+에어컨의 실제 운전 상태를 확인할 수 없어 HAP/Matter 온도조절기 위젯은 제공하지 않습니다. 별도 헤이홈 온도계를 연결하면 설정 화면에서 실제 현재 온도를 함께 확인할 수 있습니다.
+
+### 아직 제공하지 않는 기능
+
+스마트 버튼의 클릭 자동화, 레이더의 지속 재실 감지, 커튼 정지·각도 조절, 공기질·필터 기능, RGBW 색온도 확장·장면 프리셋, 카메라 영상·HKSV, 도어락 잠금·해제는 추가 확인과 구현이 필요합니다. 확인되지 않은 기기를 임의의 제어 장치로 등록하지 않습니다.
+
+<details>
+<summary>기술 지원용 Hejhome 장치 타입</summary>
+
+제품에 붙은 모델명과 API의 장치 타입은 다를 수 있습니다. 지원 요청 시 설정 화면의 모델 정보를 함께 확인해 주세요.
+
+| 제품군 | 주요 장치 타입 |
+| --- | --- |
+| RGB/RGBW·스트립 | `LightRgbw1`–`LightRgbw5`, `LightRgb4`, `LightRgb5`, `LedStripRgb`, `LedStripRgbw1`, `LedStripRgbw2` |
+| 색온도 조명 | `LightWw1`, `LightWw2`, `LightWw3` |
+| 벽 스위치 | `Switch1`–`Switch6`, `ZigbeeSwitch1`–`ZigbeeSwitch3` |
+| 릴레이 | `Relay`, `RelayController`, `RelayController2`, `RelayControllerDc`, `RelayControllerDc2` |
+| 플러그·멀티탭 | `Plug`, `SmartPlug`, `BruntPlug`, `PowerStrip`, `PowerStrip2` |
+| 커튼·블라인드 | `Curtain`, `Blind`, `Blind2` |
+| 센서 | `SensorMo`, `SensorDo`, `SensorTh`, `SensorTh2`, `SensorRefTh`, `SensorRefTh2`, `SensorWater2`, `SensorWater3`, `SensorSmoke3`, `SensorSmoke4` |
+| IR 장비 | `IrTv`, `IrSettopbox`, `IrProjector`, `IrLamp`, `IrSpeaker`, `IrDvd`, `IrTvbox`, `IrCamera`, `IrDIY`, `IrAirconditioner`, `IrFan` |
+| 범위 확인 중 | `SensorRadar` 등 부분 지원·보류 타입 |
+
+구현 정의는 [장치별 지원 목록](src/devices/capabilities.ts), 세부 제한은 [베타 안내](docs/product-specs/2.1-beta-guide.md)를 참고하세요.
+
+</details>
+
+## 연결과 설정
+
+**Matter 연결:** 플러그인 옵션과 Homebridge의 해당 브리지에서 Matter를 켠 뒤, 사용할 앱에서 Matter QR로 연결합니다. 같은 앱에 HAP와 Matter로 같은 기기를 연결하면 중복 표시될 수 있습니다. Homebridge의 Matter는 커뮤니티 구현이며 인증된 상용 Matter 제품은 아닙니다.
+
+**적응형 조명:** 지원하는 색온도 조명에서 플러그인 옵션을 켜고 Apple Home에서도 적응형 조명을 선택합니다. 색온도는 클라우드 명령으로 주기적으로 갱신됩니다. RGBW라는 이름만으로 색온도 조절을 지원한다고 가정하지 않습니다.
+
+**전력 측정:** 실제 측정 항목과 단위를 확인한 모델에만 보정 설정을 적용합니다. Matter에는 전력·전류·전압·누적 사용량을 제공할 수 있고, 보정된 단일 플러그는 Apple Home에서 전원과 실제 부하 사용 여부를 구분합니다. 누적 데이터가 없으면 사용량을 추정해 만들지 않습니다. [계측 설정 예시](docs/product-specs/2.1-beta-guide.md#전력-측정)를 참고하세요.
+
+**장치별 설정:** 사용할 연결 방식, 표시 이름과 허용된 표시 형태를 선택합니다. 이름 변경과 서비스 형태 변경의 영향을 구분하며, 연결 방식이나 형태를 바꿀 때는 기존 자동화도 확인해 주세요.
+
+**Smart Automation:** Homebridge UI 6 알파의 자동화 연계는 별도 시험 항목입니다. 공식 규칙 코드에서 확인한 제한과 설정 예시는 [자동화 가이드](docs/product-specs/smart-automation-guide.md)에 정리했습니다. 플러그인 베타의 기본 사용에 UI 알파는 필요하지 않습니다.
+
+## 연결이 안 될 때
+
+먼저 플러그인 설정의 **연결 상태 살펴보기**를 확인하세요. 장치가 발견된 상태, Homebridge에서 연결을 준비한 상태, 실제 앱에 연결된 상태는 서로 다릅니다.
+
+| 증상 | 확인할 내용 |
+| --- | --- |
+| 장치 상태는 바뀌는데 제어가 안 됨 | 로그인이 만료되었는지 확인하고 다시 로그인합니다. 상태 수신과 제어 인증은 서로 다를 수 있습니다. |
+| 장치가 보이지 않음 | 선택한 집·방, 장치별 숨김 설정, 지원 범위를 확인합니다. 설정 변경 후 재시작이 필요한지도 확인합니다. |
+| 같은 장치가 두 개로 보임 | 같은 앱에 Apple Home 연결과 Matter 연결을 모두 추가했는지 확인합니다. |
+| 리모컨 버튼을 사용할 수 없음 | 실행 중인 플러그인이 준비됐는지, 최신 상태를 받고 있는지, 해당 환경에서 리모컨 기능을 지원하는지 확인합니다. |
+| 명령 응답이 늦거나 실패함 | 실물 동작을 확인한 뒤 다시 조작합니다. 응답을 못 받았다고 실제 명령이 실행되지 않았다고 단정할 수는 없습니다. |
+| 에어컨·버튼 표시가 이전과 달라짐 | 확인되지 않은 상태나 이벤트를 제공하던 서비스를 정리한 변경입니다. 지원 범위와 연결된 자동화를 확인합니다. |
+
+`명령 전송 완료`는 헤이홈 서버가 요청에 응답했다는 의미입니다. 장치가 실제로 동작했는지는 뒤이어 받은 상태나 실물로 확인해야 합니다.
+
+문제가 계속되면 설정 화면의 진단 내용과 지원 요청 템플릿을 이용해 [GitHub 이슈](https://github.com/chazepps/homebridge-hejhome/issues)를 등록해 주세요. 설치 버전, 모델, 재현 순서와 문제 발생 시각을 적으면 원인을 찾는 데 도움이 됩니다. 비밀번호·인증번호·토큰·쿠키는 공유하지 마세요.
+
+<details>
+<summary>이전 버전에서 업데이트하거나 정식 버전으로 돌아갈 때</summary>
+
+v1에서 v2로 업그레이드되면서 변화가 많습니다. 먼저 기존 설정을 보관하고 로그인·장치 상태부터 확인해 주세요. 일반적인 연결 문제의 첫 조치로 액세서리 초기화를 권장하지 않습니다.
+
+2.0에서 2.1 베타로 바꾸면 실제 상태가 확인되지 않는 에어컨 온도조절기나 스마트 버튼 서비스가 사라질 수 있습니다. 해당 서비스를 사용한 자동화는 업데이트 후 확인해야 합니다.
+
+정식 버전으로 돌아갈 때는 [복귀 절차](docs/product-specs/2.1-beta-guide.md#정식-버전으로-돌아가기)를 따릅니다. 2.0으로 복귀할 때는 이전 스키마에 없는 `features` 설정을 제거해야 합니다. 기존 Apple Home 연결은 일반적인 복귀 과정에서 초기화할 필요가 없습니다.
+
+</details>
+
+## 개인정보와 검증
+
+로그인 세션은 `config.json`과 분리해 Homebridge 저장 공간에 보관합니다. 비밀번호와 인증번호는 저장하지 않습니다. 최근 장치 상태와 문제 확인용 로그도 해당 Homebridge에 저장하며, 민감한 인증 정보는 로그에서 가립니다. 개발자에게 진단 내용을 자동으로 보내지 않습니다.
+
+이 프로젝트는 TypeScript 기반 **Dynamic Platform Plugin**으로, 인증·장치 발견·HAP/Matter 매핑·상태 관리·설정 UI를 분리합니다. 기능 변경 시 다음 범위를 확인합니다.
+
+- 실제 Homebridge HAP 객체와 Matter endpoint를 이용한 인터페이스·등록·복원 테스트
+- 세션 교체, 재연결, 동시 명령, 늦은 응답, 결측값과 종료 처리 회귀 테스트
+- 설정 저장·진단 갱신·한영·테마·모바일 화면을 확인하는 Playwright 테스트
+- lint, 타입 검사, 빌드, 문서와 npm 패키지 구성 검사
+
+CI는 Node 22·24·26과 Homebridge 정식·베타 조합을 대상으로 구성되어 있습니다. 릴리스 워크플로는 검증 후 버전·태그·배포 채널의 일치를 확인하고 npm Trusted Publishing과 provenance를 사용하도록 구성했습니다. 사전 릴리스는 `beta` 채널로 분리합니다.
+
+검증 결과의 범위와 남은 실기 확인 사항은 [구현·검증 기록](docs/exec-plans/2026-09-30-feature-implementation-status.md)에 남깁니다. 자동화 테스트 통과를 모든 모델의 실물 동작 보장으로 확대하지 않습니다.
+
+## 개발과 기여
+
+로컬 개발에는 `.nvmrc`의 Node 버전을 사용합니다.
 
 ```sh
 nvm use
-npm install
+npm ci
 npm run build
 npm run homebridge:dev
 ```
 
-Homebridge Config UI까지 함께 띄울 때는 다음 명령을 사용합니다.
+설정 UI를 함께 실행하려면 `npm run homebridge:ui`를 사용합니다. 개발용 설정은 `test/hbConfig/config.json`에 있습니다.
 
 ```sh
-npm run homebridge:ui
-```
+# 코드·UI·빌드·문서 검증
+npm run verify
 
-로컬 개발용 Homebridge 설정은 `test/hbConfig/config.json`에 있습니다.
-
-## 검증
-
-개발 중에는 아래 명령으로 품질 게이트를 확인합니다.
-
-```sh
-npm run lint
-npm run typecheck
-npm test
-npm run test:ui
-npm run build
-npm run docs:check
+# 배포 패키지 구성 확인
 npm pack --dry-run
 ```
 
-## 릴리스
-
-릴리스는 `v*` 태그를 기준으로 GitHub Actions에서 npm에 배포합니다. 릴리스 워크플로우는 의존성 설치, 검증 게이트, `npm pack --dry-run`을 실행한 뒤 npm Trusted Publishing과 provenance를 사용해 배포합니다.
-
-npm에 Trusted Publisher 설정을 먼저 완료한 뒤 태그를 푸시합니다.
-
-```sh
-git tag v2.0.0
-git push origin v2.0.0
-```
-
-## 프로젝트 구조
-
 | 경로 | 역할 |
 | --- | --- |
-| `src/platform.ts` | Homebridge dynamic platform 생명주기, 장비 discovery, realtime 연결 |
-| `src/platformAccessory.ts` | HomeKit 액세서리 서비스 구성과 장비 제어 |
-| `src/devices/capabilities.ts` | Hejhome 타입별 지원 상태와 HomeKit 매핑 |
-| `src/hej/` | Hejhome Web 인증, REST, realtime 클라이언트 |
-| `src/storage/` | 세션, 장비 스냅샷, 로그 저장소 |
-| `homebridge-ui/` | Homebridge Custom Config UI와 UI 서버 |
-| `docs/` | 제품, 프론트엔드, 신뢰성, 보안, 아키텍처 문서 |
+| `src/platform.ts` | 장치 발견, 연결 수명주기와 공통 명령 처리 |
+| `src/platformAccessory.ts` | HomeKit 서비스와 기기 제어 매핑 |
+| `src/matter/` | Matter 장치·상태·조광 처리 |
+| `src/runtime/` | 연결 상태, 진단, 관측 순서와 UI 명령 전달 |
+| `src/devices/`, `src/media/` | 장치 기능, 명령 변환과 IR 리모컨 처리 |
+| `src/hej/`, `src/storage/` | 헤이홈 인증·REST·MQTT와 로컬 저장 |
+| `homebridge-ui/` | 사용자 설정 화면과 UI 서버 |
+| `tests/`, `docs/` | 회귀 테스트, 설계·지원 범위·검증 기록 |
 
-## 기여
+새 장치를 지원할 때는 모델과 실제 보고값·명령 의미를 먼저 확인하고, 관련 테스트와 지원 문서를 함께 갱신합니다. 개인정보를 제외한 재현 자료와 테스트가 포함된 Pull Request를 환영합니다.
 
-장비 지원은 실제 장비 데이터가 있을 때 가장 정확하게 확장할 수 있습니다. 아직 지원하지 않거나 부분 지원 중인 장비가 있다면 플러그인 설정 화면에 표시되는 GitHub 이슈 템플릿을 사용해 제보해 주세요.
-
-Pull Request에는 관련 테스트 업데이트가 포함되어야 하며, 위 검증 명령을 통과해야 합니다.
+개발에는 Codex와 자동화 도구를 활용하며, 코드 리뷰와 테스트 결과를 바탕으로 변경을 검토합니다. 자세한 구조와 보안 원칙은 [아키텍처](ARCHITECTURE.md), [문서 목록](docs/README.md), [보안 안내](docs/SECURITY.md)를 참고하세요.
 
 ## 라이선스
 
-ISC. 자세한 내용은 [LICENSE](LICENSE)를 확인하세요.
+[ISC](LICENSE).

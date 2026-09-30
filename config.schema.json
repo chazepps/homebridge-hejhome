@@ -94,6 +94,38 @@
         "title": "Beta features",
         "additionalProperties": false,
         "properties": {
+          "devices": {
+            "title": "장치별 표시 설정 / Device settings",
+            "type": "object",
+            "default": {},
+            "propertyNames": {
+              "pattern": "^(?!__proto__$|prototype$|constructor$).{1,128}$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "visibility": {
+                  "type": "string",
+                  "enum": ["both", "homekit", "matter", "hidden"]
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "role": {
+                  "type": "string",
+                  "enum": ["original", "light", "outlet", "switch"]
+                },
+                "temperatureSensorId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                }
+              }
+            }
+          },
           "matter": {
             "type": "boolean",
             "default": false

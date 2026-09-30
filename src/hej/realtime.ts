@@ -70,118 +70,125 @@ export class HejRealtimeClient {
   }
 
   private handleMessage(payload: string): void {
-    const parsed = JSON.parse(payload) as {
-      deviceDataReport?: {
-        devId: string;
-        status?: Array<{ code: string; value: unknown }>;
-      };
-    };
-    const report = parsed.deviceDataReport;
-    if (!report?.devId) {
-      this.events.onStatus?.('message.ignored', { reason: 'missing deviceDataReport.devId' });
+    const report = parseDeviceReport(payload);
+    if (!report) {
+      this.events.onStatus?.('message.ignored', { reason: 'invalid-report' });
       return;
     }
 
     const deviceState: Record<string, unknown> = {};
-    for (const status of report.status ?? []) {
-      switch (status.code) {
-        case 'switch_led':
-        case 'switch_power':
-          deviceState.power = status.value;
-          break;
-        case 'switch': {
-          deviceState.power = status.value;
-          deviceState.state = status.value ? 'OPEN' : 'CLOSED';
-          break;
-        }
-        case 'prm_switch':
-          deviceState.state = status.value ? 'OPEN' : 'CLOSED';
-          break;
-        case 'switch_usb1':
-          deviceState.power4 = status.value;
-          break;
-        default: {
-          const powerKey = parseSwitchPowerKey(status.code);
-          if (powerKey) {
-            deviceState[powerKey] = status.value;
+    try {
+      for (const status of report.status) {
+        switch (status.code) {
+          case 'switch_led':
+          case 'switch_power':
+            deviceState.power = status.value;
+            break;
+          case 'switch': {
+            deviceState.power = status.value;
+            deviceState.state = status.value ? 'OPEN' : 'CLOSED';
             break;
           }
-          deviceState[status.code] = status.value;
-          break;
+          case 'prm_switch':
+            deviceState.state = status.value ? 'OPEN' : 'CLOSED';
+            break;
+          case 'switch_usb1':
+            deviceState.power4 = status.value;
+            break;
+          default: {
+            const powerKey = parseSwitchPowerKey(status.code);
+            if (powerKey) {
+              deviceState[powerKey] = status.value;
+              break;
+            }
+            deviceState[status.code] = status.value;
+            break;
+          }
+          case 'bright_value': {
+            const value = lightReportPercent(status.value, 25);
+            if (value !== null) {
+              deviceState.brightness = value;
+            }
+            break;
+          }
+          case 'temp_value': {
+            const value = lightReportPercent(status.value, 0);
+            if (value !== null) {
+              deviceState.temperature = value;
+            }
+            break;
+          }
+          case 'work_mode':
+            deviceState.lightMode = parseLightMode(status.value);
+            break;
+          case 'scene_data':
+            deviceState.sceneValues = String(status.value ?? '');
+            break;
+          case 'colour_data': {
+            const hsvColor = parseColourData(status.value);
+            if (hsvColor) {
+              deviceState.hsvColor = hsvColor;
+            }
+            break;
+          }
+          case 'pir': {
+            if (status.value !== 'pir' && status.value !== 'none') {
+              break;
+            }
+            const motionDetected = status.value === 'pir';
+            deviceState.motionDetected = motionDetected;
+            if (motionDetected) {
+              deviceState.lastMotionAt = Date.now();
+            }
+            break;
+          }
+          case 'percent_state':
+            deviceState.percentState = toNumberOrValue(status.value);
+            break;
+          case 'percent_control':
+            deviceState.percentControl = toNumberOrValue(status.value);
+            break;
+          case 'control':
+            deviceState.control = String(status.value ?? '');
+            break;
+          case 'wind':
+            deviceState.fanSpeed = toNumberOrValue(status.value);
+            break;
+          case 'temp':
+            deviceState.temperature = toNumberOrValue(status.value);
+            break;
+          case 'cur_power':
+            deviceState.curPower = toMeterNumber(status.value);
+            break;
+          case 'cur_current':
+            deviceState.curCurrent = toMeterNumber(status.value);
+            break;
+          case 'cur_voltage':
+            deviceState.curVoltage = toMeterNumber(status.value);
+            break;
+          case 'va_temperature':
+          case 'prm_temperature':
+            deviceState.temperature = decimalFromTenths(status.value);
+            break;
+          case 'va_humidity':
+          case 'prm_content':
+            deviceState.humidity = percentFromTenths(status.value);
+            break;
+          case 'battery':
+            deviceState.battery = toNumber(status.value);
+            break;
+          case 'alarm_switch':
+            deviceState.alarmSwitch = booleanReport(status.value);
+            break;
+          case 'alarm_state':
+            deviceState.alarm = status.value === 'alarm' ? true : booleanReport(status.value);
+            break;
         }
-        case 'bright_value':
-          if (typeof status.value === 'number') {
-            deviceState.brightness = percentFromByte(status.value);
-          }
-          break;
-        case 'temp_value':
-          if (typeof status.value === 'number') {
-            deviceState.temperature = percentFromByte(status.value);
-          }
-          break;
-        case 'work_mode':
-          deviceState.lightMode = parseLightMode(status.value);
-          break;
-        case 'scene_data':
-          deviceState.sceneValues = String(status.value ?? '');
-          break;
-        case 'colour_data': {
-          const hsvColor = parseColourData(status.value);
-          if (hsvColor) {
-            deviceState.hsvColor = hsvColor;
-          }
-          break;
-        }
-        case 'pir': {
-          const motionDetected = status.value === 'pir';
-          deviceState.motionDetected = motionDetected;
-          if (motionDetected) {
-            deviceState.lastMotionAt = Date.now();
-          }
-          break;
-        }
-        case 'percent_state':
-          deviceState.percentState = toNumberOrValue(status.value);
-          break;
-        case 'percent_control':
-          deviceState.percentControl = toNumberOrValue(status.value);
-          break;
-        case 'control':
-          deviceState.control = String(status.value ?? '');
-          break;
-        case 'wind':
-          deviceState.fanSpeed = toNumberOrValue(status.value);
-          break;
-        case 'temp':
-          deviceState.temperature = toNumberOrValue(status.value);
-          break;
-        case 'cur_power':
-          deviceState.curPower = toMeterNumber(status.value);
-          break;
-        case 'cur_current':
-          deviceState.curCurrent = toMeterNumber(status.value);
-          break;
-        case 'cur_voltage':
-          deviceState.curVoltage = toMeterNumber(status.value);
-          break;
-        case 'va_temperature':
-        case 'prm_temperature':
-          deviceState.temperature = decimalFromTenths(status.value);
-          break;
-        case 'va_humidity':
-        case 'prm_content':
-          deviceState.humidity = percentFromTenths(status.value);
-          break;
-        case 'battery':
-          deviceState.battery = toNumber(status.value);
-          break;
-        case 'alarm_switch':
-          deviceState.alarmSwitch = Boolean(status.value);
-          break;
-        case 'alarm_state':
-          deviceState.alarm = status.value === 'alarm' || status.value === '1' || status.value === true;
-          break;
       }
+    } catch {
+      // Reject the entire report; malformed values must never escape the MQTT message boundary.
+      this.events.onStatus?.('message.ignored', { reason: 'invalid-values' });
+      return;
     }
 
     this.events.onStatus?.('device.update', {
@@ -213,12 +220,22 @@ function toNumberOrValue(value: unknown): number | string {
   return Number.isFinite(numberValue) ? numberValue : String(value ?? '');
 }
 
-function decimalFromTenths(value: unknown): number {
-  return Math.round(toNumber(value)) / 10;
+function decimalFromTenths(value: unknown): number | null {
+  const numeric = finiteReportNumber(value);
+  return numeric === null ? null : Math.round(numeric) / 10;
 }
 
-function percentFromTenths(value: unknown): number {
-  return Math.round(toNumber(value) / 10);
+function percentFromTenths(value: unknown): number | null {
+  const numeric = finiteReportNumber(value);
+  return numeric === null || numeric < 0 || numeric > 1000 ? null : Math.round(numeric / 10);
+}
+
+function finiteReportNumber(value: unknown): number | null {
+  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim() === '')) {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function parseLightMode(value: unknown): 'WHITE' | 'COLOR' | 'SCENE' | undefined {
@@ -245,25 +262,26 @@ function parseColourData(
     if (!parsed || typeof parsed !== 'object') {
       return null;
     }
-    return {
-      hue: clamp(Number(parsed.h ?? 0), 0, 360),
-      saturation: percentFromByte(Number(parsed.s ?? 0)),
-      brightness: percentFromByte(Number(parsed.v ?? 0)),
-    };
+    const saturation = lightReportPercent(parsed.s, 25);
+    const brightness = lightReportPercent(parsed.v, 25);
+    if (typeof parsed.h !== 'number' || !Number.isFinite(parsed.h) || parsed.h < 0 || parsed.h > 360
+      || saturation === null || brightness === null) {
+      return null;
+    }
+    return { hue: parsed.h, saturation, brightness };
   } catch {
     return null;
   }
 }
 
-function percentFromByte(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
+/** Vendor liveEvent.js uses a 230-step scale, with a 25 offset for brightness and HSV S/V.
+ * REST state is already normalized and never passes through this conversion.
+ */
+function lightReportPercent(value: unknown, offset: 0 | 25): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < offset || value > offset + 230) {
+    return null;
   }
-  return Math.round(clamp(value, 0, 255) / 255 * 100);
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+  return Math.round((value - offset) * 100 / 230);
 }
 
 function toMeterNumber(value: unknown): number | null {
@@ -272,4 +290,51 @@ function toMeterNumber(value: unknown): number | null {
   }
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function booleanReport(value: unknown): boolean | null {
+  if (value === true || value === 'true' || value === 1 || value === '1') {
+    return true;
+  }
+  if (value === false || value === 'false' || value === 0 || value === '0') {
+    return false;
+  }
+  return null;
+}
+
+interface DeviceReport {
+  devId: string;
+  status: Array<{ code: string; value: unknown }>;
+}
+
+/** Local resource limits, not vendor protocol limits: 256 KiB and 256 datapoints per report. */
+function parseDeviceReport(payload: string): DeviceReport | null {
+  if (Buffer.byteLength(payload, 'utf8') > 256 * 1024) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed) || !isRecord(parsed.deviceDataReport)) {
+    return null;
+  }
+  const report = parsed.deviceDataReport;
+  if (typeof report.devId !== 'string' || !report.devId.trim() || report.devId.length > 512
+    || !Array.isArray(report.status) || report.status.length > 256) {
+    return null;
+  }
+  for (const item of report.status) {
+    if (!isRecord(item) || typeof item.code !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_]{0,127}$/.test(item.code)
+      || item.code in Object.prototype || item.code === 'prototype' || !Object.hasOwn(item, 'value')) {
+      return null;
+    }
+  }
+  return { devId: report.devId, status: report.status as DeviceReport['status'] };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

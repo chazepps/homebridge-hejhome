@@ -27,3 +27,7 @@ Password input is disabled until code verification succeeds. Login is disabled u
 ## Test Anchors
 
 - `tests/ui/login-ui.spec.ts` verifies iframe restrictions, field state, and request order.
+
+## 2.1 beta customer settings
+
+Device settings use stable device identifiers and preserve drafts/focus during status updates. Host language and lighting mode select Korean/English and light/dark presentation. A diagnostics section distinguishes discovery, bridge preparation and recent reports; cache presence is never described as completed pairing. Expert meter editing and form editing share one saved value. UI controls use the runtime command channel instead of creating competing cloud clients. See the beta guide for supported remote buttons and explicit platform limitations.

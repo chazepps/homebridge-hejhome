@@ -8,6 +8,172 @@ import type { HejhomePlatform } from '../src/platform.js';
 import type { HejDevice } from '../src/types.js';
 
 describe('HejhomePlatformAccessory', () => {
+  test('keeps missing sensor state unknown without emitting a normal event', async () => {
+    const platform = createPlatformMock();
+    for (const [deviceType, service, characteristic] of [
+      ['SensorMo', 'MotionSensor', 'MotionDetected'], ['SensorDo', 'ContactSensor', 'ContactSensorState'],
+      ['SensorWater2', 'LeakSensor', 'LeakDetected'], ['SensorSmoke3', 'SmokeSensor', 'SmokeDetected'],
+    ]) {
+      const accessory = createAccessoryMock(deviceType!, deviceType!, platform);
+      new HejhomePlatformAccessory(platform, accessory, deviceFixture({ deviceType: deviceType!, deviceState: { battery: 50 } }), null);
+      await expect(accessory.service(service!)?.characteristic(characteristic!).getValue()).rejects.toThrow('HAP status -70402');
+      expect(accessory.service(service!)?.updates.filter((entry) => entry.characteristic === characteristic)).toEqual([]);
+      await expect(accessory.service('BatteryService')?.characteristic('BatteryLevel').getValue()).resolves.toBe(50);
+      await expect(accessory.service(service!)?.characteristic('StatusFault').getValue()).resolves.toBe(1);
+    }
+  });
+
+  test('accepts documented COLOUR mode without resending the mode command', async () => {
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('조명', 'light', platform);
+      const client = createClientMock();
+      const device = deviceFixture({ deviceType: 'LightRgbw5',
+        deviceState: { lightMode: 'COLOUR' as never, hsvColor: { hue: 30, saturation: 50, brightness: 70 } } });
+      new HejhomePlatformAccessory(platform, accessory, device, client);
+      await accessory.service('Lightbulb')?.characteristic('Hue').setValue(100);
+      expect(client.controlDevice).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(400);
+      expect(client.controlDevice).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('does not invent power for an uninitialized relay and gives role outlets their in-use state', async () => {
+    const platform = createPlatformMock();
+    Object.assign(platform, { features: { devices: { 'device-1': { role: 'outlet' } } } });
+    const accessory = createAccessoryMock('Relay', 'relay', platform);
+    const device = deviceFixture({ deviceType: 'RelayController', deviceState: {} });
+    const handler = new HejhomePlatformAccessory(platform, accessory, device, null);
+    const outlet = accessory.service('Outlet')!;
+    await expect(outlet.characteristic('On').getValue()).rejects.toThrow('HAP status -70402');
+    handler.updateDevice({ ...device, deviceState: { power1: true } });
+    await expect(outlet.characteristic('On').getValue()).resolves.toBe(true);
+    await expect(outlet.characteristic('OutletInUse').getValue()).resolves.toBe(true);
+  });
+
+  test('does not publish a Thermostat without actual HVAC operating-state feedback', () => {
+    const platform = createPlatformMock();
+    Object.assign(platform, { features: { devices: { 'device-1': { temperatureSensorId: 'room' } } }, getDeviceTemperature: () => 21 });
+    const accessory = createAccessoryMock('에어컨', 'hvac', platform);
+    new HejhomePlatformAccessory(platform, accessory,
+      deviceFixture({ deviceType: 'IrAirconditioner', deviceState: { power: true, temperature: 25, mode: '0' } }), null);
+    expect(accessory.service('Thermostat')).toBeUndefined();
+    expect(accessory.service('Switch')).toBeDefined();
+  });
+
+  test('reads vendor HVAC Korean power state without inventing an operating mode', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('에어컨', 'hvac', platform);
+    const device = deviceFixture({ deviceType: 'IrAirconditioner', deviceState: { power: '꺼짐' as never, mode: '0' } });
+    const handler = new HejhomePlatformAccessory(platform, accessory, device, null);
+    const power = accessory.service('Switch')!.characteristic('On');
+    await expect(power.getValue()).resolves.toBe(false);
+    handler.updateDevice({ ...device, deviceState: { power: '켜짐' as never } });
+    await expect(power.getValue()).resolves.toBe(true);
+  });
+
+  test('uses pulse-only power for all state-less non-HVAC IR remotes', async () => {
+    for (const deviceType of ['IrSpeaker', 'IrProjector', 'IrTvbox', 'IrLamp', 'IrDvd', 'IrCamera', 'IrDIY', 'IrFan']) {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock(deviceType, deviceType, platform);
+      const client = createClientMock();
+      const handler = new HejhomePlatformAccessory(platform, accessory, deviceFixture({ deviceType }), client);
+      const power = accessory.service('Switch')!.characteristic('On');
+      await power.setValue(false);
+      expect(client.controlDevice).not.toHaveBeenCalled();
+      await power.setValue(true);
+      expect(client.controlDevice).toHaveBeenCalledExactlyOnceWith('device-1', { power: true });
+      expect((accessory.context.device as HejDevice).deviceState?.power).toBeUndefined();
+      handler.dispose();
+    }
+  });
+
+  test('handles vendor closing feedback and never invents an empty target position', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('커튼', 'curtain', platform);
+    const device = deviceFixture({ deviceType: 'Curtain', deviceState: { workState: 'closing' } });
+    const handler = new HejhomePlatformAccessory(platform, accessory, device, null);
+    const service = accessory.service('WindowCovering')!;
+    await expect(service.characteristic('PositionState').getValue()).resolves.toBe(0);
+    await expect(service.characteristic('TargetPosition').getValue()).rejects.toThrow('HAP status -70402');
+    handler.updateDevice({ ...device, deviceState: { percentControl: null, percentState: null } as never });
+    await expect(service.characteristic('TargetPosition').getValue()).rejects.toThrow('HAP status -70402');
+  });
+
+  test('uses a momentary power button when the IR remote has no power feedback', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('TV', 'tv', platform);
+    const client = createClientMock();
+    new HejhomePlatformAccessory(platform, accessory, deviceFixture({ deviceType: 'IrTv', deviceState: {} }), client);
+    const power = accessory.service('Switch')!.characteristic('On');
+    await expect(power.getValue()).resolves.toBe(false);
+    await power.setValue(true);
+    expect(client.controlDevice).toHaveBeenCalledWith('device-1', { power: true });
+    await expect(power.getValue()).resolves.toBe(false);
+    expect((accessory.context.device as HejDevice).deviceState?.power).toBeUndefined();
+    await power.setValue(false);
+    expect(client.controlDevice).toHaveBeenCalledTimes(1);
+  });
+
+  test('reports offline and missing measurements as communication errors', async () => {
+    const platform = createPlatformMock();
+    let reachable = false;
+    Object.assign(platform, { getDeviceHealth: () => ({ reachable, reason: 'test' }) });
+    const accessory = createAccessoryMock('센서', 'sensor', platform);
+    const device = deviceFixture({ deviceType: 'SensorTh', deviceState: { temperature: 22 } });
+    const handler = new HejhomePlatformAccessory(platform, accessory, device, null);
+    await expect(accessory.service('TemperatureSensor')?.characteristic('CurrentTemperature').getValue()).rejects.toThrow('HAP status -70402');
+    reachable = true;
+    await expect(accessory.service('TemperatureSensor')?.characteristic('CurrentTemperature').getValue()).resolves.toBe(22);
+    await expect(accessory.service('HumiditySensor')?.characteristic('CurrentRelativeHumidity').getValue()).rejects.toThrow();
+    handler.updateDevice(device);
+  });
+
+  test('role changes keep the observed relay control key', async () => {
+    const platform = createPlatformMock();
+    Object.assign(platform, { features: { devices: { 'device-1': { role: 'light' } } } });
+    const accessory = createAccessoryMock('Relay', 'relay', platform);
+    const client = createClientMock();
+    new HejhomePlatformAccessory(platform, accessory, deviceFixture({ deviceType: 'RelayController', deviceState: { power1: false } }), client);
+    expect(accessory.service('Switch')).toBeUndefined();
+    await accessory.service('Lightbulb')?.characteristic('On').setValue(true);
+    expect(client.controlDevice).toHaveBeenCalledWith('device-1', { power1: true });
+  });
+
+  test('does not expose unverified thermostat modes or button gestures', () => {
+    const platform = createPlatformMock();
+    for (const deviceType of ['IrAirconditioner', 'SmartButton']) {
+      const accessory = createAccessoryMock(deviceType, deviceType, platform);
+      new HejhomePlatformAccessory(platform, accessory, deviceFixture({ deviceType, deviceState: { temperature: 24 } }), null);
+      expect(accessory.service('Thermostat')).toBeUndefined();
+      expect(accessory.serviceBySubtype('StatelessProgrammableSwitch', 'button1')).toBeUndefined();
+    }
+  });
+
+  test('requires actual curtain position and ignores command echo for movement', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('커튼', 'curtain', platform);
+    new HejhomePlatformAccessory(platform, accessory, deviceFixture({ deviceType: 'Curtain', deviceState: { percentControl: 70, control: 'open' } }), null);
+    await expect(accessory.service('WindowCovering')?.characteristic('CurrentPosition').getValue()).rejects.toThrow();
+    await expect(accessory.service('WindowCovering')?.characteristic('PositionState').getValue()).rejects.toThrow('HAP status -70402');
+  });
+
+  test('uses fresh calibrated load independently of relay power', async () => {
+    const platform = createPlatformMock();
+    Object.assign(platform, { features: { meters: [{ model: 'calibrated', power: { field: 'curPower', multiplier: 1 } }] } });
+    const accessory = createAccessoryMock('콘센트', 'outlet', platform);
+    const handler = new HejhomePlatformAccessory(platform, accessory,
+      deviceFixture({ deviceType: 'Plug', modelName: 'calibrated', deviceState: { power: true } }), null);
+    const outlet = accessory.service('Outlet')!;
+    await expect(outlet.characteristic('OutletInUse').getValue()).rejects.toThrow();
+    handler.observeExternal({ curPower: 0 });
+    await expect(outlet.characteristic('On').getValue()).resolves.toBe(true);
+    await expect(outlet.characteristic('OutletInUse').getValue()).resolves.toBe(false);
+  });
+
   test('exposes LightRgbw5 as a color light and sends Hej RGBW control payloads', async () => {
     vi.useFakeTimers();
     try {
@@ -70,6 +236,30 @@ describe('HejhomePlatformAccessory', () => {
           brightness: 44,
         },
       });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('drops only queued analog fields replaced by a newer report', async () => {
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('조명', 'light', platform);
+      const client = createClientMock();
+      const device = deviceFixture({ deviceType: 'LightRgbw5', deviceState: { power: true, lightMode: 'WHITE', brightness: 50 } });
+      const handler = new HejhomePlatformAccessory(platform, accessory, device, client);
+      const brightness = accessory.service('Lightbulb')!.characteristic('Brightness');
+      await brightness.setValue(70);
+      handler.observeExternal({ brightness: 45 });
+      handler.updateDevice({ ...device, deviceState: { ...device.deviceState, brightness: 45 } });
+      await vi.advanceTimersByTimeAsync(400);
+      expect(client.controlDevice).not.toHaveBeenCalled();
+      await brightness.setValue(80);
+      handler.observeExternal({ power: true });
+      await vi.advanceTimersByTimeAsync(400);
+      expect(client.controlDevice).toHaveBeenCalledExactlyOnceWith('device-1', { brightness: 80 });
+      handler.dispose();
     } finally {
       vi.useRealTimers();
     }
@@ -452,6 +642,7 @@ function createPlatformMock(): HejhomePlatform {
         SMOKE_DETECTED: 1,
         SMOKE_NOT_DETECTED: 0,
       }),
+      StatusFault: Object.assign('StatusFault', { NO_FAULT: 0, GENERAL_FAULT: 1 }),
       StatusLowBattery: Object.assign('StatusLowBattery', {
         BATTERY_LEVEL_NORMAL: 0,
         BATTERY_LEVEL_LOW: 1,

@@ -2,7 +2,7 @@ import type { MatterAPI, MatterAccessory } from 'homebridge';
 import type { MeterProfile } from '../features.js';
 import type { HejDevice } from '../types.js';
 import { PLUGIN_NAME, PLATFORM_NAME } from '../settings.js';
-import { createMatterAccessory } from './accessory.js';
+import { createMatterAccessory, MatterDimmingController } from './accessory.js';
 
 export class MatterAdapter {
   private readonly accessories = new Map<string, MatterAccessory>();
@@ -10,6 +10,7 @@ export class MatterAdapter {
   private readonly devices = new Map<string, HejDevice>();
   private readonly reported = new Map<string, { data: string; at: number }>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly dimmers = new Map<string, MatterDimmingController>();
   private queue = Promise.resolve();
   private disposed = false;
 
@@ -22,6 +23,48 @@ export class MatterAdapter {
 
   restore(accessory: MatterAccessory): void {
     this.accessories.set(accessory.UUID, accessory);
+  }
+
+  async pruneHidden(isVisible: (deviceId: string | undefined) => boolean): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    for (const [uuid, accessory] of this.accessories) {
+      const id = cachedDeviceId(accessory);
+      if (isVisible(id)) {
+        // A restored endpoint has no freshly verified device state yet.
+        try {
+          await this.api.updateAccessoryState(uuid, 'bridgedDeviceBasicInformation', { reachable: false });
+        } catch (error) {
+          this.onError(error);
+        }
+        continue;
+      }
+      await this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      this.accessories.delete(uuid);
+      this.active.delete(uuid);
+      for (const key of this.reported.keys()) {
+        if (key.startsWith(`${uuid}/`)) {
+          this.reported.delete(key);
+        }
+      }
+      for (const [key, timer] of this.timers) {
+        if (key.startsWith(`${uuid}/`)) {
+          clearTimeout(timer);
+          this.timers.delete(key);
+        }
+      }
+      if (id && ![...this.accessories.values()].some((other) => cachedDeviceId(other) === id)) {
+        this.devices.delete(id);
+        this.dimmers.get(id)?.cancel(true);
+        this.dimmers.delete(id);
+      }
+    }
+  }
+
+  hasDevice(id: string): boolean {
+    const uuid = this.api.uuid.generate(`hejhome:matter:${id}`);
+    return !this.disposed && this.active.has(uuid);
   }
 
   async reconcile(devices: HejDevice[]): Promise<void> {
@@ -61,6 +104,8 @@ export class MatterAdapter {
     for (const id of this.devices.keys()) {
       if (!activeIds.has(id)) {
         this.devices.delete(id);
+        this.dimmers.get(id)?.cancel(true);
+        this.dimmers.delete(id);
       }
     }
   }
@@ -80,6 +125,11 @@ export class MatterAdapter {
   }
 
   update(device: HejDevice): Promise<void> {
+    const previous = this.devices.get(device.id);
+    const dimmer = this.dimmers.get(device.id);
+    if (dimmer && previous && lightControlChanged(previous, device, dimmer)) {
+      dimmer.cancel(true);
+    }
     this.devices.set(device.id, device);
     this.queue = this.queue.catch(this.onError).then(async () => {
       if (this.disposed) {
@@ -105,6 +155,10 @@ export class MatterAdapter {
     this.timers.clear();
     this.devices.clear();
     this.reported.clear();
+    for (const dimmer of this.dimmers.values()) {
+      dimmer.cancel(true);
+    }
+    this.dimmers.clear();
   }
 
   private build(id: string): MatterAccessory | null {
@@ -112,12 +166,17 @@ export class MatterAdapter {
     if (!device) {
       return null;
     }
+    let dimmer = this.dimmers.get(id);
+    if (!dimmer) {
+      dimmer = new MatterDimmingController(this.onError);
+      this.dimmers.set(id, dimmer);
+    }
     return createMatterAccessory(this.api, () => this.devices.get(id) ?? device, async (requirements) => {
       if (this.disposed) {
         throw new Error('Hejhome bridge is shutting down.');
       }
       await this.send(id, requirements);
-    }, this.meters);
+    }, this.meters, dimmer);
   }
 
   private async report(uuid: string, clusters: Record<string, Record<string, unknown>>, partId?: string): Promise<void> {
@@ -147,4 +206,36 @@ export class MatterAdapter {
       this.reported.set(key, { data, at: Date.now() });
     }
   }
+}
+
+function cachedDeviceId(accessory: MatterAccessory): string | undefined {
+  const contextId = accessory.context?.deviceId;
+  if (typeof contextId === 'string' && contextId.trim()) {
+    return contextId;
+  }
+  return typeof accessory.serialNumber === 'string' && accessory.serialNumber.trim() ? accessory.serialNumber : undefined;
+}
+
+function lightControlChanged(previous: HejDevice, next: HejDevice, dimmer: MatterDimmingController): boolean {
+  if (next.online === false || previous.deviceType !== next.deviceType) {
+    return true;
+  }
+  const before = previous.deviceState ?? {};
+  const after = next.deviceState ?? {};
+  const mode = (value: unknown) => value === 'COLOR' || value === 'COLOUR' || value === 'colour' ? 'COLOR' : value;
+  if (before.power !== after.power || mode(before.lightMode) !== mode(after.lightMode)
+    || before.temperature !== after.temperature
+    || before.hsvColor?.hue !== after.hsvColor?.hue
+    || before.hsvColor?.saturation !== after.hsvColor?.saturation) {
+    return true;
+  }
+  for (const [oldValue, newValue] of [
+    [before.brightness, after.brightness],
+    [before.hsvColor?.brightness, after.hsvColor?.brightness],
+  ]) {
+    if (oldValue !== newValue && !dimmer.expectsBrightness(newValue)) {
+      return true;
+    }
+  }
+  return false;
 }

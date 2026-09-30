@@ -19,3 +19,9 @@ The custom UI keeps auto-login fixed on and does not expose a password persisten
 ## Release Security
 
 GitHub Actions use least-necessary permissions. npm publishing is designed for Trusted Publishing with provenance instead of long-lived npm tokens.
+
+## 2.1 beta local command boundary
+
+The settings process sends validated high-level requests to the running plugin through a local Unix socket. Runtime revalidates the canonical device type and encodes only verified commands before entering the shared device queue. The private directory/socket use restricted permissions; requests have size and lifetime limits, duplicate request identifiers are rejected, and callers never automatically retry an uncertain physical command. No cloud credentials travel in this protocol. Active endpoints owned by another process are preserved. Windows and overlong socket paths disable only this new UI control channel.
+
+Diagnostics export omits account credentials, device identifiers and user-assigned names. Unrecognized/deferred device classes are retained for diagnostics without inventing control services. Internal agent work records and generated npm archives are excluded from public documentation inventory and package file lists.

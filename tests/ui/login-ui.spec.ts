@@ -98,7 +98,7 @@ test('custom login UI follows Homebridge iframe rules and exposes the sequential
   await expect(page.getByLabel('6자리 인증번호 입력')).toBeVisible();
   await expect(page.getByLabel('비밀번호')).toBeVisible();
   await expect(page.getByLabel('자동 로그인')).toBeChecked();
-  await expect(page.getByText('이용 정보나 사용 이력은 보관하지 않으며, 타인이나 개발자에게 전달하지 않습니다.')).toBeVisible();
+  await expect(page.getByText('로그인 정보와 장치의 최근 상태, 문제 확인용 기록은 이 Homebridge에 저장해요. 비밀번호는 저장하지 않고 개발자에게 자동 전송하지 않아요.')).toBeVisible();
   await expect(page.getByLabel('비밀번호')).toBeDisabled();
   await expect(page.getByRole('button', { name: '로그인' })).toBeDisabled();
 
@@ -331,16 +331,14 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await expect(page.getByText('현재 로그인은 정상입니다. 만료 예정: 2026-06-21 21:41:31 (KST). 권장 재로그인 시각: 2026-06-20 21:41:31 (KST).')).toBeVisible();
   await expect(page.getByText('등록된 장비')).toBeVisible();
   await expect(page.getByText('7')).toBeVisible();
-  await expect(page.getByText('UnknownHeater · Warm Box')).toBeVisible();
-  await expect(page.getByText('LightRgbw5')).toBeVisible();
-  await expect(page.getByText('LedStripRgbw2')).toBeVisible();
-  await expect(page.getByText('RelayController')).toBeVisible();
-  await expect(page.getByText('SensorMo')).toBeVisible();
-  await expect(page.getByText('전구 / 구현 중')).toHaveCount(1);
+  await expect(page.getByText('Warm Box', { exact: true })).toBeVisible();
+  await expect(page.getByText('RGBW 조명')).toBeVisible();
+  await expect(page.getByText('릴레이 컨트롤러')).toBeVisible();
+  await expect(page.getByText('전구 / 준비 중')).toHaveCount(1);
   await expect(page.getByText('구현 중', { exact: true })).toHaveCount(0);
   await expect(page.getByText('전구', { exact: true })).toBeVisible();
   await expect(page.getByText('스위치', { exact: true })).toBeVisible();
-  await expect(page.getByText('모션 센서', { exact: true })).toBeVisible();
+  await expect(page.getByText('모션 센서', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: '집/방 선택' })).toBeVisible();
   await expect(page.getByText('처음 로그인하면 첫 번째 집의 모든 방을 사용합니다. 여기서 언제든 바꿀 수 있습니다.')).toBeVisible();
   await expect(page.getByLabel('첫 번째 집')).toBeChecked();
@@ -348,7 +346,7 @@ test('custom config UI shows the settings dashboard instead of the login form fo
   await expect(page.getByLabel('거실')).toBeChecked();
   await expect(page.getByRole('button', { name: '집/방 설정 저장' })).toBeVisible();
   await expect(page.getByText('부분 지원')).toBeVisible();
-  await expect(page.getByText('카메라는 API 분석 완료, Home 앱 영상 연동은 다음 단계')).toBeVisible();
+  await expect(page.getByText('아직 사용할 수 없음')).toBeVisible();
   await expect(page.getByText('1개 발견')).toBeVisible();
   await expect(page.getByText('[Unsupported Device] UnknownHeater / Warm Box')).toBeVisible();
   await expect(page.getByText('세션')).toHaveCount(0);

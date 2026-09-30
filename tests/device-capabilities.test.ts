@@ -49,3 +49,11 @@ describe('device capability registry', () => {
     ]));
   });
 });
+
+test('describes both actual fan shapes without promising speed or rotation state', () => {
+  const model = getSupportedDeviceModels().find((entry) => entry.deviceType === 'IrFan');
+  expect(model?.homeKitServices).toEqual(['Fan', 'Switch']);
+  expect(model?.homeKitService).toBe('Fan / Switch');
+  expect(model?.note).toContain('전원 상태가 있으면 선풍기');
+  expect(model?.note).toContain('없으면 전원 버튼');
+});

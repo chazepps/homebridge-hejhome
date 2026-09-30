@@ -6,6 +6,20 @@ describe('beta opt-ins and calibrated meters', () => {
   test('old config leaves optional features disabled', () => {
     expect(normalizeFeatures(undefined)).toEqual({ matter: false, adaptiveLighting: false, meters: [] });
   });
+  test('device preferences are optional, validated, and preserve stable IDs', () => {
+    expect(normalizeFeatures({ devices: { 'fixture-plug': { visibility: 'matter', name: 'Desk plug', role: 'light' } } }).devices)
+      .toEqual({ 'fixture-plug': { visibility: 'matter', name: 'Desk plug', role: 'light' } });
+    expect(() => normalizeFeatures({ devices: { '__proto__': { name: 'Unsafe' } } })).not.toThrow();
+    expect(() => normalizeFeatures(JSON.parse('{"devices":{"__proto__":{"name":"Unsafe"}}}'))).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'plug-1': { visibility: 'unknown' } } })).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'plug-1': { name: '  ' } } })).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'plug-1': { name: 'x'.repeat(65) } } })).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'plug-1': { role: 'heater' } } })).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'plug-1': { vendorField: true } } })).toThrow();
+    expect(normalizeFeatures({ devices: { 'hvac-1': { temperatureSensorId: 'sensor-1' } } }).devices?.['hvac-1'])
+      .toEqual({ temperatureSensorId: 'sensor-1' });
+    expect(() => normalizeFeatures({ devices: { 'hvac-1': { temperatureSensorId: ' ' } } })).toThrow();
+  });
   test('refuses ambiguous boolean flags and uncalibrated meter sources', () => {
     expect(() => normalizeFeatures({ matter: 'true' })).toThrow();
     expect(() => normalizeFeatures({ meters: [{ model: 'Plug', power: { field: 'curPower' } }] })).toThrow();

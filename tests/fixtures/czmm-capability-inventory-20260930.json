@@ -1,0 +1,61 @@
+{
+  "capturedAt": "2026-09-30",
+  "source": "read-only Homebridge saved device snapshot",
+  "snapshotGeneratedAt": "2026-09-30T11:07:50.537Z",
+  "versions": {
+    "homebridge": "2.4.1-beta.11",
+    "ui": "6.0.1-alpha.20",
+    "plugin": "2.0.2"
+  },
+  "devices": [
+    {
+      "type": "RelayController",
+      "model": "GKW-RC031",
+      "count": 1,
+      "stateKeys": [
+        "power1"
+      ]
+    },
+    {
+      "type": "LightRgbw5",
+      "model": "GKW-MD081",
+      "count": 1,
+      "stateKeys": [
+        "brightness",
+        "hsvColor",
+        "lightMode",
+        "power",
+        "sceneValues"
+      ],
+      "observedLightMode": "COLOUR"
+    },
+    {
+      "type": "ZigbeeSwitch2",
+      "count": 2,
+      "stateKeys": [
+        "power1",
+        "power2"
+      ]
+    },
+    {
+      "type": "SensorMo",
+      "model": "GKZ-MO021",
+      "count": 1,
+      "stateKeys": [
+        "battery"
+      ]
+    },
+    {
+      "type": "ZigbeeSwitch1",
+      "count": 2,
+      "stateKeys": [
+        "power1"
+      ]
+    }
+  ],
+  "limitations": [
+    "No physical commands issued. Snapshot online flags are not fresh liveness proof.",
+    "No available Hejhome button, fan, HVAC, contact, temperature/humidity, curtain, purifier, camera or lock found in this saved snapshot.",
+    "Device identifiers, names, rooms, accounts and credentials are intentionally omitted."
+  ]
+}

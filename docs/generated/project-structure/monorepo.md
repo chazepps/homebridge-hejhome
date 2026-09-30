@@ -19,18 +19,19 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   └── screenshots
 │       ├── hejhome-plugin-login.png
 │       └── hejhome-plugin-settings.png
-├── chazepps-homebridge-hejhome-2.1.0-beta.0.tgz
 ├── config.schema.json
 ├── docs
 │   ├── api
 │   │   └── README.md
 │   ├── design-docs
 │   │   ├── 2.1.0-beta.md
+│   │   ├── media-security-contracts.md
 │   │   └── README.md
 │   ├── DESIGN.md
 │   ├── exec-plans
 │   │   ├── 2026-05-28-production-hardening-and-device-expansion.md
 │   │   ├── 2026-09-30-2.1.0-beta.md
+│   │   ├── 2026-09-30-feature-implementation-status.md
 │   │   ├── 2026-09-30-homebridge-feature-action-checklist.md
 │   │   └── README.md
 │   ├── FRONTEND.md
@@ -42,7 +43,8 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── 2.1-beta-guide.md
 │   │   ├── device-discovery-and-control.md
 │   │   ├── login-config-ui.md
-│   │   └── README.md
+│   │   ├── README.md
+│   │   └── smart-automation-guide.md
 │   ├── project-avatar
 │   │   ├── architectures
 │   │   │   ├── ci-release-governance.md
@@ -75,7 +77,10 @@ Generated from the current repository tree. Generated project-structure snapshot
 ├── README.md
 ├── src
 │   ├── devices
-│   │   └── capabilities.ts
+│   │   ├── capabilities.ts
+│   │   ├── hvac.ts
+│   │   ├── load.ts
+│   │   └── power.ts
 │   ├── discovery
 │   │   └── scope.ts
 │   ├── features.ts
@@ -90,8 +95,15 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── accessory.ts
 │   │   ├── adapter.ts
 │   │   └── metering.ts
+│   ├── media
+│   │   └── irRemoteCommands.ts
 │   ├── platform.ts
 │   ├── platformAccessory.ts
+│   ├── runtime
+│   │   ├── commands.ts
+│   │   ├── health.ts
+│   │   ├── observations.ts
+│   │   └── status.ts
 │   ├── settings.ts
 │   ├── storage
 │   │   ├── deviceSnapshotStore.ts
@@ -107,18 +119,26 @@ Generated from the current repository tree. Generated project-structure snapshot
 │       └── config.json
 ├── tests
 │   ├── adaptive-lighting.test.ts
+│   ├── automation-hap.test.ts
 │   ├── beta-options.test.ts
 │   ├── device-capabilities.test.ts
+│   ├── device-hvac.test.ts
+│   ├── device-load.test.ts
 │   ├── device-snapshot-store.test.ts
 │   ├── device-support.test.ts
 │   ├── discovery-scope.test.ts
 │   ├── docs-harness.test.ts
 │   ├── fixtures
+│   │   ├── czmm-capability-inventory-20260930.json
 │   │   └── pi-devices-snapshot.json
+│   ├── hap-lifecycle.test.ts
 │   ├── hej-auth.test.ts
+│   ├── hej-rest-lifecycle.test.ts
 │   ├── homebridge-dev-ui.test.ts
+│   ├── ir-remote-commands.test.ts
 │   ├── log-store.test.ts
 │   ├── matter-conformance.test.ts
+│   ├── matter-dimming.test.ts
 │   ├── matter.test.ts
 │   ├── official-gates.test.ts
 │   ├── pi-snapshot-fixture.test.ts
@@ -130,14 +150,28 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── realtime.test.ts
 │   ├── redaction.test.ts
 │   ├── release-channel.test.ts
+│   ├── runtime-commands.test.ts
+│   ├── runtime-health.test.ts
+│   ├── runtime-lifecycle.test.ts
+│   ├── runtime-observations.test.ts
+│   ├── runtime-status.test.ts
+│   ├── runtime-visibility.test.ts
 │   ├── session-diagnostics.test.ts
 │   ├── session-store.test.ts
 │   ├── ui
+│   │   ├── appearance.spec.ts
 │   │   ├── beta-features.spec.ts
+│   │   ├── catalog-services.spec.ts
+│   │   ├── device-settings.spec.ts
 │   │   └── login-ui.spec.ts
+│   ├── ui-diagnostics-server.test.ts
 │   ├── ui-features-server.test.ts
 │   └── ui-server-source.test.ts
 ├── tools
+│   ├── automation
+│   │   ├── README.md
+│   │   ├── verify-dirty-clone.mjs
+│   │   └── verify-upstream.mjs
 │   ├── docs
 │   │   ├── generate-project-structure.mjs
 │   │   ├── harness-lib.mjs

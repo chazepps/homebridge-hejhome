@@ -36,9 +36,7 @@ export function resolveDiscoveryScope(
         }
         return scope;
       });
-    if (selected.length > 0) {
-      return selected;
-    }
+    return selected;
   }
 
   const firstFamily = families[0];

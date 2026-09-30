@@ -25,8 +25,8 @@ export interface HejSession {
 }
 
 export interface HejDeviceState {
-  power?: boolean;
-  lightMode?: 'WHITE' | 'COLOR' | 'SCENE';
+  power?: boolean | '켜짐' | '꺼짐';
+  lightMode?: 'WHITE' | 'COLOR' | 'COLOUR' | 'SCENE';
   hsvColor?: {
     hue: number;
     saturation: number;
@@ -40,13 +40,13 @@ export interface HejDeviceState {
   power4?: boolean;
   power5?: boolean;
   power6?: boolean;
-  battery?: number;
-  motionDetected?: boolean;
+  battery?: number | null;
+  motionDetected?: boolean | null;
   lastMotionAt?: number;
-  temperature?: number | string;
-  humidity?: number;
+  temperature?: number | string | null;
+  humidity?: number | null;
   state?: 'OPEN' | 'CLOSED' | string;
-  doorOpened?: boolean;
+  doorOpened?: boolean | null;
   percentState?: number | string;
   percentControl?: number | string;
   control?: 'open' | 'close' | string;
@@ -56,7 +56,7 @@ export interface HejDeviceState {
   curPower?: number | null;
   curCurrent?: number | null;
   curVoltage?: number | null;
-  alarm?: boolean;
+  alarm?: boolean | null;
   alarmSwitch?: boolean;
   pm25?: string | number;
   [key: string]: unknown;

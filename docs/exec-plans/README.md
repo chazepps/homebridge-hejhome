@@ -8,3 +8,5 @@ New plans should include scope, official gates, test plan, release impact, and r
 
 - [Homebridge 기능 확장 액션 체크리스트](2026-09-30-homebridge-feature-action-checklist.md): 우선순위, 선행 증거, 구현·테스트·실기 작업, 완료 조건, 베타 출시 게이트.
 - [2.1.0 베타 구현 및 검증 기록](2026-09-30-2.1.0-beta.md): 이미 준비한 공통 기반의 완료 기록.
+
+- [기능 구현·검증 결과](2026-09-30-feature-implementation-status.md): 코드 완료, 부분 구현, 추가 기기 계약과 실기 인수 구분.

@@ -6,16 +6,23 @@ export interface MeterProfile {
   current?: MeterSource;
   energy?: MeterSource;
 }
+export interface DevicePreference {
+  visibility?: 'both' | 'homekit' | 'matter' | 'hidden';
+  name?: string;
+  role?: 'original' | 'light' | 'outlet' | 'switch';
+  temperatureSensorId?: string;
+}
 export interface FeatureOptions {
   matter: boolean;
   adaptiveLighting: boolean;
   meters: MeterProfile[];
+  devices?: Record<string, DevicePreference>;
 }
 
 export function normalizeFeatures(input: unknown): FeatureOptions {
   const value = object(input ?? {});
   for (const key of Object.keys(value)) {
-    if (!['matter', 'adaptiveLighting', 'meters'].includes(key)) {
+    if (!['matter', 'adaptiveLighting', 'meters', 'devices'].includes(key)) {
       throw new Error(`Unknown feature option: ${key}`);
     }
   }
@@ -56,7 +63,52 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
     }
     return result;
   });
-  return { matter: value.matter === true, adaptiveLighting: value.adaptiveLighting === true, meters };
+  const result: FeatureOptions = { matter: value.matter === true, adaptiveLighting: value.adaptiveLighting === true, meters };
+  if (value.devices !== undefined) {
+    const devices = object(value.devices);
+    const normalized: Record<string, DevicePreference> = Object.create(null);
+    for (const [id, rawPreference] of Object.entries(devices)) {
+      if (!id.trim() || id.length > 128 || ['__proto__', 'prototype', 'constructor'].includes(id)) {
+        throw new Error('Invalid device ID.');
+      }
+      const preference = object(rawPreference);
+      for (const key of Object.keys(preference)) {
+        if (!['visibility', 'name', 'role', 'temperatureSensorId'].includes(key)) {
+          throw new Error(`Unknown device option: ${key}`);
+        }
+      }
+      const entry: DevicePreference = {};
+      if (preference.visibility !== undefined) {
+        if (!['both', 'homekit', 'matter', 'hidden'].includes(preference.visibility as string)) {
+          throw new Error('Invalid device visibility.');
+        }
+        entry.visibility = preference.visibility as NonNullable<DevicePreference['visibility']>;
+      }
+      if (preference.name !== undefined) {
+        if (typeof preference.name !== 'string' || !preference.name.trim() || preference.name.trim().length > 64) {
+          throw new Error('Device name must be 1–64 characters.');
+        }
+        entry.name = preference.name.trim();
+      }
+      if (preference.role !== undefined) {
+        if (!['original', 'light', 'outlet', 'switch'].includes(preference.role as string)) {
+          throw new Error('Invalid device role.');
+        }
+        entry.role = preference.role as NonNullable<DevicePreference['role']>;
+      }
+      if (preference.temperatureSensorId !== undefined) {
+        if (typeof preference.temperatureSensorId !== 'string' || !preference.temperatureSensorId.trim()
+          || preference.temperatureSensorId.length > 128
+          || ['__proto__', 'prototype', 'constructor'].includes(preference.temperatureSensorId)) {
+          throw new Error('Invalid temperature sensor ID.');
+        }
+        entry.temperatureSensorId = preference.temperatureSensorId;
+      }
+      normalized[id] = entry;
+    }
+    result.devices = normalized;
+  }
+  return result;
 }
 
 function object(value: unknown): Record<string, unknown> {

@@ -57,7 +57,7 @@ const RELAY_TYPES = ['Relay', 'RelayController', 'RelayController2', 'RelayContr
 const PLUG_TYPES = ['Plug', 'SmartPlug', 'BruntPlug'];
 const POWER_STRIP_TYPES = ['PowerStrip', 'PowerStrip2'];
 const WINDOW_COVERING_TYPES = ['Curtain', 'Blind', 'Blind2'];
-const MOTION_TYPES = ['SensorMo', 'SensorRadar'];
+const MOTION_TYPES = ['SensorMo'];
 const CONTACT_TYPES = ['SensorDo'];
 const TEMPERATURE_HUMIDITY_TYPES = ['SensorTh', 'SensorTh2', 'SensorRefTh', 'SensorRefTh2'];
 const LEAK_TYPES = ['SensorWater2', 'SensorWater3'];
@@ -79,6 +79,7 @@ export const EXAMPLE_DEVICE_TYPES = [
   ...POWER_STRIP_TYPES,
   ...WINDOW_COVERING_TYPES,
   ...MOTION_TYPES,
+  'SensorRadar',
   ...CONTACT_TYPES,
   ...TEMPERATURE_HUMIDITY_TYPES,
   ...LEAK_TYPES,
@@ -142,6 +143,13 @@ register(MOTION_TYPES, {
   supportStatus: 'supported',
   homeKitServices: ['MotionSensor', 'BatteryService'],
 });
+register(['SensorRadar'], {
+  label: '레이더 센서',
+  serviceKind: 'motion-sensor',
+  supportStatus: 'partial',
+  homeKitServices: ['MotionSensor', 'BatteryService'],
+  note: '수신된 움직임만 표시합니다. 지속 재실과 부재 지연은 확인되지 않았습니다.',
+});
 register(CONTACT_TYPES, {
   label: '문 열림 센서',
   serviceKind: 'contact-sensor',
@@ -169,8 +177,9 @@ register(SMOKE_TYPES, {
 register(BUTTON_TYPES, {
   label: '스마트 버튼',
   serviceKind: 'stateless-button',
-  supportStatus: 'supported',
-  homeKitServices: ['StatelessProgrammableSwitch', 'BatteryService'],
+  supportStatus: 'deferred',
+  homeKitServices: ['BatteryService'],
+  note: '배터리만 표시합니다. 버튼 입력 값이 확인될 때까지 자동화 이벤트는 제공하지 않습니다.',
 });
 register(IR_SWITCH_TYPES, {
   label: 'IR 리모컨 장비',
@@ -181,17 +190,17 @@ register(IR_SWITCH_TYPES, {
 });
 register(IR_THERMOSTAT_TYPES, {
   label: 'IR 에어컨',
-  serviceKind: 'ir-thermostat',
+  serviceKind: 'ir-switch',
   supportStatus: 'partial',
-  homeKitServices: ['Thermostat'],
-  note: '전원, 온도, 운전 모드만 보수적으로 지원합니다.',
+  homeKitServices: ['Switch'],
+  note: 'Home 앱은 전원만 제공합니다. 설정 화면에서 온도와 모드를 제어할 수 있지만 실제 운전 상태는 확인할 수 없습니다.',
 });
 register(IR_FAN_TYPES, {
   label: 'IR 선풍기',
   serviceKind: 'ir-fan',
   supportStatus: 'partial',
   homeKitServices: ['Fan'],
-  note: '전원과 바람 세기만 보수적으로 지원합니다.',
+  note: '전원 상태가 있으면 선풍기, 없으면 전원 버튼으로 표시합니다. 풍량·회전 상태는 제공하지 않습니다.',
 });
 register(CAMERA_TYPES, {
   label: '홈 카메라',
@@ -231,6 +240,10 @@ export function getSupportedDeviceModels(): SupportedDeviceModel[] {
         homeKitServices: capability.homeKitServices,
         supportStatus: capability.supportStatus,
       };
+      if (capability.serviceKind === 'ir-fan') {
+        model.homeKitService = 'Fan / Switch';
+        model.homeKitServices = ['Fan', 'Switch'];
+      }
       if (capability.note !== undefined) {
         model.note = capability.note;
       }

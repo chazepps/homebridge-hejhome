@@ -66,3 +66,7 @@ describe('discovery scope', () => {
     expect(resolveDiscoveryScope(config, families)).toEqual([]);
   });
 });
+
+test('does not expose another home when an explicitly selected home disappears', () => {
+  expect(resolveDiscoveryScope({ scope: { mode: 'custom', includedFamilyIds: [303] } }, families)).toEqual([]);
+});

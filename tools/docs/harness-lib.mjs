@@ -61,6 +61,7 @@ const IGNORED_DIRS = new Set([
   '.git',
   '.github',
   '.playwright-mcp',
+  '.superpowers',
   '.yarn',
   'coverage',
   'dist',
@@ -116,6 +117,7 @@ export function listProjectFiles() {
     .map((filePath) => path.relative(ROOT, filePath))
     .filter((relativePath) => relativePath !== '.git')
     .filter((relativePath) => relativePath !== '.DS_Store')
+    .filter((relativePath) => !relativePath.endsWith('.tgz'))
     .filter((relativePath) => !IGNORED_PATH_PREFIXES.some((prefix) => relativePath.startsWith(prefix)))
     .sort();
 }

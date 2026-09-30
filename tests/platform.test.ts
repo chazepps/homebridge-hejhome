@@ -89,7 +89,7 @@ const log = {
 } as unknown as Logging;
 
 describe('HejhomePlatform', () => {
-  test('does not start cloud discovery when the plugin has no stored session', async () => {
+  test('does not start cloud discovery without a session and prunes unsupported cached publications', async () => {
     vi.clearAllMocks();
     const api = createApiMock();
     const platform = new HejhomePlatform(log, { name: 'Hejhome', platform: PLATFORM_NAME }, api);
@@ -97,18 +97,19 @@ describe('HejhomePlatform', () => {
     platform.configureAccessory({
       UUID: 'uuid:stale',
       displayName: 'Stale',
-      context: { device: { id: 'stale' } },
+      context: { device: { id: 'stale', deviceType: 'UnknownRobot' } },
     } as PlatformAccessory);
 
     await api.trigger('didFinishLaunching');
 
     expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
-    expect(api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+    expect(api.unregisterPlatformAccessories).toHaveBeenCalledOnce();
     await vi.waitFor(() => {
       expect(log.warn).toHaveBeenCalledWith(
         'Hejhome initialize.no-session:',
         expect.objectContaining({ message: expect.stringContaining('complete login') }),
       );
     });
+    await api.trigger('shutdown');
   });
 });
