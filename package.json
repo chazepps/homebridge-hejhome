@@ -1,7 +1,7 @@
 {
   "name": "@chazepps/homebridge-hejhome",
   "displayName": "Hejhome",
-  "version": "2.1.0-beta.1",
+  "version": "3.0.0-beta.1",
   "private": false,
   "description": "The Hejhome plugin allows you to access your Hejhome device(s) from HomeKit.",
   "author": {
@@ -57,7 +57,7 @@
     "config.schema.json",
     "README.md",
     "LICENSE",
-    "docs/product-specs/2.1-beta-guide.md",
+    "docs/product-specs/3.0-beta-guide.md",
     "docs/product-specs/smart-automation-guide.md"
   ],
   "engines": {

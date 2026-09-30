@@ -1,5 +1,7 @@
 # Hejhome과 Homebridge Smart Automation 시험 가이드
 
+이 가이드는 **3.0.0-beta.1**에도 적용합니다. 자동화 연동 동작은 아래 검증 기준 버전과 같습니다.
+
 이 문서는 **시험용 Homebridge**에서 Hejhome 장치를 Smart Automation에 연결할 때 사용하는 설정 예시입니다. 검증 기준은 Hejhome 플러그인 `2.1.0-beta.1`, Homebridge core `2.4.0`의 로컬 HAP 출력, Homebridge UI `v6.0.1-alpha.20`의 [공식 소스 `b85d97ff`](https://github.com/homebridge/homebridge-config-ui-x/tree/b85d97ff3777c6f72a451db9ba8c16bd530fab42/src/smart-automation)입니다. 플러그인 베타, core 베타, UI 알파는 서로 다른 버전 축입니다. 이 문서의 자동화 실행 검증은 **공식 규칙 소스의 격리 실행**이며 UI 알파 화면이나 실물 장치에서의 성공을 뜻하지 않습니다. UI 알파 [릴리스](https://github.com/homebridge/homebridge-config-ui-x/releases/tag/v6.0.1-alpha.20)는 운영 사용을 권장하지 않습니다.
 
 ## 시작하기 / Getting started

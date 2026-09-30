@@ -40,7 +40,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── PLANS.md
 │   ├── PRODUCT_SENSE.md
 │   ├── product-specs
-│   │   ├── 2.1-beta-guide.md
+│   │   ├── 3.0-beta-guide.md
 │   │   ├── device-discovery-and-control.md
 │   │   ├── login-config-ui.md
 │   │   ├── README.md

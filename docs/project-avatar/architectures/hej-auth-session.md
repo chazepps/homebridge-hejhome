@@ -16,6 +16,6 @@ The UI server keeps an in-memory set of identifiers that have completed verifica
 
 The email verification endpoint is confirmed from captured traffic. Phone verification should remain marked as inferred until a separate captured request confirms it.
 
-## 2.1 beta session replacement
+## 3.0 beta session replacement
 
 Runtime watches the stored session after login as well as before login. A changed session starts a new generation, cancels old HTTP requests and queued work, clears old-account verification, and reconnects. A failed new discovery cannot authorize the previous account's cached devices. This is session replacement and recovery, not an undocumented refresh-token implementation. Login UI/API request order remains unchanged.

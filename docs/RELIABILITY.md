@@ -19,7 +19,7 @@ Users recover by reopening plugin settings and completing login again. The runti
 
 All thrown errors at cloud and UI boundaries must be caught, logged or returned in redacted form, and must not crash Homebridge.
 
-## 2.1 beta recovery and state rules
+## 3.0 beta recovery and state rules
 
 - Session replacement invalidates old queued/in-flight results, disposes HTTP requests including response bodies, and reconnects the state receiver.
 - One complete scoped discovery succeeds before cloud removals are reflected. Explicit local hiding is independent of cloud success.

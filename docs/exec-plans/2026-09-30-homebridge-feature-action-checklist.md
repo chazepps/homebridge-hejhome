@@ -2,13 +2,13 @@
 
 작성일: 2026-09-30
 
-상태: 2.1.0-beta.1 코드 구현 및 로컬 검증 결과 반영. 체크한 작업만 완료이며, 실기·공급자 계약·호스트 알파 제한이 남은 항목은 열린 상태로 유지한다.
+상태: 3.0.0-beta.1 출시 후보. 2.1.0-beta.1에서 수행한 기능 구현·검증 결과를 이어받고 버전과 사용자 문서를 갱신했다. 체크한 작업만 완료이며, 실기·공급자 계약·호스트 알파 제한이 남은 항목은 열린 상태로 유지한다.
 
 대상: `@chazepps/homebridge-hejhome`, `codex/hejhome-2.1.0-beta`
 
 기준 구현: `edbf64a` / `2.1.0-beta.0`
 
-근거: [기능 차이 조사](../references/homebridge-feature-gaps-2026-09-30.md), [기존 베타 실행 기록](2026-09-30-2.1.0-beta.md), [베타 사용·출시 안내](../product-specs/2.1-beta-guide.md)
+근거: [기능 차이 조사](../references/homebridge-feature-gaps-2026-09-30.md), [기존 베타 실행 기록](2026-09-30-2.1.0-beta.md), [베타 사용·출시 안내](../product-specs/3.0-beta-guide.md)
 
 진행 결과: [기능 구현 및 검증 기록](2026-09-30-feature-implementation-status.md). 체크는 항목 단위의 완료이며 기능 전체의 실기 인수를 의미하지 않는다.
 
@@ -347,8 +347,8 @@
 - [ ] 지원 Node 22/24/26 및 Homebridge 정식·베타 조합을 검증한다. UI 알파는 C 항목을 위한 별도 검증으로 기록한다.
 - [ ] 새 기능의 실제 제어·상태 재수신, 최소 두 번의 재시작, 클라우드 실패·재연결, 자원 정리를 검증한다.
 - [x] 독립 코드 리뷰를 받고 중요한 결함을 재현 테스트로 수정한다.
-- [x] package/lockfile 버전을 일치시키고 번호가 붙은 `2.1.0-beta.N`을 사용한다. `publishConfig.tag`는 `beta`로 유지한다.
-- [x] 해당 버전으로 `node tools/release/channel.mjs v2.1.0-beta.N`을 실행해 `beta` 출력과 불일치 거부를 확인한다. 실제 명령의 N은 확정된 번호로 바꾼다.
+- [x] package/lockfile 버전을 일치시키고 번호가 붙은 `3.0.0-beta.N`을 사용한다. `publishConfig.tag`는 `beta`로 유지한다.
+- [x] 해당 버전으로 `node tools/release/channel.mjs v3.0.0-beta.N`을 실행해 `beta` 출력과 불일치 거부를 확인한다. 실제 명령의 N은 확정된 번호로 바꾼다.
 - [x] `npm pack --dry-run`과 실제 tarball 검사를 수행한다. 컴파일된 기능·가이드는 포함하고 세션·계정정보·테스트 데이터는 제외한다.
 - [ ] 패키지를 격리된 환경에서 설치해 smoke test를 수행하고 `latest` 복귀 절차를 확인한다.
 - [x] **명시적인 게시 지시를 받은 경우에만** 태그 push와 npm 게시를 실행한다. 그 전에는 로컬 후보와 검증 기록을 보존한다.
