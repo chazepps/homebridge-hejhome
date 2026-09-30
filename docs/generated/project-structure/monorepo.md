@@ -19,6 +19,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   └── screenshots
 │       ├── hejhome-plugin-login.png
 │       └── hejhome-plugin-settings.png
+├── chazepps-homebridge-hejhome-2.1.0-beta.0.tgz
 ├── config.schema.json
 ├── docs
 │   ├── api
@@ -53,6 +54,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── references
 │   │   ├── documentation-harness-authoring-guide.md
 │   │   ├── hej-web-packet-map.md
+│   │   ├── homebridge-feature-gaps-2026-09-30.md
 │   │   ├── homebridge-official-rules.md
 │   │   ├── project-map.md
 │   │   └── README.md
