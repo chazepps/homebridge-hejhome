@@ -39,8 +39,8 @@ test('expert and form meter edits share the saved value including deletion of th
   await page.locator('#saveMeters').click();
   await expect.poll(async () => (await requestCalls(page, '/save-features')).map((call) => call.payload))
     .toEqual([{ features: { meters: profiles } }]);
-  await expect(page.locator('[data-meter-multiplier="power"]')).toHaveValue('2');
-  await page.getByRole('button', { name: '이 모델 삭제', exact: true }).click();
+  await expect(page.locator('[data-meter-multiplier]')).toHaveValue('2');
+  await page.getByRole('button', { name: '측정 행 삭제', exact: true }).click();
   await page.locator('#saveMeters').click();
   await expect.poll(async () => (await requestCalls(page, '/save-features')).at(-1)?.payload).toEqual({ features: { meters: [] } });
   expect(await page.evaluate(() => window.__hejHost.status.features)).toMatchObject({ matter: true, adaptiveLighting: true, meters: [] });

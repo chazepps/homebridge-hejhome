@@ -530,7 +530,7 @@ for (const operation of ['add', 'remove'] as const) {
       meters: operation === 'remove' ? [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] : [] } } });
     await page.getByRole('tab', { name: '도움말', exact: true }).click();
     await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
-    await page.getByRole('button', { name: operation === 'add' ? '측정 모델 추가' : '이 모델 삭제', exact: true }).click();
+    await page.getByRole('button', { name: operation === 'add' ? '측정 행 추가' : '측정 행 삭제', exact: true }).click();
     await cancelLogout(page);
     await page.getByRole('tab', { name: '도움말', exact: true }).click();
     await expect(page.locator('[data-meter-model]')).toHaveCount(operation === 'add' ? 1 : 0);
