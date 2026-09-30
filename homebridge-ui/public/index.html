@@ -506,6 +506,28 @@
     <p class="hej-status" id="scopeStatus" role="status"></p>
   </section>
 
+  <section class="hej-section" aria-label="Beta features">
+    <div class="hej-section-head"><h2>2.1 베타 기능</h2><span class="hej-badge">선택 사용</span></div>
+    <p class="hej-muted">설정을 저장한 뒤 Homebridge를 다시 시작해 주세요.</p>
+    <label><input type="checkbox" id="matterFeature"> Matter 장치 노출</label>
+    <p class="hej-muted">Google Home·SmartThings 등에서 사용할 장치를 Matter로 노출합니다.
+      Homebridge의 해당 브리지에서도 Matter를 켜고 표시된 QR로 연결해 주세요.
+      이미 HomeKit에 연결된 장치를 같은 앱에 다시 연결하면 중복 표시될 수 있습니다.</p>
+    <label><input type="checkbox" id="adaptiveFeature"> 적응형 조명</label>
+    <p class="hej-muted">색온도 조명(LightWw)에 Apple Home의 시간대별 자동 조명을 제공합니다.
+      Home 앱에서도 적응형 조명을 켜야 합니다. 클라우드에 주기적으로 명령을 전송합니다.</p>
+    <details>
+      <summary>고급: 전력 측정 모델 설정</summary>
+      <p class="hej-muted">확인된 모델명과 원본 필드의 단위 배율만 입력하세요.
+        power는 W, current는 A, voltage는 V, energy는 누적 Wh 기준입니다.
+        측정되지 않은 값은 추정하지 않습니다.</p>
+      <label for="meterProfiles">계측 프로필 JSON</label>
+      <textarea id="meterProfiles" class="form-control" rows="6" spellcheck="false">[]</textarea>
+    </details>
+    <div class="hej-actions"><button type="button" id="saveFeatures" class="hej-action secondary">베타 기능 저장</button></div>
+    <p class="hej-status" id="featuresStatus" role="status"></p>
+  </section>
+
   <section class="hej-section" aria-label="Hejhome device support">
     <div class="hej-section-head">
       <h2>장비 및 지원 현황</h2>
@@ -589,6 +611,26 @@
   let verificationSent = false;
   let verified = false;
   let currentStatus = null;
+
+  document.getElementById('saveFeatures').addEventListener('click', async () => {
+    const button = document.getElementById('saveFeatures');
+    const status = document.getElementById('featuresStatus');
+    button.disabled = true;
+    try {
+      const features = {
+        matter: document.getElementById('matterFeature').checked,
+        adaptiveLighting: document.getElementById('adaptiveFeature').checked,
+        meters: JSON.parse(document.getElementById('meterProfiles').value),
+      };
+      await requestWithTimeout('/save-features', { features }, 15000, '베타 기능 저장');
+      status.textContent = '저장했습니다. Homebridge를 다시 시작하면 적용됩니다.';
+    } catch (error) {
+      status.textContent = `저장하지 못했습니다: ${error.message}`;
+    } finally {
+      status.classList.add('is-visible');
+      button.disabled = false;
+    }
+  });
 
   function updateControls() {
     if (loginCompleted) {
@@ -701,6 +743,10 @@
 	    renderSessionStatus(status);
 	    await renderScopeStatus(status);
 	    renderDeviceStatus(status);
+    const features = status.features ?? {};
+    document.getElementById('matterFeature').checked = features.matter === true;
+    document.getElementById('adaptiveFeature').checked = features.adaptiveLighting === true;
+    document.getElementById('meterProfiles').value = JSON.stringify(features.meters ?? [], null, 2);
 	    window.homebridge?.fixScrollHeight?.();
 	  }
 

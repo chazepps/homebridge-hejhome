@@ -11,6 +11,7 @@ export interface HejhomePlatformConfig extends PlatformConfig {
     includedFamilyIds?: number[];
     includedRoomsByFamilyId?: Record<string, number[]>;
   };
+  features?: Partial<import('./features.js').FeatureOptions>;
   debug?: boolean;
 }
 
@@ -52,9 +53,9 @@ export interface HejDeviceState {
   workState?: string;
   fanSpeed?: number | string | boolean;
   mode?: number | string;
-  curPower?: number;
-  curCurrent?: number;
-  curVoltage?: number;
+  curPower?: number | null;
+  curCurrent?: number | null;
+  curVoltage?: number | null;
   alarm?: boolean;
   alarmSwitch?: boolean;
   pm25?: string | number;

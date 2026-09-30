@@ -23,7 +23,7 @@
         "additionalProperties": false,
         "properties": {
           "identifier": {
-            "title": "이메일",
+            "title": "\uc774\uba54\uc77c",
             "type": "string"
           },
           "sessionConfigured": {
@@ -34,29 +34,29 @@
         }
       },
       "scope": {
-        "title": "집/방 선택",
+        "title": "\uc9d1/\ubc29 \uc120\ud0dd",
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "mode": {
-            "title": "장비를 불러올 범위",
+            "title": "\uc7a5\ube44\ub97c \ubd88\ub7ec\uc62c \ubc94\uc704",
             "type": "string",
             "default": "first-family",
             "oneOf": [
               {
-                "title": "첫 번째 집",
+                "title": "\uccab \ubc88\uc9f8 \uc9d1",
                 "enum": [
                   "first-family"
                 ]
               },
               {
-                "title": "모든 집",
+                "title": "\ubaa8\ub4e0 \uc9d1",
                 "enum": [
                   "all"
                 ]
               },
               {
-                "title": "직접 선택",
+                "title": "\uc9c1\uc811 \uc120\ud0dd",
                 "enum": [
                   "custom"
                 ]
@@ -64,7 +64,7 @@
             ]
           },
           "includedFamilyIds": {
-            "title": "선택한 집",
+            "title": "\uc120\ud0dd\ud55c \uc9d1",
             "type": "array",
             "items": {
               "type": "number"
@@ -72,7 +72,7 @@
             "default": []
           },
           "includedRoomsByFamilyId": {
-            "title": "선택한 방",
+            "title": "\uc120\ud0dd\ud55c \ubc29",
             "type": "object",
             "additionalProperties": {
               "type": "array",
@@ -88,6 +88,110 @@
         "title": "Debug Logging",
         "type": "boolean",
         "default": false
+      },
+      "features": {
+        "type": "object",
+        "title": "Beta features",
+        "additionalProperties": false,
+        "properties": {
+          "matter": {
+            "type": "boolean",
+            "default": false
+          },
+          "adaptiveLighting": {
+            "type": "boolean",
+            "default": false
+          },
+          "meters": {
+            "type": "array",
+            "default": [],
+            "items": {
+              "type": "object",
+              "required": [
+                "model"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "power": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "field",
+                    "multiplier"
+                  ],
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+                    },
+                    "multiplier": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                },
+                "voltage": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "field",
+                    "multiplier"
+                  ],
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+                    },
+                    "multiplier": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                },
+                "current": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "field",
+                    "multiplier"
+                  ],
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+                    },
+                    "multiplier": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                },
+                "energy": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "field",
+                    "multiplier"
+                  ],
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+                    },
+                    "multiplier": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

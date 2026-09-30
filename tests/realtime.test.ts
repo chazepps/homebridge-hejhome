@@ -209,3 +209,12 @@ function dispatchMessage(client: HejRealtimeClient, payload: unknown): void {
   (client as unknown as { handleMessage(payload: string): void })
     .handleMessage(JSON.stringify(payload));
 }
+
+test('invalid meter reports remain unknown instead of appearing as zero power', () => {
+  const updates: Array<Partial<HejDevice> & { id: string }> = [];
+  const client = new HejRealtimeClient(session, { onDeviceUpdate: (d) => updates.push(d), onError: () => undefined });
+  dispatchMessage(client, { deviceDataReport: { devId: 'plug', status: [
+    { code: 'cur_power', value: 'invalid' }, { code: 'cur_voltage', value: null }, { code: 'cur_current', value: 0 },
+  ] } });
+  expect(updates[0]?.deviceState).toEqual({ curPower: null, curVoltage: null, curCurrent: 0 });
+});

@@ -27,8 +27,8 @@ describe('Homebridge official plugin gates', () => {
     expect(pkg.main).toBe('dist/index.js');
     expect(pkg.type).toBe('module');
     expect(pkg.private).toBe(false);
-    expect(pkg.engines.node).toBe('^22.12.0 || ^24.0.0');
-    expect(pkg.engines.homebridge).toBe('^1.8.0 || ^2.0.0');
+    expect(pkg.engines.node).toBe('^22.12.0 || ^24.0.0 || ^26.0.0');
+    expect(pkg.engines.homebridge).toBe('^2.4.0');
     expect(pkg.scripts?.postinstall).toBeUndefined();
   });
 

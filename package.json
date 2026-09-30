@@ -1,7 +1,7 @@
 {
   "name": "@chazepps/homebridge-hejhome",
   "displayName": "Hejhome",
-  "version": "2.0.2",
+  "version": "2.1.0-beta.0",
   "private": false,
   "description": "The Hejhome plugin allows you to access your Hejhome device(s) from HomeKit.",
   "author": {
@@ -36,7 +36,10 @@
     "outlet",
     "smart-home",
     "homekit",
-    "헤이홈"
+    "\ud5e4\uc774\ud648",
+    "supports-matter",
+    "matter",
+    "supports-hap"
   ],
   "funding": [
     {
@@ -53,11 +56,12 @@
     "branding",
     "config.schema.json",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/product-specs/2.1-beta-guide.md"
   ],
   "engines": {
-    "node": "^22.12.0 || ^24.0.0",
-    "homebridge": "^1.8.0 || ^2.0.0"
+    "node": "^22.12.0 || ^24.0.0 || ^26.0.0",
+    "homebridge": "^2.4.0"
   },
   "scripts": {
     "build": "rimraf ./dist && tsc",
@@ -73,11 +77,11 @@
     "test": "vitest run",
     "test:ui": "playwright test",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run lint && npm run typecheck && npm test && npm run test:ui && npm run build && npm run docs:check",
+    "verify": "npm run lint && npm run typecheck && npm run build && npm test && npm run test:ui && npm run docs:check",
     "watch": "npm run build && npm link && nodemon"
   },
   "dependencies": {
-    "@homebridge/plugin-ui-utils": "^2.2.3",
+    "@homebridge/plugin-ui-utils": "^2.2.6",
     "mqtt": "^5.15.1"
   },
   "devDependencies": {
@@ -85,8 +89,8 @@
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.1.1",
     "eslint": "^10.10.0",
-    "homebridge": "^2.0.2",
-    "homebridge-config-ui-x": "^5.23.0",
+    "homebridge": "^2.4.0",
+    "homebridge-config-ui-x": "^5.29.0",
     "nodemon": "^3.1.14",
     "rimraf": "^6.1.3",
     "typescript": "^6.0.3",
@@ -95,6 +99,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "provenance": true,
+    "tag": "beta"
   }
 }

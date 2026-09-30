@@ -156,13 +156,13 @@ export class HejRealtimeClient {
           deviceState.temperature = toNumberOrValue(status.value);
           break;
         case 'cur_power':
-          deviceState.curPower = toNumber(status.value);
+          deviceState.curPower = toMeterNumber(status.value);
           break;
         case 'cur_current':
-          deviceState.curCurrent = toNumber(status.value);
+          deviceState.curCurrent = toMeterNumber(status.value);
           break;
         case 'cur_voltage':
-          deviceState.curVoltage = toNumber(status.value);
+          deviceState.curVoltage = toMeterNumber(status.value);
           break;
         case 'va_temperature':
         case 'prm_temperature':
@@ -264,4 +264,12 @@ function percentFromByte(value: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function toMeterNumber(value: unknown): number | null {
+  if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '') {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
 }

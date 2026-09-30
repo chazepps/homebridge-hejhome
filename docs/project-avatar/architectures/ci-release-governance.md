@@ -10,4 +10,4 @@ Dependency review and CodeQL run separately with read-only source access except 
 
 ## Release
 
-Tag `v*` starts npm publishing with provenance. The workflow assumes npm Trusted Publishing is configured for the repository.
+Matching `v*` tags start validated Trusted Publishing after supported-Node verification. `tools/release/channel.mjs` rejects version/tag/lockfile/channel mismatches. Beta prereleases use only `beta`; `latest` remains unchanged. Preparation does not push tags or publish.

@@ -558,6 +558,10 @@ class ServiceMock {
     return this;
   }
 
+  testCharacteristic(characteristic: string): boolean {
+    return this.characteristics.has(characteristic);
+  }
+
   getCharacteristic(characteristic: string): CharacteristicMock {
     return this.characteristic(String(characteristic));
   }
@@ -587,6 +591,10 @@ class CharacteristicMock {
   private setHandler: ((value: CharacteristicValue) => void | Promise<void>) | null = null;
 
   constructor(public readonly name: string) {}
+
+  setProps(): this {
+    return this;
+  }
 
   onGet(handler: () => CharacteristicValue | Promise<CharacteristicValue>): this {
     this.getHandler = handler;

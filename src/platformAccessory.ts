@@ -1,9 +1,11 @@
-import type { PlatformAccessory, Service as HomebridgeService, WithUUID } from 'homebridge';
+import type { AdaptiveLightingController, PlatformAccessory, Service as HomebridgeService, WithUUID } from 'homebridge';
 
 import type { HejRestClient } from './hej/rest.js';
 import type { HejhomePlatform } from './platform.js';
 import type { HejDevice, HejDeviceState } from './types.js';
 import { getDeviceCapability, type DeviceCapability } from './devices/capabilities.js';
+
+import { AdaptiveLightingSession } from './lighting/adaptive.js';
 
 type PowerKey = `power${number}` | 'power';
 type ServiceType = WithUUID<typeof HomebridgeService>;
@@ -13,6 +15,9 @@ type AddServiceByType = (serviceType: ServiceType, name: string, subtype?: strin
 const ANALOG_CONTROL_DEBOUNCE_MS = 350;
 
 export class HejhomePlatformAccessory {
+  private adaptiveController: AdaptiveLightingController | undefined;
+  private adaptiveSession: AdaptiveLightingSession | undefined;
+  private disposed = false;
   private readonly capability: DeviceCapability;
   private analogControlTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingAnalogControlRequirements: Record<string, unknown> | null = null;
@@ -41,6 +46,26 @@ export class HejhomePlatformAccessory {
     this.removeStaleBaseServices();
     this.configureServices();
     this.updateDevice(device);
+  }
+
+  observeExternal(patch: HejDeviceState): void {
+    this.adaptiveSession?.observe(patch);
+  }
+
+  prepareExternalControl(requirements: Record<string, unknown>): void {
+    this.cancelAnalogControlSet('external-control');
+    if (requirements.temperature !== undefined) {
+      this.adaptiveController?.disableAdaptiveLighting();
+    }
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.cancelAnalogControlSet('shutdown-or-removal');
+    // Detach persistence before stopping the automatic timer: keep the last saved schedule.
+    this.adaptiveController?.setupStateChangeDelegate(() => undefined);
+    this.adaptiveController?.disableAdaptiveLighting();
+    this.adaptiveController?.handleControllerRemoved();
   }
 
   updateDevice(device: HejDevice): void {
@@ -206,7 +231,25 @@ export class HejhomePlatformAccessory {
       .onSet((value) => this.scheduleAnalogControlSet({ brightness: clampNumber(Number(value), 0, 100) }, 'white-light.brightness'));
     light.getCharacteristic(this.platform.Characteristic.ColorTemperature)
       .onGet(() => temperaturePercentToMired(readNumberState(this.currentDevice(), 'temperature', 100)))
-      .onSet((value) => this.scheduleAnalogControlSet({ temperature: miredToTemperaturePercent(Number(value)) }, 'white-light.temperature'));
+      .setProps({ minValue: 154, maxValue: 333 })
+      .onSet((value) => {
+        const temperature = miredToTemperaturePercent(Number(value));
+        this.adaptiveSession?.commanded(temperature);
+        this.scheduleAnalogControlSet({ temperature }, 'white-light.temperature');
+      });
+    if (this.platform.features?.adaptiveLighting) {
+      this.adaptiveController = new this.platform.api.hap.AdaptiveLightingController(light);
+      this.adaptiveSession = new AdaptiveLightingSession(this.adaptiveController);
+      this.accessory.configureController(this.adaptiveController);
+    } else {
+      for (const type of [this.platform.Characteristic.SupportedCharacteristicValueTransitionConfiguration,
+        this.platform.Characteristic.CharacteristicValueTransitionControl,
+        this.platform.Characteristic.CharacteristicValueActiveTransitionCount]) {
+        if (light.testCharacteristic(type)) {
+          light.removeCharacteristic(light.getCharacteristic(type));
+        }
+      }
+    }
   }
 
   private configurePowerServices(keys: PowerKey[], serviceType: ServiceType, label: string): void {
@@ -312,9 +355,12 @@ export class HejhomePlatformAccessory {
       stateKeys: Object.keys(requirements),
     });
     try {
-      await this.client.controlDevice(this.device.id, requirements);
-      const next = mergeDeviceState(this.currentDevice(), requirements);
-      this.updateDevice(next);
+      if (this.platform.controlDevice) {
+        await this.platform.controlDevice(this.device.id, requirements, 'hap');
+      } else {
+        await this.client.controlDevice(this.device.id, requirements);
+        this.updateDevice(mergeDeviceState(this.currentDevice(), requirements));
+      }
       this.platform.info('accessory.control.set.succeeded', {
         deviceId: this.device.id,
         name: this.device.name,
@@ -394,7 +440,7 @@ export class HejhomePlatformAccessory {
   }
 
   private requireClient(): HejRestClient {
-    if (!this.client) {
+    if (this.disposed || !this.client) {
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
     return this.client;
@@ -654,7 +700,7 @@ export class HejhomePlatformAccessory {
   }
 }
 
-function mergeDeviceState(device: HejDevice, patch: Record<string, unknown>): HejDevice {
+export function mergeDeviceState(device: HejDevice, patch: Record<string, unknown>): HejDevice {
   const deviceState = {
     ...(device.deviceState ?? {}),
     ...patch,

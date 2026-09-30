@@ -10,10 +10,23 @@
 
 <p align="center">
   <a href="https://github.com/homebridge/homebridge/wiki/Verified-Plugins"><img alt="Homebridge verified" src="https://img.shields.io/badge/homebridge-verified-491F59?style=for-the-badge&logo=homebridge&logoColor=white"></a>
-  <img alt="Node.js 22 or 24" src="https://img.shields.io/badge/node.js-22.12%2B%20%7C%2024.x-339933?style=for-the-badge&logo=node.js&logoColor=white">
-  <img alt="Homebridge 1 or 2" src="https://img.shields.io/badge/homebridge-1.8%2B%20%7C%202.x-491F59?style=for-the-badge">
+  <img alt="Node.js 22, 24 or 26" src="https://img.shields.io/badge/node.js-22.12%2B%20%7C%2024.x%20%7C%2026.x-339933?style=for-the-badge&logo=node.js&logoColor=white">
+  <img alt="Homebridge 2.4+" src="https://img.shields.io/badge/homebridge-2.4%2B-491F59?style=for-the-badge">
   <img alt="License ISC" src="https://img.shields.io/badge/license-ISC-0f766e?style=for-the-badge">
 </p>
+
+## 2.1 베타 준비 중
+
+이 브랜치는 **2.1.0-beta.0** 출시 후보이며 아직 게시되지 않았습니다.
+Matter 장치 노출, 색온도 조명의 Adaptive Lighting, 모델별 단위를 지정하는 전력 측정,
+Node 26 및 Homebridge 정식·베타 호환성 검증을 추가합니다.
+
+게시 후에도 사용자가 `@chazepps/homebridge-hejhome@beta`를 명시적으로 설치해야 합니다.
+일반 설치·업데이트가 사용하는 `latest`는 기존 정식 버전을 유지합니다.
+Matter와 적응형 조명은 설정 화면에서 각각 켜야 하며 기본값은 꺼짐입니다.
+이 플러그인 베타에는 Homebridge **정식 2.4+**를 사용할 수 있습니다.
+
+[베타 설치·기능별 지원 범위·계측 설정·복귀 절차](docs/product-specs/2.1-beta-guide.md)
 
 ## 🎉 버전 2가 드디어 출시되었습니다
 

@@ -33,3 +33,7 @@ flowchart TD
 ## Change Anchors
 
 Any change to authentication must update `tests/hej-auth.test.ts`, `tests/ui/login-ui.spec.ts`, and `docs/project-avatar/architectures/hej-auth-session.md`.
+
+## 2.1 beta adapters
+
+`src/features.ts` validates opt-ins. `src/matter/` maps host API endpoints and calibrated telemetry. `src/lighting/adaptive.ts` distinguishes command echoes from manual overrides. Platform commands are serialized per device and share successful state across protocols. See `design-docs/2.1.0-beta.md` and `product-specs/2.1-beta-guide.md`.

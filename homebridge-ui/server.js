@@ -2,6 +2,8 @@ import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-ut
 import fs from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 
+import { normalizeFeatures } from '../dist/features.js';
+
 import { HejAuthClient } from '../dist/hej/auth.js';
 import { HejRestClient } from '../dist/hej/rest.js';
 import { DeviceSnapshotStore } from '../dist/storage/deviceSnapshotStore.js';
@@ -26,11 +28,13 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     this.sessionStore = new SessionStore(this.homebridgeStoragePath);
     this.snapshotStore = new DeviceSnapshotStore(this.homebridgeStoragePath);
     this.verifiedIdentifiers = new Set();
+    this.configWrites = Promise.resolve();
 
     this.onRequest('/send-verification', this.handleSendVerification.bind(this));
     this.onRequest('/verify-code', this.handleVerifyCode.bind(this));
     this.onRequest('/login', this.handleLogin.bind(this));
     this.onRequest('/logout', this.handleLogout.bind(this));
+    this.onRequest('/save-features', this.handleSaveFeatures.bind(this));
     this.onRequest('/save-scope', this.handleSaveScope.bind(this));
     this.onRequest('/session-status', this.handleSessionStatus.bind(this));
     this.onRequest('/ui-event', this.handleUiEvent.bind(this));
@@ -124,6 +128,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       const scope = platformConfig.scope ?? { mode: 'first-family' };
       const deviceSummary = createDeviceSupportSummary(snapshot, scope);
       const baseStatus = {
+        features: normalizeFeatures(platformConfig.features),
         scope,
         deviceSummary,
         issueTemplate: createUnsupportedDeviceIssueTemplate(deviceSummary),
@@ -180,6 +185,14 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     }, 'Hejhome 세션 상태 확인에 실패했습니다.');
   }
 
+  async handleSaveFeatures(payload) {
+    return await this.timedRequest('features.save', {}, async () => {
+      const features = normalizeFeatures(payload?.features);
+      await this.savePlatformPatch({ features });
+      return { ok: true, features };
+    }, '베타 기능 설정을 확인해 주세요.');
+  }
+
   async handleSaveScope(payload) {
     return await this.timedRequest('scope.save', payload, async () => {
       const scope = normalizeScope(payload?.scope);
@@ -205,12 +218,22 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
   }
 
   async savePlatformScope(scope) {
+    return this.savePlatformPatch({ scope });
+  }
+
+  savePlatformPatch(patch) {
+    const pending = this.configWrites.catch(() => undefined).then(() => this.writePlatformPatch(patch));
+    this.configWrites = pending;
+    return pending;
+  }
+
+  async writePlatformPatch(patch) {
     const config = await this.loadHomebridgeConfig();
     const platforms = Array.isArray(config.platforms) ? config.platforms : [];
     const platformIndex = platforms.findIndex((entry) => entry?.platform === 'Hejhome');
     const nextPlatform = {
       ...(platformIndex >= 0 ? platforms[platformIndex] : { name: 'Hejhome', platform: 'Hejhome' }),
-      scope,
+      ...patch,
     };
     const nextPlatforms = platformIndex >= 0
       ? platforms.map((entry, index) => index === platformIndex ? nextPlatform : entry)

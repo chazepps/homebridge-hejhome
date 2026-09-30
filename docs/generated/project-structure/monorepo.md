@@ -24,10 +24,12 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── api
 │   │   └── README.md
 │   ├── design-docs
+│   │   ├── 2.1.0-beta.md
 │   │   └── README.md
 │   ├── DESIGN.md
 │   ├── exec-plans
 │   │   ├── 2026-05-28-production-hardening-and-device-expansion.md
+│   │   ├── 2026-09-30-2.1.0-beta.md
 │   │   └── README.md
 │   ├── FRONTEND.md
 │   ├── generated
@@ -35,6 +37,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── PLANS.md
 │   ├── PRODUCT_SENSE.md
 │   ├── product-specs
+│   │   ├── 2.1-beta-guide.md
 │   │   ├── device-discovery-and-control.md
 │   │   ├── login-config-ui.md
 │   │   └── README.md
@@ -72,11 +75,18 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   └── capabilities.ts
 │   ├── discovery
 │   │   └── scope.ts
+│   ├── features.ts
 │   ├── hej
 │   │   ├── auth.ts
 │   │   ├── realtime.ts
 │   │   └── rest.ts
 │   ├── index.ts
+│   ├── lighting
+│   │   └── adaptive.ts
+│   ├── matter
+│   │   ├── accessory.ts
+│   │   ├── adapter.ts
+│   │   └── metering.ts
 │   ├── platform.ts
 │   ├── platformAccessory.ts
 │   ├── settings.ts
@@ -93,6 +103,8 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   └── hbConfig
 │       └── config.json
 ├── tests
+│   ├── adaptive-lighting.test.ts
+│   ├── beta-options.test.ts
 │   ├── device-capabilities.test.ts
 │   ├── device-snapshot-store.test.ts
 │   ├── device-support.test.ts
@@ -103,18 +115,24 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── hej-auth.test.ts
 │   ├── homebridge-dev-ui.test.ts
 │   ├── log-store.test.ts
+│   ├── matter-conformance.test.ts
+│   ├── matter.test.ts
 │   ├── official-gates.test.ts
 │   ├── pi-snapshot-fixture.test.ts
 │   ├── pi-verify-script.test.ts
 │   ├── platform-accessory.test.ts
+│   ├── platform-beta.test.ts
 │   ├── platform.test.ts
 │   ├── public-surface.test.ts
 │   ├── realtime.test.ts
 │   ├── redaction.test.ts
+│   ├── release-channel.test.ts
 │   ├── session-diagnostics.test.ts
 │   ├── session-store.test.ts
 │   ├── ui
+│   │   ├── beta-features.spec.ts
 │   │   └── login-ui.spec.ts
+│   ├── ui-features-server.test.ts
 │   └── ui-server-source.test.ts
 ├── tools
 │   ├── docs
@@ -122,11 +140,13 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── harness-lib.mjs
 │   │   ├── inventory-doc-harness.mjs
 │   │   └── validate-doc-harness.mjs
-│   └── homebridge
-│       ├── dev-ui-logging.mjs
-│       ├── prepare-dev-plugins.mjs
-│       ├── run-dev-ui.mjs
-│       └── verify-pi-runtime.mjs
+│   ├── homebridge
+│   │   ├── dev-ui-logging.mjs
+│   │   ├── prepare-dev-plugins.mjs
+│   │   ├── run-dev-ui.mjs
+│   │   └── verify-pi-runtime.mjs
+│   └── release
+│       └── channel.mjs
 ├── tsconfig.json
 └── vitest.config.ts
 ```

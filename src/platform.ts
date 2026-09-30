@@ -1,8 +1,8 @@
-import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, Service } from 'homebridge';
+import type { API, Characteristic, DynamicPlatformPlugin, Logging, MatterAccessory, PlatformAccessory, Service } from 'homebridge';
 
 import { HejRestClient } from './hej/rest.js';
 import { HejRealtimeClient } from './hej/realtime.js';
-import { HejhomePlatformAccessory } from './platformAccessory.js';
+import { HejhomePlatformAccessory, mergeDeviceState } from './platformAccessory.js';
 import { resolveDiscoveryScope } from './discovery/scope.js';
 import { DeviceSnapshotStore } from './storage/deviceSnapshotStore.js';
 import { LogStore, type LogLevel } from './storage/logStore.js';
@@ -12,11 +12,18 @@ import { sanitizeForLog } from './utils/redact.js';
 import { createSessionLogContext } from './utils/sessionDiagnostics.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
+import { normalizeFeatures, type FeatureOptions } from './features.js';
+import { MatterAdapter } from './matter/adapter.js';
+
 export class HejhomePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
   public readonly accessories: Map<string, PlatformAccessory> = new Map();
 
+  public readonly features: FeatureOptions;
+  private readonly matter: MatterAdapter | undefined;
+  private stopping = false;
+  private readonly commands = new Map<string, Promise<void>>();
   private readonly accessoryHandlers: Map<string, HejhomePlatformAccessory> = new Map();
   private readonly logStore: LogStore;
   private readonly snapshotStore: DeviceSnapshotStore;
@@ -32,11 +39,19 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     public readonly config: HejhomePlatformConfig,
     public readonly api: API,
   ) {
+    this.features = normalizeFeatures(config.features);
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
     this.logStore = new LogStore(api.user.storagePath());
     this.snapshotStore = new DeviceSnapshotStore(api.user.storagePath());
     this.sessionStore = new SessionStore(api.user.storagePath());
+
+    if (api.matter) {
+      this.matter = new MatterAdapter(api.matter, (id, requirements) => this.controlDevice(id, requirements, 'matter'),
+        this.features.meters, (error) => this.warn('matter.update.failed', { error: String(error) }));
+    } else if (this.features.matter) {
+      this.warn('matter.disabled-on-bridge', { message: 'Enable Matter for this bridge in Homebridge UI and restart.' });
+    }
 
     this.info('platform.bootstrapped', { name: this.config.name ?? 'Hejhome' });
 
@@ -45,9 +60,48 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     });
 
     this.api.on('shutdown', () => {
+      this.stopping = true;
       this.stopSessionWatcher();
       this.realtime?.disconnect();
+      this.matter?.dispose();
+      for (const handler of this.accessoryHandlers.values()) {
+        handler.dispose();
+      }
     });
+  }
+
+  configureMatterAccessory(accessory: MatterAccessory): void {
+    this.matter?.restore(accessory);
+  }
+
+  public controlDevice(id: string, requirements: Record<string, unknown>, origin: 'hap' | 'matter'): Promise<void> {
+    const previous = this.commands.get(id) ?? Promise.resolve();
+    const command = previous.catch(() => undefined).then(async () => {
+      if (this.stopping || !this.client) {
+        throw new Error('Hejhome is not ready.');
+      }
+      const uuid = this.api.hap.uuid.generate(id);
+      const accessory = this.accessories.get(uuid);
+      if (!accessory) {
+        throw new Error('Hejhome device is no longer available.');
+      }
+      if (origin === 'matter') {
+        this.accessoryHandlers.get(uuid)?.prepareExternalControl(requirements);
+      }
+      await this.client.controlDevice(id, requirements);
+      if (this.stopping) {
+        return;
+      }
+      const next = mergeDeviceState(accessory.context.device as HejDevice, requirements);
+      this.applyDevice(next, origin);
+    });
+    this.commands.set(id, command);
+    void command.finally(() => {
+      if (this.commands.get(id) === command) {
+        this.commands.delete(id);
+      }
+    }).catch(() => undefined);
+    return command;
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
@@ -56,7 +110,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private async initialize(): Promise<void> {
-    if (this.initialized || this.initializing) {
+    if (this.stopping || this.initialized || this.initializing) {
       this.debug('initialize.skipped', { initialized: this.initialized, initializing: this.initializing });
       return;
     }
@@ -78,6 +132,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         logger: (event) => this.info('rest.request', event),
       });
       await this.discoverDevices();
+      if (this.stopping) {
+        return;
+      }
 
       this.realtime = new HejRealtimeClient(session, {
         onDeviceUpdate: (device) => this.handleRealtimeDeviceUpdate(device),
@@ -131,6 +188,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         deviceCount: devices.length,
       });
       for (const device of devices) {
+        if (this.stopping) {
+          return;
+        }
         const uuid = this.api.hap.uuid.generate(device.id);
         discoveredCacheUUIDs.add(uuid);
         const existingAccessory = this.accessories.get(uuid);
@@ -153,6 +213,14 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       }
     }
 
+    if (this.stopping) {
+      return;
+    }
+    try {
+      await this.matter?.reconcile(this.features.matter ? snapshotFamilies.flatMap((f) => f.devices) : []);
+    } catch (error) {
+      this.warn('matter.discovery.failed', { error: String(error) });
+    }
     const snapshot = await this.snapshotStore.save(snapshotFamilies);
     this.info('snapshot.saved', {
       path: this.snapshotStore.path,
@@ -165,6 +233,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       if (!discoveredCacheUUIDs.has(uuid)) {
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         this.accessories.delete(uuid);
+        this.accessoryHandlers.get(uuid)?.dispose();
         this.accessoryHandlers.delete(uuid);
         staleCount += 1;
         this.info('accessory.unregistered-stale', {
@@ -206,6 +275,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     for (const roomId of roomIds) {
       const devices = await this.client.getDevices(familyId, roomId);
       for (const device of devices) {
+        if (this.stopping) {
+          return [];
+        }
         byId.set(device.id, {
           ...device,
           roomId,
@@ -216,6 +288,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private createAccessoryHandler(accessory: PlatformAccessory, device: HejDevice): void {
+    this.accessoryHandlers.get(accessory.UUID)?.dispose();
     const handler = new HejhomePlatformAccessory(this, accessory, device, this.client);
     this.accessoryHandlers.set(accessory.UUID, handler);
   }
@@ -237,13 +310,31 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         ...(devicePatch.deviceState ?? {}),
       },
     };
-    accessory.context.device = next;
-    this.api.updatePlatformAccessories([accessory]);
-    this.accessoryHandlers.get(uuid)?.updateDevice(next);
+    this.accessoryHandlers.get(uuid)?.observeExternal(devicePatch.deviceState ?? {});
+    this.applyDevice(next, 'external');
     this.info('realtime.state-applied', {
       deviceId: devicePatch.id,
       stateKeys: Object.keys(devicePatch.deviceState ?? {}),
     });
+  }
+
+  private applyDevice(device: HejDevice, origin: 'hap' | 'matter' | 'external'): void {
+    if (this.stopping) {
+      return;
+    }
+    const uuid = this.api.hap.uuid.generate(device.id);
+    const accessory = this.accessories.get(uuid);
+    if (!accessory) {
+      return;
+    }
+    accessory.context.device = device;
+    this.api.updatePlatformAccessories([accessory]);
+    this.accessoryHandlers.get(uuid)?.updateDevice(device);
+    if (origin === 'matter') {
+      this.matter?.accept(device);
+    } else if (this.features.matter) {
+      void this.matter?.update(device).catch((error) => this.warn('matter.update.failed', { error: String(error) }));
+    }
   }
 
   private startSessionWatcher(): void {
@@ -267,7 +358,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private async checkSessionAndInitialize(): Promise<void> {
-    if (this.initialized || this.initializing) {
+    if (this.stopping || this.initialized || this.initializing) {
       return;
     }
     try {

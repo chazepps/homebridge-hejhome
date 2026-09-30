@@ -10,7 +10,8 @@ This ledger tracks the documentation harness for the Hejhome Homebridge plugin. 
 - [x] Add design, frontend, product, reliability, security, quality, and plan documents.
 - [x] Add generated project structure tooling.
 - [x] Add forbidden content and sensitive value validation.
-- [ ] Keep generated structure current after every source tree change.
+- [x] Refresh generated structure for 2.1 beta adapter modules.
+- [x] Document explicit beta installation, metering calibration, feature opt-ins and rollback.
 
 ## Validation Commands
 

@@ -10,6 +10,9 @@
 
 ## Active Execution Plan
 
+`docs/exec-plans/2026-09-30-2.1.0-beta.md` prepares the opt-in 2.1 beta without publication.
+
+
 `docs/exec-plans/2026-05-28-production-hardening-and-device-expansion.md` tracks the current product hardening batch: public documentation cleanup, Trusted Publishing alignment, Pi runtime regression verification, and realtime/device-state normalization tests.
 
 ## Test Plan
@@ -24,4 +27,4 @@
 
 ## Release Plan
 
-Tag releases as `v*`. CI builds and tests on Node 22 and Node 24 before npm publish.
+Tags must match package and lockfile versions. Numbered beta versions publish only to `beta`; stable versions require an explicit `latest` package configuration. Node 22/24/26 checks gate publication.
