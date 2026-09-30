@@ -11,6 +11,8 @@ const modelDevices: UiDevice[] = [
   { id: 'fixture-unknown', name: 'No model', deviceType: 'Plug', modelName: null, meterProfileApplied: false },
 ];
 const units = ['power', 'voltage', 'current', 'energy'] as const;
+const fieldLabels = { ko: ['전력 측정값', '전압 측정값', '전류 측정값', '누적 사용량'],
+  en: ['Power reading', 'Voltage reading', 'Current reading', 'Total energy used'] } as const;
 async function openMeters(page: Page, language: 'ko' | 'en' = 'ko') {
   await page.getByRole('tab', { name: language === 'en' ? 'Help' : '도움말', exact: true }).click();
   await page.getByText(language === 'en' ? 'Advanced: power meter models' : '고급: 전력 측정 모델 설정', { exact: true }).click();
@@ -21,7 +23,7 @@ async function addRow(page: Page) {
 }
 async function fillPower(row: Locator, model: string, multiplier = '0.1') {
   await row.locator('[data-meter-model]').fill(model);
-  await row.locator('[data-meter-field="power"]').fill('curPower');
+  await row.locator('[data-meter-field="power"]').fill('전력 측정값');
   await row.locator('[data-meter-multiplier="power"]').fill(multiplier);
 }
 
@@ -56,7 +58,12 @@ for (const language of ['ko', 'en'] as const) {
     expect(await table.locator('tbody tr').first().getAttribute('data-testid')).toBe('meter-example-row');
     await expect(example.locator('input, select, button, textarea')).toHaveCount(0);
     await expect(example).toHaveCSS('font-style', 'italic');
-    for (const text of ['curPower', 'curVoltage', 'curCurrent', 'totalWh', '0.1', '0.001', '2200', '220', '1000', '1250', '1.25', 'kWh']) {
+    await expect(page.locator('#meterScrollRange, #meterHelpSection input[type=range]')).toHaveCount(0);
+    for (const cell of await table.locator('th, td').all()) {
+      await expect(cell).toHaveCSS('white-space', 'nowrap');
+    }
+    await expect(example).not.toContainText(/curPower|curVoltage|curCurrent|totalWh/);
+    for (const text of [...fieldLabels[language], '0.1', '0.001', '2200', '220', '1000', '1250', '1.25', 'kWh']) {
       await expect(example).toContainText(text);
     }
     for (const unit of ['W', 'V', 'A', 'Wh']) {
@@ -77,13 +84,19 @@ test('new rows stay empty with unit-labelled placeholders and selecting a unique
     await expect(input).toHaveValue('');
     await expect(input).toHaveAttribute('placeholder', /.+/);
   }
-  const picker = row.getByLabel('모델 선택', { exact: true });
-  await expect(picker.locator('option[value="SYNTHETIC-METER-01"]')).toHaveCount(1);
-  await expect(picker.locator('option[value="SYNTHETIC-RELAY-02"]')).toHaveCount(1);
-  await expect(picker).not.toContainText('No model');
-  await picker.selectOption('SYNTHETIC-METER-01');
-  await expect(row.locator('[data-meter-model]')).toHaveValue('SYNTHETIC-METER-01');
-  await row.locator('[data-meter-field="power"]').fill('curPower');
+  await expect(row.locator('select, [data-meter-model-choice]')).toHaveCount(0);
+  const model = row.locator('[data-meter-model]');
+  const listId = await model.getAttribute('list');
+  expect(listId).toBeTruthy();
+  const suggestions = page.locator(`datalist[id="${listId}"]`);
+  await expect(suggestions.locator('option[value="SYNTHETIC-METER-01"]')).toHaveCount(1);
+  await expect(suggestions.locator('option[value="SYNTHETIC-RELAY-02"]')).toHaveCount(1);
+  expect(await suggestions.locator('option[value="SYNTHETIC-METER-01"]').getAttribute('label')).toMatch(/First plug|Second plug/);
+  await expect(suggestions).not.toContainText('No model');
+  await model.fill('SYNTHETIC-METER-01');
+  await model.press('Tab');
+  await expect(model).toHaveValue('SYNTHETIC-METER-01');
+  await row.locator('[data-meter-field="power"]').fill('전력 측정값');
   await row.locator('[data-meter-multiplier="power"]').fill('0.1');
   await page.locator('#saveMeters').click();
   await expect.poll(async () => (await requestCalls(page, '/save-features')).at(-1)?.payload).toEqual({ features: { meters: [
@@ -96,6 +109,7 @@ test('manual and previously saved unknown models remain editable without fabrica
     meters: [{ model: 'OLDER-MODEL', power: { field: 'wattsRaw', multiplier: 1 } }] } } });
   await openMeters(page);
   await expect(page.getByTestId('meter-row').first().locator('[data-meter-model]')).toHaveValue('OLDER-MODEL');
+  await expect(page.getByTestId('meter-row').first().locator('[data-meter-field="power"]')).toHaveValue('wattsRaw');
   const row = await addRow(page);
   await fillPower(row, 'MY-MANUAL-MODEL', '1');
   await page.locator('#saveMeters').click();
@@ -115,7 +129,7 @@ for (const invalid of ['blank-model', 'no-fields', 'half-pair', 'half-multiplier
     }
     if (invalid !== 'no-fields') {
       if (invalid !== 'half-multiplier') {
-        await row.locator('[data-meter-field="power"]').fill('curPower');
+        await row.locator('[data-meter-field="power"]').fill('전력 측정값');
       }
       if (invalid !== 'half-pair') {
         await row.locator('[data-meter-multiplier="power"]').fill(invalid === 'zero' ? '0' : invalid === 'negative' ? '-1' : '1');
@@ -144,7 +158,9 @@ test('raw malformed JSON and non-finite factors cannot be saved', async ({ page 
   expect(await requestCalls(page, '/save-features')).toHaveLength(0);
 });
 
-for (const [language, theme, width] of [['ko', 'light', 375], ['en', 'dark', 375], ['ko', 'dark', 1200], ['en', 'light', 1200]] as const) {
+const renderCases = (['ko', 'en'] as const).flatMap((language) => (['light', 'dark'] as const)
+  .flatMap((theme) => [375, 1200].map((width) => ({ language, theme, width }))));
+for (const { language, theme, width } of renderCases) {
   test(`${language} ${theme} ${width}px meter table scrolls internally and keeps keyboard edits through status updates`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await mountUi(page, { language, theme, devices: modelDevices });
@@ -157,25 +173,17 @@ for (const [language, theme, width] of [['ko', 'light', 375], ['en', 'dark', 375
     await wrapper.focus();
     await page.keyboard.press('ArrowRight');
     await expect.poll(() => wrapper.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
-    const scrollbar = page.getByLabel(language === 'en' ? 'Scroll table horizontally' : '표 가로 이동', { exact: true });
-    await expect(scrollbar).toBeVisible();
-    expect(await scrollbar.getAttribute('type')).toBe('range');
-    await scrollbar.focus();
-    await page.keyboard.press('End');
-    await expect.poll(() => wrapper.evaluate((node) => Math.abs(node.scrollLeft - (node.scrollWidth - node.clientWidth)))).toBeLessThan(2);
-    await wrapper.evaluate((node) => {
-      node.scrollLeft = 10;
-    });
-    await expect.poll(async () => Math.abs(Number(await scrollbar.inputValue()) - await wrapper.evaluate((node) => node.scrollLeft)))
-      .toBeLessThan(2);
+    await expect(page.locator('#meterScrollRange, #meterHelpSection input[type=range]')).toHaveCount(0);
+    await expect(wrapper).toHaveCSS('overflow-x', 'auto');
+    expect(await wrapper.evaluate((node) => node.scrollWidth)).toBeGreaterThan(await wrapper.evaluate((node) => node.clientWidth));
     const energy = row.locator('[data-meter-field="energy"]');
     await energy.focus();
-    await page.keyboard.type('totalWh');
+    await page.keyboard.type(fieldLabels[language][3]);
     // Arrow-key and focus scrolling can finish after typing; compare settled layouts, not an in-flight animation frame.
     const before = await settledScrollGeometry(wrapper);
     await publishStatus(page);
     await expect(energy).toBeFocused();
-    await expect(energy).toHaveValue('totalWh');
+    await expect(energy).toHaveValue(fieldLabels[language][3]);
     await expect(model).toHaveValue('DRAFT-MODEL');
     expect(await settledScrollGeometry(wrapper)).toEqual(before);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -186,16 +194,24 @@ for (const [language, theme, width] of [['ko', 'light', 375], ['en', 'dark', 375
       await expect(field).toHaveAccessibleName(/.+/);
       await expect(row.locator(`[data-meter-multiplier="${kind}"]`)).toHaveAccessibleName(/.+/);
     }
-    const directory = path.resolve('.superpowers/sdd/2026-10-01-meter-table/screenshots');
+    const wrappedText = await page.getByTestId('meter-table').locator('th, td, label, button').evaluateAll((elements) =>
+      elements.filter((element) => getComputedStyle(element).whiteSpace !== 'nowrap')
+        .map((element) => element.textContent?.trim().slice(0, 30)));
+    expect(wrappedText).toEqual([]);
+    const directory = path.resolve('.superpowers/sdd/2026-10-01-meter-ux/screenshots');
     fs.mkdirSync(directory, { recursive: true });
+    await wrapper.evaluate((node) => {
+      node.scrollLeft = node.scrollWidth - node.clientWidth;
+    });
+    await settledScrollGeometry(wrapper);
     await wrapper.screenshot({ path: path.join(directory, `${language}-${theme}-${width}-table-right.png`) });
-    await scrollbar.focus();
-    await page.keyboard.press('Home');
+    await wrapper.evaluate((node) => {
+      node.scrollLeft = 0;
+    });
+    await settledScrollGeometry(wrapper);
     await expect.poll(() => wrapper.evaluate((node) => node.scrollLeft)).toBe(0);
     await wrapper.screenshot({ path: path.join(directory, `${language}-${theme}-${width}-table-left.png`) });
-    if (language === 'ko') {
-      await page.locator('#meterHelpSection').screenshot({ path: path.join(directory, `${language}-${theme}-${width}-section.png`) });
-    }
+    await page.locator('#meterHelpSection').screenshot({ path: path.join(directory, `${language}-${theme}-${width}-section.png`) });
   });
 }
 
@@ -207,8 +223,8 @@ test('four measurement columns save only their model, source field and SI multip
   await row.locator('[data-meter-model]').fill('MANUAL-FOUR-CHANNEL');
   const values = { power: { field: 'curPower', multiplier: 0.1 }, voltage: { field: 'curVoltage', multiplier: 0.1 },
     current: { field: 'curCurrent', multiplier: 0.001 }, energy: { field: 'totalWh', multiplier: 1 } };
-  for (const [kind, value] of Object.entries(values)) {
-    await row.locator(`[data-meter-field="${kind}"]`).fill(value.field);
+  for (const [index, [kind, value]] of Object.entries(values).entries()) {
+    await row.locator(`[data-meter-field="${kind}"]`).fill(fieldLabels.ko[index]!);
     await row.locator(`[data-meter-multiplier="${kind}"]`).fill(String(value.multiplier));
   }
   await page.locator('#saveMeters').click();
@@ -227,7 +243,7 @@ test('adding a table row after raw JSON editing retains the raw profiles before 
   const added = await addRow(page);
   await expect(page.getByTestId('meter-row')).toHaveCount(2);
   await expect(page.getByTestId('meter-row').first().locator('[data-meter-model]')).toHaveValue('RAW-PROFILE');
-  await expect(page.getByTestId('meter-row').first().locator('[data-meter-field="current"]')).toHaveValue('curCurrent');
+  await expect(page.getByTestId('meter-row').first().locator('[data-meter-field="current"]')).toHaveValue('전류 측정값');
   await fillPower(added, 'ADDED-MODEL', '0.1');
   await page.locator('#saveMeters').click();
   await expect.poll(async () => (await requestCalls(page, '/save-features')).at(-1)?.payload).toEqual({ features: { meters: [
@@ -247,16 +263,16 @@ test('adding a row from invalid raw JSON shows an error and does not lose the ra
   expect(await requestCalls(page, '/save-features')).toHaveLength(0);
 });
 
-test('editing a selected model manually resets the picker to manual entry', async ({ page }) => {
+test('a suggested model can be replaced by a manual model name using the same input', async ({ page }) => {
   await mountUi(page, { devices: modelDevices });
   await openMeters(page);
   const row = await addRow(page);
-  const picker = row.getByLabel('모델 선택', { exact: true });
-  await picker.selectOption('SYNTHETIC-METER-01');
-  await row.locator('[data-meter-model]').fill('MANUALLY-CHANGED-MODEL');
-  await expect(picker).toHaveValue('');
-  await expect(picker.locator('option:checked')).toContainText(/직접|수동/);
-  await row.locator('[data-meter-field="power"]').fill('curPower');
+  const model = row.locator('[data-meter-model]');
+  await model.fill('SYNTHETIC-METER-01');
+  await model.press('Tab');
+  await model.fill('MANUALLY-CHANGED-MODEL');
+  await expect(row.locator('select')).toHaveCount(0);
+  await row.locator('[data-meter-field="power"]').fill('전력 측정값');
   await row.locator('[data-meter-multiplier="power"]').fill('0.1');
   await page.locator('#saveMeters').click();
   await expect.poll(async () => (await requestCalls(page, '/save-features')).at(-1)?.payload).toEqual({ features: { meters: [
@@ -264,21 +280,19 @@ test('editing a selected model manually resets the picker to manual entry', asyn
   ] } });
 });
 
-test('opening an empty meter table enables its scrollbar before any row is added', async ({ page }) => {
+test('opening an empty meter table provides native keyboard scrolling without a range slider', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 900 });
   await mountUi(page);
   await openMeters(page);
   await expect(page.getByTestId('meter-row')).toHaveCount(0);
-  const scrollbar = page.getByLabel('표 가로 이동', { exact: true });
-  await expect(scrollbar).toBeEnabled();
-  await expect.poll(async () => Number(await scrollbar.getAttribute('max'))).toBeGreaterThan(0);
-  await scrollbar.focus();
-  await page.keyboard.press('End');
+  await expect(page.locator('#meterScrollRange, #meterHelpSection input[type=range]')).toHaveCount(0);
   const wrapper = page.getByTestId('meter-table-scroll');
+  await expect(wrapper).toHaveAttribute('tabindex', '0');
+  await wrapper.focus();
+  await page.keyboard.press('ArrowRight');
   await expect.poll(() => wrapper.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 });
-
 
 for (const change of ['edit', 'add', 'remove'] as const) {
   test(`a pending save cannot overwrite newer table ${change} changes`, async ({ page }) => {
@@ -343,7 +357,7 @@ test('editing raw JSON locks stale table inputs until explicit validated applica
   const row = page.getByTestId('meter-row').first();
   await expect(row.locator('[data-meter-model]')).toBeEnabled();
   await expect(row.locator('[data-meter-model]')).toHaveValue('NEW-RAW');
-  await expect(row.locator('[data-meter-field="voltage"]')).toHaveValue('curVoltage');
+  await expect(row.locator('[data-meter-field="voltage"]')).toHaveValue('전압 측정값');
   await row.locator('[data-meter-multiplier="voltage"]').fill('0.2');
   await page.locator('#saveMeters').click();
   await expect.poll(async () => (await requestCalls(page, '/save-features')).at(-1)?.payload).toEqual({ features: { meters: [
@@ -371,7 +385,8 @@ test('an already-open raw editor follows table add, model selection and row remo
   await page.getByText('전문가용 원본 설정', { exact: true }).click();
   const row = await addRow(page);
   await expect.poll(async () => JSON.parse(await page.locator('#meterProfiles').inputValue())).toEqual([{ model: '' }]);
-  await row.getByLabel('모델 선택', { exact: true }).selectOption('SYNTHETIC-METER-01');
+  await row.locator('[data-meter-model]').fill('SYNTHETIC-METER-01');
+  await row.locator('[data-meter-model]').press('Tab');
   await expect.poll(async () => JSON.parse(await page.locator('#meterProfiles').inputValue())).toEqual([{ model: 'SYNTHETIC-METER-01' }]);
   await row.getByRole('button', { name: '이 모델 삭제', exact: true }).click();
   await expect.poll(async () => JSON.parse(await page.locator('#meterProfiles').inputValue())).toEqual([]);
@@ -383,3 +398,84 @@ test('English meter guidance contains no untranslated Korean text', async ({ pag
   await openMeters(page, 'en');
   await expect(page.locator('#meterHelpSection')).not.toContainText(/[가-힣]/);
 });
+
+
+for (const language of ['ko', 'en'] as const) {
+  test(`${language} friendly field suggestions save raw keys and redisplay aliases after reopening`, async ({ page }) => {
+    await mountUi(page, { language });
+    await openMeters(page, language);
+    const row = await addRow(page);
+    await row.locator('[data-meter-model]').fill('ALIAS-MODEL');
+    const keys = ['curPower', 'curVoltage', 'curCurrent', 'totalWh'];
+    const multipliers = [0.1, 0.1, 0.001, 1];
+    const expected: Record<string, unknown> = { model: 'ALIAS-MODEL' };
+    for (const [index, kind] of units.entries()) {
+      const input = row.locator(`[data-meter-field="${kind}"]`);
+      await input.fill(fieldLabels[language][index]!);
+      const listId = await input.getAttribute('list');
+      expect(listId).toBeTruthy();
+      const optionValues = await page.locator(`datalist[id="${listId}"] option`).evaluateAll((options) =>
+        options.map((option) => (option as HTMLOptionElement).value));
+      expect(optionValues).toContain(fieldLabels[language][index]);
+      const optionLabels = await page.locator(`datalist[id="${listId}"] option`).evaluateAll((options) =>
+        options.map((option) => (option as HTMLOptionElement).label));
+      expect(optionLabels).toContain(fieldLabels[language][index]);
+      expect(optionLabels.join(' ')).not.toMatch(/curPower|curVoltage|curCurrent|totalWh/);
+      // Datalist metadata is not itself a visible raw-code leak; the ordinary input value is friendly.
+      await expect(input).toHaveValue(fieldLabels[language][index]!);
+      await row.locator(`[data-meter-multiplier="${kind}"]`).fill(String(multipliers[index]));
+      expected[kind] = { field: keys[index], multiplier: multipliers[index] };
+    }
+    await page.locator('#saveMeters').click();
+    await expect.poll(async () => (await requestCalls(page, '/save-features')).at(-1)?.payload)
+      .toEqual({ features: { meters: [expected] } });
+    await page.getByText(language === 'en' ? 'Expert settings' : '전문가용 원본 설정', { exact: true }).click();
+    await expect.poll(async () => JSON.parse(await page.locator('#meterProfiles').inputValue())).toEqual([expected]);
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await page.setContent(fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8'));
+    await openMeters(page, language);
+    for (const [index, kind] of units.entries()) {
+      await expect(page.getByTestId('meter-row').locator(`[data-meter-field="${kind}"]`)).toHaveValue(fieldLabels[language][index]!);
+    }
+    await expect(page.getByTestId('meter-table')).not.toContainText(/curPower|curVoltage|curCurrent|totalWh/);
+    const ordinaryFields = await page.getByTestId('meter-table').locator('input').evaluateAll((inputs) => inputs.map((element) => ({
+      value: (element as HTMLInputElement).value, placeholder: (element as HTMLInputElement).placeholder,
+    })));
+    expect(JSON.stringify(ordinaryFields)).not.toMatch(/curPower|curVoltage|curCurrent|totalWh/);
+  });
+}
+
+for (const language of ['ko', 'en'] as const) {
+  test(`${language} icon-only add and remove actions have keyboard names, tooltips and 44px targets`, async ({ page }) => {
+    await mountUi(page, { language });
+    await openMeters(page, language);
+    const addName = language === 'en' ? 'Add meter model' : '측정 모델 추가';
+    const removeName = language === 'en' ? 'Remove model' : '이 모델 삭제';
+    const add = page.getByRole('button', { name: addName, exact: true });
+    await expect(add).toHaveAttribute('title', addName);
+    await expect(add).toHaveText('');
+    await expect(add.locator('svg')).toHaveCount(1);
+    const addBox = await add.boundingBox();
+    expect(addBox!.height).toBeGreaterThanOrEqual(44);
+    expect(addBox!.width).toBeGreaterThanOrEqual(44);
+    await add.focus();
+    await page.keyboard.press('Enter');
+    const row = page.getByTestId('meter-row').last();
+    const remove = row.getByRole('button', { name: removeName, exact: true });
+    await expect(remove).toHaveAttribute('title', removeName);
+    await expect(remove).toHaveText('');
+    await expect(remove.locator('svg')).toHaveCount(1);
+    const removeBox = await remove.boundingBox();
+    expect(removeBox!.height).toBeGreaterThanOrEqual(44);
+    expect(removeBox!.width).toBeGreaterThanOrEqual(44);
+    await remove.focus();
+    await page.keyboard.press('Space');
+    await expect(page.getByTestId('meter-row')).toHaveCount(0);
+    const gap = await page.locator('#meterDetails').evaluate((details) => {
+      const add = details.querySelector('#addMeter')!.getBoundingClientRect();
+      const expert = details.querySelector(':scope > details')!.getBoundingClientRect();
+      return expert.top - add.bottom;
+    });
+    expect(gap).toBe(16);
+  });
+}
