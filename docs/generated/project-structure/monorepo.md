@@ -31,6 +31,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── exec-plans
 │   │   ├── 2026-05-28-production-hardening-and-device-expansion.md
 │   │   ├── 2026-09-30-2.1.0-beta.md
+│   │   ├── 2026-09-30-homebridge-feature-action-checklist.md
 │   │   └── README.md
 │   ├── FRONTEND.md
 │   ├── generated
