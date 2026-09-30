@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Keep aligned with typescript-eslint's supported TypeScript range.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
     groups:
       npm-production:
         dependency-type: production
