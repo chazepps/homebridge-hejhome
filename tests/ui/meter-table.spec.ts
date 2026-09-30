@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { mountUi, publishStatus, requestCalls, type UiDevice } from './host-fixture.js';
+import { installUiHost, mountUi, publishStatus, requestCalls, type UiDevice } from './host-fixture.js';
 
 // Synthetic model names test UI matching only; they do not claim metering support on real hardware.
 const modelDevices: UiDevice[] = [
@@ -464,4 +464,137 @@ test('the empty calculator scrolls natively before adding editable rows', async 
   await wrapper.focus(); await page.keyboard.press('ArrowRight');
   await expect.poll(() => wrapper.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+});
+
+test('preview-only account changes isolate old meter rows immediately and reject late account responses', async ({ page }) => {
+  await installUiHost(page, { status: { features: {
+    meters: [{ model: 'ACCOUNT-A', power: { field: 'curPower', multiplier: 1 } }],
+  } } });
+  // The first diagnostics can arrive after the saved settings and a preview edit.
+  await page.evaluate(() => {
+    window.__hejHost.holdNext['/diagnostics'] = 2;
+  });
+  await page.setContent(fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8'));
+  await openMeters(page);
+  await page.getByTestId('meter-row').locator('[data-meter-preview]').fill('777');
+  const oldDiagnostics = await page.evaluate(() => structuredClone(window.__hejHost.diagnostics));
+  const initialStatusRequests = (await requestCalls(page, '/session-status')).length;
+  let dialogs = 0;
+  page.on('dialog', async (dialog) => {
+    dialogs++;
+    await dialog.dismiss();
+  });
+  await expect.poll(() => page.evaluate(() => window.__hejHost.pending.length)).toBe(2);
+  await page.evaluate(() => {
+    const host = window.__hejHost;
+    host.status.uiSessionRevision = 'account-B';
+    host.status.features = { meters: [{ model: 'ACCOUNT-B', current: { field: 'curCurrent', multiplier: 0.001 } }] };
+    host.diagnostics = { ...host.diagnostics, uiSessionRevision: 'account-B', devices: [] };
+    host.holdNext['/session-status'] = 1;
+    // Two startup refreshes exist; resolve only the newer request as the first observed account.
+    host.pending[1]!.resolve(structuredClone(host.diagnostics));
+  });
+  await expect(page.getByTestId('meter-row')).toHaveCount(0);
+  await expect(page.locator('#meterProfiles')).not.toHaveValue(/ACCOUNT-A/);
+  await expect(page.locator('#accountChangeAction')).toHaveCount(0);
+  await expect.poll(async () => (await requestCalls(page, '/session-status')).length).toBe(initialStatusRequests + 1);
+  const devicesTab = page.getByRole('tab', { name: '내 장치', exact: true });
+  await devicesTab.focus();
+  await page.keyboard.press('End');
+  await expect(devicesTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#panel-connections')).toBeHidden();
+  await expect(page.locator('#panel-help')).toBeHidden();
+  const statusB = await page.evaluate(() => structuredClone(window.__hejHost.status));
+  // A second account switch while B's settings are pending exercises the same late-status boundary.
+  // Reusing A's exact model/kind also ensures its preview cannot leak through render-time matching.
+  await page.evaluate(() => {
+    const host = window.__hejHost;
+    host.status.uiSessionRevision = 'account-C';
+    host.status.features = { meters: [{ model: 'ACCOUNT-A', power: { field: 'customC', multiplier: 2 } }] };
+    host.diagnostics = { ...host.diagnostics, uiSessionRevision: 'account-C' };
+  });
+  await publishStatus(page);
+  await expect.poll(async () => (await requestCalls(page, '/session-status')).length).toBe(initialStatusRequests + 2);
+  const row = page.getByTestId('meter-row');
+  await expect(row.locator('[data-meter-model]')).toHaveValue('ACCOUNT-A');
+  await expect(row.locator('[data-meter-multiplier]')).toHaveValue('2');
+  await expect(row.locator('[data-meter-preview]')).toHaveValue('');
+  await page.evaluate(({ oldDiagnostics, statusB }) => {
+    window.__hejHost.pending.find((pending) => pending.route === '/diagnostics')!.resolve(oldDiagnostics);
+    window.__hejHost.pending.find((pending) => pending.route === '/session-status')!.resolve(statusB);
+  }, { oldDiagnostics, statusB });
+  await page.getByRole('tab', { name: '도움말', exact: true }).click();
+  await expect(row.locator('[data-meter-model]')).toHaveValue('ACCOUNT-A');
+  await expect(row.locator('[data-meter-multiplier]')).toHaveValue('2');
+  await expect(row.locator('[data-meter-preview]')).toHaveValue('');
+  await expect.poll(async () => JSON.parse(await page.locator('#meterProfiles').inputValue())).toEqual([
+    { model: 'ACCOUNT-A', power: { field: 'customC', multiplier: 2 } },
+  ]);
+  expect(dialogs).toBe(0);
+  expect(await requestCalls(page, '/save-features')).toHaveLength(0);
+});
+
+test('an actual meter settings draft still requires confirmation before changing accounts', async ({ page }) => {
+  await mountSaved(page, [{ model: 'ACCOUNT-A', power: { field: 'curPower', multiplier: 1 } }]);
+  await page.getByTestId('meter-row').locator('[data-meter-multiplier]').fill('3');
+  await page.getByTestId('meter-row').locator('[data-meter-preview]').fill('777');
+  const initialStatusRequests = (await requestCalls(page, '/session-status')).length;
+  await page.evaluate(() => {
+    const host = window.__hejHost;
+    host.status.uiSessionRevision = 'account-B';
+    host.status.features = { meters: [{ model: 'ACCOUNT-B', voltage: { field: 'curVoltage', multiplier: 0.1 } }] };
+    host.diagnostics = { ...host.diagnostics, uiSessionRevision: 'account-B', devices: [] };
+  });
+  await publishStatus(page);
+  const review = page.locator('#accountChangeAction');
+  await expect(review).toBeVisible();
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await review.click();
+  await expect(review).toBeVisible();
+  await expect(page.getByTestId('meter-row').locator('[data-meter-model]')).toHaveValue('ACCOUNT-A');
+  await expect(page.getByTestId('meter-row').locator('[data-meter-multiplier]')).toHaveValue('3');
+  expect((await requestCalls(page, '/session-status')).length).toBe(initialStatusRequests);
+  expect(await requestCalls(page, '/save-features')).toHaveLength(0);
+  page.once('dialog', (dialog) => dialog.accept());
+  await review.click();
+  await expect(review).toHaveCount(0);
+  await expect(page.getByTestId('meter-row').locator('[data-meter-model]')).toHaveValue('ACCOUNT-B');
+  await expect(page.getByTestId('meter-row').locator('[data-meter-multiplier]')).toHaveValue('0.1');
+  await expect(page.getByTestId('meter-row').locator('[data-meter-preview]')).toHaveValue('');
+  expect(await requestCalls(page, '/save-features')).toHaveLength(0);
+});
+
+test('signing out and into another account never renders the previous calculator preview before diagnostics arrive', async ({ page }) => {
+  await mountSaved(page, [{ model: 'SHARED-MODEL', power: { field: 'curPower', multiplier: 1 } }]);
+  await page.getByTestId('meter-row').locator('[data-meter-preview]').fill('777');
+  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+  await expect(page.getByLabel('이메일')).toBeVisible();
+  await page.evaluate(() => {
+    window.__hejHost.status.features = {
+      meters: [{ model: 'SHARED-MODEL', power: { field: 'otherAccountWatts', multiplier: 2 } }],
+    };
+    window.__hejHost.holdNext['/diagnostics'] = 2;
+  });
+  await page.getByLabel('이메일').fill('other-account@example.test');
+  await page.getByRole('button', { name: '인증번호 전송', exact: true }).click();
+  await page.getByLabel('6자리 인증번호 입력').fill('123456');
+  await page.getByRole('button', { name: '확인', exact: true }).click();
+  await page.getByLabel('비밀번호').fill('fixture-only-password');
+  await page.getByRole('button', { name: '로그인', exact: true }).click();
+  await expect(page.locator('#loginView')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.__hejHost.pending.filter((entry) => entry.route === '/diagnostics').length))
+    .toBeGreaterThan(0);
+  await page.getByRole('tab', { name: '도움말', exact: true }).click();
+  const row = page.getByTestId('meter-row');
+  await expect(row.locator('[data-meter-model]')).toHaveValue('SHARED-MODEL');
+  await expect(row.locator('[data-meter-multiplier]')).toHaveValue('2');
+  await expect(row.locator('[data-meter-preview]')).toHaveValue('');
+  await expect(row.locator('[data-meter-result]')).not.toContainText('1554');
+  await expect.poll(async () => JSON.parse(await page.locator('#meterProfiles').inputValue())).toEqual([
+    { model: 'SHARED-MODEL', power: { field: 'otherAccountWatts', multiplier: 2 } },
+  ]);
+  expect(await requestCalls(page, '/logout')).toHaveLength(1);
+  expect(await requestCalls(page, '/login')).toHaveLength(1);
+  expect(await requestCalls(page, '/save-features')).toHaveLength(0);
 });

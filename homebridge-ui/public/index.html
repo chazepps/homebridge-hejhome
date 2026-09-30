@@ -1068,6 +1068,8 @@
   let scopeEditToken = null;
   let uiSessionRevision = null;
   let accountChangePending = false;
+  let accountStatusLoading = false;
+  let accountReloadGeneration = 0;
   let featureDraftDirty = false;
   let scopeDraftDirty = false;
   const featureEdits = { matter: 0, adaptiveLighting: 0, meters: 0 };
@@ -1148,7 +1150,6 @@
           for (const control of settingsView.querySelectorAll('button')) control.disabled = false;
           selectTab(0);
           void reloadCurrentAccount();
-          void refreshDiagnostics();
         });
         document.getElementById('globalStatus').after(button);
       }
@@ -1159,19 +1160,49 @@
     }
     selectedDeviceId = null;
     deviceDetailView.classList.add('is-hidden'); deviceListView.classList.remove('is-hidden');
-    return true;
+    currentStatus = null;
+    document.getElementById('matterFeature').checked = false;
+    document.getElementById('adaptiveFeature').checked = false;
+    document.getElementById('meterProfiles').value = '[]';
+    renderMeterRows([]);
+    document.getElementById('meterStatus').textContent = '';
+    deviceList.replaceChildren();
+    deviceList.textContent = tr('새 계정의 설정을 확인하고 있어요.', 'Checking settings for the new account.');
+    selectTab(0);
+    void reloadCurrentAccount(revision);
+    return false;
   }
 
-  async function reloadCurrentAccount() {
+  async function reloadCurrentAccount(expectedRevision = uiSessionRevision) {
+    const requestGeneration = ++accountReloadGeneration;
+    accountStatusLoading = true;
+    for (const id of ['saveFeatures', 'saveLighting', 'saveMeters', 'addMeter', 'saveScope']) {
+      document.getElementById(id).disabled = true;
+    }
+    tabButtons[1].disabled = true;
+    tabButtons[2].disabled = true;
     try {
       const status = await requestWithTimeout('/session-status', {}, 10000,
         tr('계정 상태 확인', 'Check account status'));
-      if (accountChangePending || !applySessionRevision(status.uiSessionRevision)) return;
+      if (accountChangePending || requestGeneration !== accountReloadGeneration
+        || expectedRevision !== uiSessionRevision || status.uiSessionRevision !== expectedRevision) return;
       await showSettingsView(status);
     } catch {
-      document.getElementById('globalStatus').textContent = tr(
-        '새 계정 상태를 확인하지 못했어요. 잠시 후 다시 열어 주세요.',
-        'Could not check the new account. Please reopen this page shortly.');
+      if (requestGeneration === accountReloadGeneration && expectedRevision === uiSessionRevision) {
+        document.getElementById('globalStatus').textContent = tr(
+          '새 계정 상태를 확인하지 못했어요. 설정 창을 닫았다 다시 열어 주세요.',
+          'Could not check the new account. Close and reopen settings.');
+      }
+    } finally {
+      if (requestGeneration === accountReloadGeneration && expectedRevision === uiSessionRevision
+        && currentStatus?.uiSessionRevision === expectedRevision) {
+        accountStatusLoading = false;
+        tabButtons[1].disabled = false;
+        tabButtons[2].disabled = false;
+        for (const id of ['saveFeatures', 'saveLighting', 'saveMeters', 'addMeter']) {
+          document.getElementById(id).disabled = false;
+        }
+      }
     }
   }
 
@@ -1210,7 +1241,7 @@
   }
 
   function selectTab(index, focus = false) {
-    if (accountChangePending) return;
+    if (accountChangePending || (accountStatusLoading && index !== 0)) return;
     activeTab = index;
     tabButtons.forEach((button, position) => {
       button.setAttribute('aria-selected', String(position === index));
@@ -1425,6 +1456,7 @@
   }
 
   async function saveFeaturePatch(features, button, status, label) {
+    if (accountStatusLoading || accountChangePending) return;
     button.disabled = true;
     const ownerRevision = uiSessionRevision;
     const meterDraftAtSave = Array.isArray(features.meters) ? document.getElementById('meterProfiles').value : null;
@@ -2293,6 +2325,7 @@
       return;
     }
     const generation = ++diagnosticsGeneration;
+    const revisionAtRequest = uiSessionRevision;
     diagnosticsOutstanding++;
     try {
       const rawRequest = window.homebridge.request('/diagnostics', {});
@@ -2303,6 +2336,8 @@
         window.homebridge?.getCachedMatterAccessories?.().catch(() => []) ?? [],
       ]);
       if (generation !== diagnosticsGeneration || settingsView.classList.contains('is-hidden')) return;
+      if (revisionAtRequest && revisionAtRequest !== uiSessionRevision
+        && diagnostics.uiSessionRevision !== uiSessionRevision) return;
       if (!applySessionRevision(diagnostics.uiSessionRevision)) return;
       closeStalledSettings.classList.add('is-hidden');
       currentDiagnostics = diagnostics;
@@ -2599,6 +2634,12 @@
 	  }
 
   async function showSettingsView(status) {
+    if (!applySessionRevision(status.uiSessionRevision)) {
+      loginView.classList.add('is-hidden');
+      settingsView.classList.remove('is-hidden');
+      window.homebridge?.fixScrollHeight?.();
+      return;
+    }
 	    currentStatus = status;
 	    scopeEditToken = status.scopeEditToken ?? null;
 	    loginView.classList.add('is-hidden');
