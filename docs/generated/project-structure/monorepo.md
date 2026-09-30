@@ -181,6 +181,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── diagnostics-transitions.spec.ts
 │   │   ├── host-fixture.ts
 │   │   ├── login-ui.spec.ts
+│   │   ├── meter-table.spec.ts
 │   │   └── navigation-workflow.spec.ts
 │   ├── ui-diagnostics-server.test.ts
 │   ├── ui-features-server.test.ts

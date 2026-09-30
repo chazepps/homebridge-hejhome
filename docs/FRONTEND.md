@@ -30,7 +30,10 @@ Password input is disabled until code verification succeeds. Login is disabled u
 - `tests/ui/login-ui.spec.ts` verifies iframe restrictions, field state, and request order.
 - `tests/ui/navigation-workflow.spec.ts` verifies tabs, device detail, draft/focus preservation, delayed responses, and command results.
 - `tests/ui/appearance.spec.ts` and `tests/ui/accessibility.spec.ts` cover two languages, two themes, responsive layout, and keyboard access.
+- `tests/ui/meter-table.spec.ts` covers the illustrative reference row, observed-model picker, unit conversion labels, profile validation, draft preservation, and horizontal table navigation.
 
 ## 3.0 beta customer settings
 
 Device settings use stable device identifiers. Drafts, focus, and selection survive status updates and tab/detail navigation; saved changes apply only after the relevant server response. Scope edits require the server's current account and edit token, and old account responses cannot replace the current view. Host language and lighting mode select Korean/English and light/dark presentation. Help holds connection diagnostics and advanced meter setup. Cache presence is never described as completed pairing. Expert meter editing and form editing share one saved value. UI controls use the runtime command channel and distinguish an acknowledged command from confirmed physical behavior. See the beta guide for supported remote buttons and platform limits.
+
+Advanced meter profiles use one table row per exact model name. The first, italic reference row contains hypothetical conversions and is never submitted. Observed model choices come from the current account's in-scope diagnostics; selecting a model does not infer metering support or calibration. Users can also enter a model manually. Each configured source field needs a positive finite multiplier to produce W, V, A, or cumulative Wh. A visible range control stays synchronized with the table's native horizontal scroll position so navigation remains available on platforms that hide overlay scrollbars.

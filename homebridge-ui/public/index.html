@@ -263,8 +263,12 @@
     background: var(--hej-panel);
     border: 1px solid var(--hej-border);
     border-radius: 8px;
+    box-sizing: border-box;
+    min-width: 0;
     padding: 22px;
   }
+
+  #meterHelpSection, #meterHelpMount, #meterDetails { box-sizing: border-box; min-width: 0; width: 100%; }
 
   .hej-upgrade-warning {
     background: #2f2a1f;
@@ -544,6 +548,23 @@
     grid-template-columns: repeat(3, minmax(110px, 1fr));
   }
 
+  .hej-meter-scroll { border: 1px solid var(--hej-border); border-radius: 8px; max-width: 100%; overflow-x: auto;
+    scrollbar-color: var(--hej-muted) var(--hej-card); scrollbar-width: auto; }
+  .hej-meter-table { border-collapse: collapse; min-width: 1550px; table-layout: fixed; width: 100%; }
+  .hej-meter-table th, .hej-meter-table td { border-bottom: 1px solid var(--hej-border); padding: 10px 8px;
+    text-align: left; vertical-align: top; width: 150px; }
+  .hej-meter-table th:first-child, .hej-meter-table td:first-child { min-width: 230px; width: 230px; }
+  .hej-meter-table th:last-child, .hej-meter-table td:last-child { width: 100px; }
+  .hej-meter-table th { background: var(--hej-card); color: var(--hej-text); font-size: 13px; line-height: 1.35; }
+  .hej-meter-table td label { color: var(--hej-muted); display: grid; font-size: 12px; gap: 5px; }
+  .hej-meter-table input, .hej-meter-table select { background: var(--hej-panel); border: 1px solid var(--hej-border);
+    border-radius: 5px; color: var(--hej-text); min-height: 44px; min-width: 0; padding: 6px; width: 100%; }
+  .hej-meter-example { color: var(--hej-muted); font-style: italic; }
+  .hej-meter-example td { overflow-wrap: anywhere; }
+  .hej-meter-range-label { color: var(--hej-muted); display: grid; font-size: 13px; font-weight: 700;
+    gap: 4px; margin: 12px 0; }
+  #meterScrollRange { accent-color: #07845d; cursor: ew-resize; min-height: 44px; width: 100%; }
+
   .hej-device-note { width: 100%; }
 
   [hidden] { display: none !important; }
@@ -713,7 +734,7 @@
       <p id="helpConnectionSummary" class="hej-muted"></p></section>
     <section class="hej-section"><h2>문제 신고용 정보</h2><p class="hej-muted">개인 정보 없는 진단 내용을 확인하고 필요할 때만 직접 공유하세요.</p>
       <div id="helpDiagnosticsMount"></div></section>
-    <section id="meterHelpSection" class="hej-section"><h2>전력 측정 고급 설정</h2><p class="hej-muted">측정 단위가 확인된 모델에만 설정하세요.</p>
+    <section id="meterHelpSection" class="hej-section"><h2>전력 측정 고급 설정</h2>
       <div id="meterHelpMount"></div><button id="saveMeters" class="hej-action secondary" type="button">전력 측정 설정 저장</button>
       <p id="meterStatus" class="hej-status" role="status"></p></section>
   </section>
@@ -763,14 +784,31 @@
       Home 앱에서도 적응형 조명을 켜야 합니다. 클라우드에 주기적으로 명령을 전송합니다.</p>
     <details id="meterDetails">
       <summary>고급: 전력 측정 모델 설정</summary>
-      <p class="hej-muted">확인된 모델명과 원본 필드의 단위 배율만 입력하세요.
-        power는 W, current는 A, voltage는 V, energy는 누적 Wh 기준입니다.
-        측정되지 않은 값은 추정하지 않습니다.</p>
-      <div id="meterRows" class="hej-list"></div>
+      <p class="hej-muted" id="meterExampleIntro">첫 줄은 가상 참고 예시이며 저장되지 않습니다. 원본값 × 배율로 W·V·A·Wh를 계산합니다. 단위가 확인된 경우에만 입력하세요.</p>
+      <p class="hej-muted" id="meterModelScope">모델을 선택해도 측정 기능이나 배율은 확인되지 않습니다. 이 설정은 같은 모델에서 지원되는 측정 항목에만 사용됩니다.</p>
+      <p class="hej-muted" id="meterScrollHint">표가 넓습니다. 아래 가로 이동 막대를 움직여 전압·전류·누적 전력량을 확인하세요.</p>
+      <div id="meterTableScroll" data-testid="meter-table-scroll" class="hej-meter-scroll" tabindex="0" aria-label="전력 측정 설정 표 가로 스크롤">
+        <table id="meterTable" data-testid="meter-table" class="hej-meter-table">
+          <thead><tr>
+            <th scope="col">모델</th>
+            <th scope="col">전력 원본 항목 이름</th><th scope="col">전력 배율 → W</th>
+            <th scope="col">전압 원본 항목 이름</th><th scope="col">전압 배율 → V</th>
+            <th scope="col">전류 원본 항목 이름</th><th scope="col">전류 배율 → A</th>
+            <th scope="col">누적 원본 항목 이름</th><th scope="col">누적 배율 → Wh</th>
+            <th scope="col">행 삭제</th>
+          </tr></thead>
+          <tbody id="meterRows"></tbody>
+        </table>
+      </div>
+      <label class="hej-meter-range-label" for="meterScrollRange">표 가로 이동
+        <input id="meterScrollRange" type="range" min="0" max="0" value="0" aria-controls="meterTableScroll">
+      </label>
       <button class="hej-action secondary" id="addMeter" type="button">측정 모델 추가</button>
       <details><summary>전문가용 원본 설정</summary>
         <label for="meterProfiles">원본 설정</label>
         <textarea id="meterProfiles" class="form-control" rows="6" spellcheck="false">[]</textarea>
+        <p id="meterRawHint" class="hej-muted is-hidden">원본을 편집하는 동안 표 입력을 잠갔습니다. 표에서 계속 편집하려면 원본을 표에 적용하세요.</p>
+        <button id="applyMeterRaw" class="hej-action secondary is-hidden" type="button">원본을 표에 적용</button>
       </details>
     </details>
     <div class="hej-actions"><button type="button" id="saveFeatures" class="hej-action secondary">베타 기능 저장</button></div>
@@ -904,6 +942,20 @@
       '전력 측정 고급 설정': 'Advanced power meter settings',
       '측정 단위가 확인된 모델에만 설정하세요.': 'Configure only models with confirmed units.',
       '전력 측정 설정 저장': 'Save power meter settings',
+      '첫 줄은 가상 참고 예시이며 저장되지 않습니다. 원본값 × 배율로 W·V·A·Wh를 계산합니다. 단위가 확인된 경우에만 입력하세요.':
+        'The first row is a fictional example and is never saved. Raw value × factor gives W, V, A, or Wh. Enter values only when their units are confirmed.',
+      '모델을 선택해도 측정 기능이나 배율은 확인되지 않습니다. 이 설정은 같은 모델에서 지원되는 측정 항목에만 사용됩니다.':
+        'Choosing a model does not confirm its meter fields or factors. Settings are used only for supported measurements on devices with that model name.',
+      '표가 넓습니다. 아래 가로 이동 막대를 움직여 전압·전류·누적 전력량을 확인하세요.':
+        'This table is wide. Use the slider below to reach voltage, current, and total energy.',
+      '표 가로 이동': 'Scroll table horizontally', '모델': 'Model', '행 삭제': 'Remove row',
+      '원본을 편집하는 동안 표 입력을 잠갔습니다. 표에서 계속 편집하려면 원본을 표에 적용하세요.':
+        'Table fields are locked while editing raw settings. Apply the raw settings to continue editing the table.',
+      '원본을 표에 적용': 'Apply raw settings to table',
+      '전력 원본 항목 이름': 'Power source field name', '전력 배율 → W': 'Power factor → W',
+      '전압 원본 항목 이름': 'Voltage source field name', '전압 배율 → V': 'Voltage factor → V',
+      '전류 원본 항목 이름': 'Current source field name', '전류 배율 → A': 'Current factor → A',
+      '누적 원본 항목 이름': 'Total energy source field name', '누적 배율 → Wh': 'Total energy factor → Wh',
       'Apple Home는 기본 연결입니다. Matter를 켠 뒤 해당 브리지의 QR로 다른 앱에 연결해 주세요.': 'Apple Home is the default connection. Turn on Matter, then use the bridge QR code to connect other apps.',
       '단위가 확인된 모델의 측정값만 설정합니다. 자세한 안내는 아래에 있습니다.': 'Configure measurements only for models with confirmed units. More guidance is below.',
       '연결할 앱': 'Connected apps', '조명 색 자동 조절': 'Automatic light color',
@@ -929,6 +981,7 @@
       translateStaticText();
       document.querySelector('.hej-tabs').setAttribute('aria-label', tr('설정 화면', 'Settings screens'));
       document.getElementById('deviceFilter').setAttribute('aria-label', tr('장치 필터', 'Device filter'));
+      document.getElementById('meterTableScroll').setAttribute('aria-label', tr('전력 측정 설정 표 가로 스크롤', 'Scroll meter settings table'));
       await updateTheme();
     }
     async function updateTheme() {
@@ -1100,8 +1153,6 @@
     connections.append(lighting);
     const featureLead = featureSection.querySelector('.hej-muted');
     if (featureLead) featureLead.textContent = 'Apple Home는 기본 연결입니다. Matter를 켠 뒤 해당 브리지의 QR로 다른 앱에 연결해 주세요.';
-    const meterDescription = document.querySelector('#meterDetails > p');
-    if (meterDescription) meterDescription.textContent = '단위가 확인된 모델의 측정값만 설정합니다. 자세한 안내는 아래에 있습니다.';
     document.getElementById('autoLogin').closest('label').classList.add('is-hidden');
     document.getElementById('saveFeatures').textContent = '연결할 앱 저장';
     document.getElementById('meterHelpMount').append(document.getElementById('meterDetails'));
@@ -1124,6 +1175,7 @@
       tabPanels[position].hidden = position !== index;
     });
     if (focus) tabButtons[index].focus();
+    if (index === 2) requestAnimationFrame(updateMeterScrollRange);
     window.homebridge?.fixScrollHeight?.();
   }
 
@@ -1338,7 +1390,8 @@
       const saved = await requestWithTimeout('/save-features', { features }, 15000, label);
       if (uiSessionRevision !== ownerRevision) return;
       if (currentStatus) currentStatus.features = { ...(currentStatus.features ?? {}), ...(saved.features ?? features) };
-      if (Array.isArray(features.meters) && document.getElementById('meterProfiles').value === meterDraftAtSave) {
+      if (Array.isArray(features.meters) && featureEdits.meters === submittedEdit.meters
+        && document.getElementById('meterProfiles').value === meterDraftAtSave) {
         renderMeterRows(saved.features?.meters ?? features.meters);
         document.getElementById('meterProfiles').value = JSON.stringify(saved.features?.meters ?? features.meters, null, 2);
       }
@@ -1371,89 +1424,253 @@
     try {
       return saveFeaturePatch({ meters: readMeterRows() }, button, status,
         tr('전력 측정 설정 저장', 'Save power meter settings'));
-    } catch {
-      status.textContent = tr('전력 측정 설정을 확인해 주세요.', 'Check the power meter settings.');
+    } catch (error) {
+      status.textContent = error instanceof SyntaxError
+        ? tr('원본 설정 형식을 확인해 주세요.', 'Check the raw settings format.')
+        : error.message;
       status.classList.add('is-visible');
     }
   });
 
+  const meterKinds = [
+    ['power', '전력', 'Power', 'W', 'curPower', '0.1'],
+    ['voltage', '전압', 'Voltage', 'V', 'curVoltage', '0.1'],
+    ['current', '전류', 'Current', 'A', 'curCurrent', '0.001'],
+    ['energy', '누적 전력량', 'Total energy', 'Wh', 'totalWh', '1'],
+  ];
+  const meterScroll = document.getElementById('meterTableScroll');
+  const meterScrollRange = document.getElementById('meterScrollRange');
+  function updateMeterScrollRange() {
+    const maximum = Math.max(0, meterScroll.scrollWidth - meterScroll.clientWidth);
+    meterScrollRange.max = String(maximum);
+    meterScrollRange.value = String(Math.min(maximum, meterScroll.scrollLeft));
+    meterScrollRange.disabled = maximum === 0;
+  }
+  meterScroll.addEventListener('scroll', updateMeterScrollRange);
+  meterScrollRange.addEventListener('input', () => { meterScroll.scrollLeft = Number(meterScrollRange.value); });
+  window.addEventListener('resize', updateMeterScrollRange);
+  document.getElementById('meterDetails').addEventListener('toggle', () => requestAnimationFrame(updateMeterScrollRange));
+
+  function observedMeterModels() {
+    const models = new Map();
+    for (const device of currentDiagnostics?.devices ?? []) {
+      if (device.inScope && typeof device.modelName === 'string' && device.modelName.trim()
+        && !models.has(device.modelName)) models.set(device.modelName, device.name);
+    }
+    return models;
+  }
+
+  function refreshMeterModelChoices() {
+    const models = observedMeterModels();
+    const signature = JSON.stringify([...models]);
+    for (const select of document.querySelectorAll('[data-meter-model-choice]')) {
+      if (select.dataset.modelOptions === signature) continue;
+      const selected = select.value;
+      select.replaceChildren(option('', tr('직접 입력', 'Enter manually')));
+      for (const [modelName, deviceName] of models) select.append(option(modelName, `${deviceName} · ${modelName}`));
+      select.value = models.has(selected) ? selected : '';
+      select.dataset.modelOptions = signature;
+    }
+  }
+
+  function appendMeterRow(profile = {}) {
+    const row = document.createElement('tr');
+    row.dataset.testid = 'meter-row';
+    const modelCell = document.createElement('td');
+    const modelChoice = document.createElement('select');
+    modelChoice.dataset.meterModelChoice = 'true';
+    modelChoice.setAttribute('aria-label', tr('모델 선택', 'Select model'));
+    const model = document.createElement('input');
+    model.dataset.meterModel = 'true';
+    model.value = profile.model ?? '';
+    model.placeholder = tr('확인된 모델명 입력', 'Enter confirmed model name');
+    const modelLabel = document.createElement('label');
+    modelLabel.textContent = tr('모델명', 'Model name');
+    modelLabel.append(model);
+    modelChoice.addEventListener('change', () => {
+      if (modelChoice.value) {
+        model.value = modelChoice.value;
+        row.dataset.observedModel = modelChoice.value;
+      } else {
+        delete row.dataset.observedModel;
+      }
+      meterSourceMode = 'form'; markFeatureDraft('meters');
+      syncMeterRawFromForm();
+    });
+    model.addEventListener('input', () => { delete row.dataset.observedModel; modelChoice.value = ''; });
+    modelCell.append(modelChoice, modelLabel);
+    row.append(modelCell);
+    for (const [kind, ko, en, unit, fieldExample, factorExample] of meterKinds) {
+      const fieldCell = document.createElement('td');
+      const fieldLabel = document.createElement('label');
+      fieldLabel.textContent = tr(`${ko} 원본 항목 이름`, `${en} source field name`);
+      const field = document.createElement('input');
+      field.dataset.meterField = kind;
+      field.value = profile[kind]?.field ?? '';
+      field.placeholder = fieldExample;
+      fieldLabel.append(field); fieldCell.append(fieldLabel);
+      const multiplierCell = document.createElement('td');
+      const multiplierLabel = document.createElement('label');
+      multiplierLabel.textContent = tr(`${ko} 배율 → ${unit}`, `${en} factor → ${unit}`);
+      const multiplier = document.createElement('input');
+      multiplier.type = 'number'; multiplier.step = 'any'; multiplier.min = '0';
+      multiplier.dataset.meterMultiplier = kind;
+      multiplier.value = profile[kind]?.multiplier ?? '';
+      multiplier.placeholder = factorExample;
+      multiplierLabel.append(multiplier); multiplierCell.append(multiplierLabel);
+      row.append(fieldCell, multiplierCell);
+    }
+    const removeCell = document.createElement('td');
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'hej-action secondary';
+    remove.textContent = tr('이 모델 삭제', 'Remove model');
+    remove.addEventListener('click', () => {
+      const focusedNext = row.nextElementSibling?.querySelector('input,button')
+        ?? row.previousElementSibling?.querySelector('input,button')
+        ?? document.getElementById('addMeter');
+      row.remove(); meterSourceMode = 'form'; markFeatureDraft('meters');
+      syncMeterRawFromForm();
+      focusedNext?.focus({ preventScroll: true }); updateMeterScrollRange();
+    });
+    removeCell.append(remove); row.append(removeCell);
+    document.getElementById('meterRows').append(row);
+    refreshMeterModelChoices();
+    modelChoice.value = observedMeterModels().has(model.value) ? model.value : '';
+    if (modelChoice.value) row.dataset.observedModel = modelChoice.value;
+    updateMeterScrollRange();
+    return row;
+  }
+
   function renderMeterRows(profiles) {
     const container = document.getElementById('meterRows');
     container.replaceChildren();
-    for (const profile of profiles) {
-      const row = document.createElement('div');
-      row.className = 'hej-list-item hej-meter-grid';
-      const model = document.createElement('input');
-      model.dataset.meterModel = 'true';
-      model.value = profile.model ?? '';
-      const modelLabel = document.createElement('label');
-      modelLabel.textContent = tr('모델명', 'Model name');
-      modelLabel.append(model);
-      row.append(modelLabel);
-      for (const [kind, label] of Object.entries({ power: tr('전력', 'Power'), voltage: tr('전압', 'Voltage'),
-        current: tr('전류', 'Current'), energy: tr('누적 전력량', 'Total energy') })) {
-        const fieldLabel = document.createElement('label');
-        fieldLabel.textContent = `${label} · ${tr('원본 항목', 'Source field')}`;
-        const field = document.createElement('input');
-        field.dataset.meterField = kind;
-        field.value = profile[kind]?.field ?? '';
-        fieldLabel.append(field);
-        const multiplierLabel = document.createElement('label');
-        multiplierLabel.textContent = `${label} · ${tr('단위 배율', 'Unit multiplier')}`;
-        const multiplier = document.createElement('input');
-        multiplier.type = 'number'; multiplier.step = 'any'; multiplier.min = '0';
-        multiplier.dataset.meterMultiplier = kind;
-        multiplier.value = profile[kind]?.multiplier ?? '';
-        multiplierLabel.append(multiplier);
-        row.append(fieldLabel, multiplierLabel);
-      }
-      const remove = document.createElement('button');
-      remove.type = 'button'; remove.className = 'hej-action secondary';
-      remove.textContent = tr('이 모델 삭제', 'Remove model');
-      remove.addEventListener('click', () => {
-        row.remove();
-        meterSourceMode = 'form';
-        markFeatureDraft('meters');
-      });
-      row.append(remove);
-      container.append(row);
+    const sample = document.createElement('tr');
+    sample.dataset.testid = 'meter-example-row'; sample.className = 'hej-meter-example';
+    const values = [tr('예시 전력 측정 플러그(가상) · 저장 안 됨', 'Example metering plug (fictional) · not saved'),
+      'curPower · 2200', '0.1 → 220 W', 'curVoltage · 2200', '0.1 → 220 V',
+      'curCurrent · 1000', '0.001 → 1 A', 'totalWh · 1250', '1 → 1250 Wh (1.25 kWh)', '—'];
+    for (const value of values) {
+      const cell = document.createElement('td'); cell.textContent = value; sample.append(cell);
     }
+    container.append(sample);
+    for (const profile of profiles) appendMeterRow(profile);
     meterSourceMode = 'form';
+    setMeterTableLocked(false);
+    requestAnimationFrame(updateMeterScrollRange);
   }
 
-  document.getElementById('meterProfiles').addEventListener('change', () => {
-    if (meterSourceMode !== 'raw') return;
-    // Keep the Save button in place while the textarea loses focus.
-    // The form is synchronized after the save response.
-  });
+  function setMeterTableLocked(locked) {
+    for (const control of document.querySelectorAll('#meterRows [data-testid="meter-row"] input, #meterRows [data-testid="meter-row"] select, #meterRows [data-testid="meter-row"] button')) {
+      control.disabled = locked;
+    }
+    document.getElementById('meterRawHint').classList.toggle('is-hidden', !locked);
+    document.getElementById('applyMeterRaw').classList.toggle('is-hidden', !locked);
+  }
 
-  function readMeterRows() {
-    const rows = [...document.querySelectorAll('#meterRows .hej-meter-grid')];
-    if (meterSourceMode === 'raw') {
-      return JSON.parse(document.getElementById('meterProfiles').value);
-    }
-    if (rows.length === 0) {
-      document.getElementById('meterProfiles').value = '[]';
-      return [];
-    }
-    const profiles = rows.map((row) => {
-      const profile = { model: row.querySelector('[data-meter-model]').value.trim() };
+  function serializeMeterRowsDraft() {
+    const rows = [...document.querySelectorAll('[data-testid="meter-row"]')];
+    return rows.map((row) => {
+      const typedModel = row.querySelector('[data-meter-model]').value;
+      const profile = { model: row.dataset.observedModel === typedModel ? typedModel : typedModel.trim() };
       for (const kind of ['power', 'voltage', 'current', 'energy']) {
         const field = row.querySelector(`[data-meter-field="${kind}"]`).value.trim();
         const rawMultiplier = row.querySelector(`[data-meter-multiplier="${kind}"]`).value;
-        if (field || rawMultiplier) profile[kind] = { field, multiplier: Number(rawMultiplier) };
+        if (field || rawMultiplier) profile[kind] = { field, multiplier: rawMultiplier ? Number(rawMultiplier) : null };
       }
       return profile;
     });
+  }
+
+  function syncMeterRawFromForm() {
+    if (meterSourceMode === 'form') {
+      document.getElementById('meterProfiles').value = JSON.stringify(serializeMeterRowsDraft(), null, 2);
+    }
+  }
+
+  function readMeterRows() {
+    if (meterSourceMode === 'raw') {
+      const profiles = JSON.parse(document.getElementById('meterProfiles').value);
+      validateMeterProfiles(profiles);
+      return profiles;
+    }
+    const profiles = serializeMeterRowsDraft();
+    validateMeterProfiles(profiles);
     document.getElementById('meterProfiles').value = JSON.stringify(profiles, null, 2);
     return profiles;
   }
 
-  document.getElementById('meterProfiles').addEventListener('input', () => { meterSourceMode = 'raw'; });
-  document.getElementById('meterRows').addEventListener('input', () => { meterSourceMode = 'form'; });
+  function validateMeterProfiles(profiles) {
+    if (!Array.isArray(profiles)) throw new Error(tr('측정 모델 목록을 확인해 주세요.', 'Check the meter model list.'));
+    const known = new Set();
+    const reserved = new Set(['brightness', 'lightMode', 'hsvColor', 'sceneValues', 'temperature', 'humidity',
+      'pm25', 'battery', 'motionDetected', 'lastMotionAt', 'state', 'doorOpened', 'alarm', 'alarmSwitch',
+      'percentState', 'percentControl', 'control', 'workState', 'fanSpeed', 'mode', 'action', 'event',
+      'button', 'buttonEvent', 'gesture']);
+    for (const [index, profile] of profiles.entries()) {
+      const number = index + 1;
+      if (!profile || typeof profile.model !== 'string' || !profile.model.trim() || known.has(profile.model)) {
+        throw new Error(tr(`${number}행: 모델명을 입력하고 중복 모델을 지워 주세요.`,
+          `Row ${number}: enter a unique model name.`));
+      }
+      known.add(profile.model);
+      let measurements = 0;
+      for (const [kind, ko, en, unit] of meterKinds) {
+        const pair = profile[kind];
+        if (pair === undefined) continue;
+        if (!pair || typeof pair.field !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(pair.field)
+          || /^power\d*$/.test(pair.field) || reserved.has(pair.field)
+          || typeof pair.multiplier !== 'number' || !Number.isFinite(pair.multiplier) || pair.multiplier <= 0) {
+          throw new Error(tr(`${number}행 ${ko}(${unit}): 원본 항목 이름과 0보다 큰 배율을 함께 입력해 주세요.`,
+            `Row ${number} ${en} (${unit}): enter a source field name and a positive factor together.`));
+        }
+        measurements++;
+      }
+      if (!measurements) throw new Error(tr(`${number}행: 측정 항목을 하나 이상 입력해 주세요.`,
+        `Row ${number}: enter at least one measurement.`));
+    }
+  }
+
+  const meterProfilesInput = document.getElementById('meterProfiles');
+  meterProfilesInput.closest('details').addEventListener('toggle', (event) => {
+    if (event.target.open && meterSourceMode === 'form') {
+      meterProfilesInput.value = JSON.stringify(serializeMeterRowsDraft(), null, 2);
+    }
+  });
+  meterProfilesInput.addEventListener('input', () => {
+    meterSourceMode = 'raw';
+    setMeterTableLocked(true);
+  });
+  document.getElementById('applyMeterRaw').addEventListener('click', () => {
+    try {
+      renderMeterRows(readMeterRows());
+      document.getElementById('meterStatus').classList.remove('is-visible');
+    } catch (error) {
+      const status = document.getElementById('meterStatus');
+      status.textContent = error instanceof SyntaxError
+        ? tr('원본 설정 형식을 확인해 주세요.', 'Check the raw settings format.') : error.message;
+      status.classList.add('is-visible');
+    }
+  });
+  document.getElementById('meterRows').addEventListener('input', () => {
+    meterSourceMode = 'form';
+    syncMeterRawFromForm();
+  });
 
   document.getElementById('addMeter').addEventListener('click', () => {
-    renderMeterRows([...readMeterRows(), { model: '' }]);
+    if (meterSourceMode === 'raw') {
+      try {
+        renderMeterRows(readMeterRows());
+      } catch (error) {
+        const status = document.getElementById('meterStatus');
+        status.textContent = error instanceof SyntaxError
+          ? tr('원본 설정 형식을 확인해 주세요.', 'Check the raw settings format.') : error.message;
+        status.classList.add('is-visible');
+        return;
+      }
+    }
+    const row = appendMeterRow();
+    syncMeterRawFromForm();
+    row.querySelector('[data-meter-model]')?.focus({ preventScroll: true });
     markFeatureDraft('meters');
   });
 
@@ -1969,6 +2186,7 @@
       if (!applySessionRevision(diagnostics.uiSessionRevision)) return;
       closeStalledSettings.classList.add('is-hidden');
       currentDiagnostics = diagnostics;
+      refreshMeterModelChoices();
       currentHapCache = cacheIds(hapCache, 'hap');
       currentMatterCache = cacheIds(matterCache, 'matter');
       renderDiagnostics(diagnostics, currentHapCache, currentMatterCache);
