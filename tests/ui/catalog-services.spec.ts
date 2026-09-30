@@ -16,6 +16,8 @@ for (const language of ['ko', 'en']) {
                 { deviceType: 'IrFan', label: 'IR 선풍기', homeKitServices: ['Fan', 'Switch'], supportStatus: 'partial' },
                 { deviceType: 'SensorTh', label: '온습도 센서',
                   homeKitServices: ['TemperatureSensor', 'HumiditySensor', 'BatteryService'], supportStatus: 'supported' },
+                { deviceType: 'ZigbeeDoorlock', label: '도어락 문 열림',
+                  homeKitServices: ['ContactSensor'], supportStatus: 'partial' },
               ] };
           }
           if (route === '/diagnostics') {
@@ -37,5 +39,8 @@ for (const language of ['ko', 'en']) {
     await expect(list).toContainText(language === 'en'
       ? 'Temperature sensor + Humidity sensor + Battery'
       : '온도 센서 + 습도 센서 + 배터리');
+    await expect(list).toContainText(language === 'en'
+      ? 'Lock status and lock or unlock controls are unavailable.'
+      : '잠금 상태 확인이나 잠금·해제 조작은 할 수 없습니다.');
   });
 }

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 import type { HejSession } from '../types.js';
 
@@ -55,4 +56,12 @@ export class SessionStore {
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
+}
+
+
+/** Internal ownership marker; callers must not expose it in UI or diagnostic exports. */
+export function sessionFingerprint(session: HejSession): string {
+  return createHash('sha256').update(JSON.stringify([
+    session.identifier, session.accessToken, session.jsessionId, session.usernameCookie, session.expiresAt, session.autoLogin,
+  ])).digest('hex');
 }

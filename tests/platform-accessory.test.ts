@@ -161,6 +161,28 @@ describe('HejhomePlatformAccessory', () => {
     await expect(accessory.service('WindowCovering')?.characteristic('PositionState').getValue()).rejects.toThrow('HAP status -70402');
   });
 
+  test('outlet load follows the per-device freshness override through the shared policy', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const platform = createPlatformMock();
+      Object.assign(platform, { features: { devices: { 'device-1': { freshnessMinutes: 10 } },
+        meters: [{ model: 'calibrated', power: { field: 'curPower', multiplier: 1 } }] } });
+      const accessory = createAccessoryMock('콘센트', 'outlet', platform);
+      const handler = new HejhomePlatformAccessory(platform, accessory,
+        deviceFixture({ deviceType: 'Plug', modelName: 'calibrated', deviceState: { power: true } }), null);
+      handler.observeExternal({ curPower: 3 });
+      const load = accessory.service('Outlet')!.characteristic('OutletInUse');
+      vi.setSystemTime(599999);
+      await expect(load.getValue()).resolves.toBe(true);
+      vi.setSystemTime(600000);
+      await expect(load.getValue()).rejects.toThrow('HAP status -70402');
+      handler.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('uses fresh calibrated load independently of relay power', async () => {
     const platform = createPlatformMock();
     Object.assign(platform, { features: { meters: [{ model: 'calibrated', power: { field: 'curPower', multiplier: 1 } }] } });
@@ -263,6 +285,125 @@ describe('HejhomePlatformAccessory', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  test('a newly reported scene replaces queued manual brightness but a same-mode echo does not', async () => {
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('RGBW', 'rgbw', platform);
+      const client = createClientMock();
+      const device = deviceFixture({ deviceType: 'LightRgbw5', deviceState: { power: true, lightMode: 'WHITE', brightness: 50 } });
+      const handler = new HejhomePlatformAccessory(platform, accessory, device, client);
+      const brightness = accessory.service('Lightbulb')!.characteristic('Brightness');
+      await brightness.setValue(70);
+      handler.observeExternal({ lightMode: 'SCENE' });
+      handler.updateDevice({ ...device, deviceState: { ...device.deviceState, lightMode: 'SCENE' } });
+      await vi.advanceTimersByTimeAsync(400);
+      expect(client.controlDevice).not.toHaveBeenCalled();
+      handler.updateDevice(device);
+      await brightness.setValue(80);
+      handler.observeExternal({ lightMode: 'WHITE', sceneValues: 'inactive-recipe' });
+      await vi.advanceTimersByTimeAsync(400);
+      expect(client.controlDevice).toHaveBeenCalledExactlyOnceWith('device-1', { brightness: 80 });
+      handler.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('coalesces concurrent color writes across one mode transition without losing hue or saturation', async () => {
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('RGBW', 'rgbw', platform);
+      const client = createClientMock();
+      const device = deviceFixture({ deviceType: 'LightRgbw5',
+        deviceState: { power: true, lightMode: 'WHITE', brightness: 64, hsvColor: { hue: 10, saturation: 50, brightness: 20 } } });
+      const handler = new HejhomePlatformAccessory(platform, accessory, device, client);
+      const light = accessory.service('Lightbulb')!;
+      await Promise.all([light.characteristic('Hue').setValue(240), light.characteristic('Saturation').setValue(75)]);
+      await vi.advanceTimersByTimeAsync(400);
+      expect(client.controlDevice).toHaveBeenCalledTimes(2);
+      expect(client.controlDevice).toHaveBeenLastCalledWith('device-1', { hsvColor: { hue: 240, saturation: 75, brightness: 64 } });
+      handler.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('leaves a reported scene before manual brightness and keeps brightness across white selection', async () => {
+    vi.useFakeTimers();
+    try {
+      const platform = createPlatformMock();
+      const accessory = createAccessoryMock('RGBW', 'rgbw', platform);
+      const client = createClientMock();
+      const device = deviceFixture({ deviceType: 'LightRgbw5',
+        deviceState: { power: true, lightMode: 'SCENE', brightness: 20, hsvColor: { hue: 120, saturation: 80, brightness: 70 } } });
+      const handler = new HejhomePlatformAccessory(platform, accessory, device, client);
+      const light = accessory.service('Lightbulb')!;
+      await light.characteristic('Brightness').setValue(65);
+      expect(client.controlDevice).toHaveBeenNthCalledWith(1, 'device-1', { lightMode: 'colour' });
+      await vi.advanceTimersByTimeAsync(400);
+      await light.characteristic('Saturation').setValue(0);
+      await vi.advanceTimersByTimeAsync(400);
+      expect(client.controlDevice).toHaveBeenLastCalledWith('device-1', { brightness: 65 });
+      await expect(light.characteristic('Brightness').getValue()).resolves.toBe(65);
+      handler.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('RGBW missing color values remain unknown rather than fabricating full brightness', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('RGBW', 'rgbw', platform);
+    const handler = new HejhomePlatformAccessory(platform, accessory,
+      deviceFixture({ deviceType: 'LightRgbw5', deviceState: { power: true } }), null);
+    const light = accessory.service('Lightbulb')!;
+    for (const characteristic of ['Brightness', 'Hue', 'Saturation']) {
+      await expect(light.characteristic(characteristic).getValue()).rejects.toThrow('HAP status -70402');
+    }
+    handler.dispose();
+  });
+
+  test('Airpurifier uses its documented power key even before the first power report', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('공기청정기', 'purifier', platform);
+    const client = createClientMock();
+    const handler = new HejhomePlatformAccessory(platform, accessory, deviceFixture({ deviceType: 'Airpurifier' }), client);
+    const power = accessory.service('Switch')!.characteristic('On');
+    await expect(power.getValue()).rejects.toThrow('HAP status -70402');
+    await power.setValue(true);
+    expect(client.controlDevice).toHaveBeenCalledExactlyOnceWith('device-1', { power: true });
+    handler.updateDevice(deviceFixture({ deviceType: 'Airpurifier', deviceState: { power: 'false' as never } }));
+    await expect(power.getValue()).resolves.toBe(false);
+    handler.dispose();
+  });
+
+  test('ZigbeeDoorlock trusts only the strict doorOpened field', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('도어락', 'doorlock', platform);
+    const device = deviceFixture({ deviceType: 'ZigbeeDoorlock', deviceState: { state: 'OPEN' } });
+    const handler = new HejhomePlatformAccessory(platform, accessory, device, null);
+    const contact = accessory.service('ContactSensor')!.characteristic('ContactSensorState');
+    await expect(contact.getValue()).rejects.toThrow('HAP status -70402');
+    handler.updateDevice({ ...device, deviceState: { state: 'OPEN', doorOpened: false } });
+    await expect(contact.getValue()).resolves.toBe(0);
+    handler.updateDevice({ ...device, deviceState: { doorOpened: true } });
+    await expect(contact.getValue()).resolves.toBe(1);
+    handler.dispose();
+  });
+
+  test('white light missing or invalid levels remain unknown', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('White', 'white', platform);
+    const handler = new HejhomePlatformAccessory(platform, accessory,
+      deviceFixture({ deviceType: 'LightWw3', deviceState: { power: true } }), null);
+    const light = accessory.service('Lightbulb')!;
+    await expect(light.characteristic('Brightness').getValue()).rejects.toThrow('HAP status -70402');
+    await expect(light.characteristic('ColorTemperature').getValue()).rejects.toThrow('HAP status -70402');
+    handler.dispose();
   });
 
   test('debounces rapid RGBW color brightness changes into one Hej request', async () => {

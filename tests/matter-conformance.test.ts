@@ -12,10 +12,14 @@ import { createMatterAccessory } from '../src/matter/accessory.js';
 import { MatterAdapter } from '../src/matter/adapter.js';
 
 const api = { deviceTypes, status: MatterStatus, uuid: { generate: () => 'device-test' } } as unknown as MatterAPI;
+const coreDeviceTypes = [
+  'RelayController', 'Switch3', 'PowerStrip', 'Plug', 'IrTv', 'Airpurifier', 'LightRgbw5', 'LightWw1', 'Curtain',
+  'SensorMo', 'SensorDo', 'ZigbeeDoorlock', 'SensorTh', 'SensorWater2', 'SensorSmoke3',
+];
+const pmLabelCases = [['hangul', '가'.repeat(32)], ['emoji', '😀'.repeat(20)]];
 
 describe('real Matter endpoint conformance', () => {
-  test.each(['RelayController', 'Switch3', 'PowerStrip', 'Plug', 'IrTv', 'LightRgbw5', 'LightWw1', 'Curtain',
-    'SensorMo', 'SensorDo', 'SensorTh', 'SensorWater2', 'SensorSmoke3'])('%s registers and restores on the installed host', async (deviceType) => {
+  test.each(coreDeviceTypes)('%s registers and restores on the installed host', async (deviceType) => {
     const environment = new Environment('hej-conformance', Environment.default);
     environment.set(StorageService, new MockStorageService(environment));
     const node = await ServerNode.create({ id: `test-${deviceType}`, environment });
@@ -24,7 +28,8 @@ describe('real Matter endpoint conformance', () => {
     try {
       const send = vi.fn().mockResolvedValue(undefined);
       const a = createMatterAccessory(api, () => ({ id: 'test', name: 'Device', deviceType, modelName: 'M1',
-        deviceState: { ...(deviceType === 'IrTv' ? { power: true } : {}), power1: true,
+        deviceState: { ...(['IrTv', 'Airpurifier'].includes(deviceType) ? { power: true } : {}),
+          ...(deviceType === 'ZigbeeDoorlock' ? { doorOpened: false } : {}), power1: true,
           battery: 40, temperature: 20, humidity: 50, alarm: false,
           lightMode: 'COLOUR', brightness: 50, hsvColor: { hue: 120, saturation: 60, brightness: 50 } } }), send,
       [{ model: 'M1', power: { field: 'curPower', multiplier: 1 }, energy: { field: 'total', multiplier: 1 } }])!;
@@ -204,6 +209,52 @@ describe('real Matter endpoint conformance', () => {
       };
       await new AccessoryManager().registerAccessory('homebridge-hejhome', 'Hejhome', accessory, deps);
       expect(accessories.get(accessory.UUID)?.endpoint?.lifecycle.isReady).toBe(true);
+    } finally {
+      await node.close();
+    }
+  });
+
+  test.each(pmLabelCases)('AirQualitySensor %s child keeps a valid PM2.5 label and nullable measurement', async (caseName, name) => {
+    const environment = new Environment(`hej-pm25-part-${caseName}`, Environment.default);
+    environment.set(StorageService, new MockStorageService(environment));
+    const node = await ServerNode.create({ id: `pm25-part-${caseName}`, environment });
+    const aggregator = new Endpoint(AggregatorEndpoint, { id: 'bridge' });
+    await node.add(aggregator);
+    try {
+      const purifier = (pm25: unknown) => ({ id: 'purifier', name, deviceType: 'Airpurifier',
+        deviceState: { power: true, pm25 } });
+      const accessory = createMatterAccessory(api, () => purifier(25), vi.fn(), [], undefined, 0.5)!;
+      expect(accessory).toBeTruthy();
+      expect(accessory.deviceType).toBe(deviceTypes.OnOffOutlet);
+      const accessories: AccessoryManagerDeps['accessories'] = new Map();
+      const deps: AccessoryManagerDeps = {
+        accessories, config: { externalAccessory: false } as AccessoryManagerDeps['config'],
+        behaviorRegistry: new BehaviorRegistry(accessories), registryManager: new RegistryManager(), accessoryCache: null,
+        getServerNode: () => node, getAggregator: () => aggregator, getIsRunning: () => false,
+        getMonitoringEnabled: () => false, isCommissioned: () => false,
+      };
+      const manager = new AccessoryManager();
+      await manager.registerAccessory('homebridge-hejhome', 'Hejhome', accessory, deps);
+      expect(accessories.get(accessory.UUID)?.endpoint?.parts.size).toBe(1);
+      expect(accessories.get(accessory.UUID)?._parts?.[0]?.id).toBe('air-quality');
+      expect(accessory.parts?.[0]?.displayName?.length).toBeLessThanOrEqual(64);
+      expect(accessory.parts?.[0]?.displayName?.endsWith(' PM2.5')).toBe(true);
+      const states = new StateManager(accessories, new EventEmitter(), () => false);
+      await states.updateAccessoryState(accessory.UUID, 'pm25ConcentrationMeasurement',
+        { measuredValue: null, measurementMedium: 0, measurementUnit: 4 }, 'air-quality');
+      expect(states.getAccessoryState(accessory.UUID, 'pm25ConcentrationMeasurement', 'air-quality')?.measuredValue).toBeNull();
+      const initialEndpoint = accessories.get(accessory.UUID)?.endpoint;
+      accessories.get(accessory.UUID)!._restoredFromCache = true;
+      const withoutPm = createMatterAccessory(api, () => purifier(null), vi.fn(), [])!;
+      await manager.registerAccessory('homebridge-hejhome', 'Hejhome', withoutPm, deps);
+      expect(withoutPm.UUID).toBe(accessory.UUID);
+      expect(accessories.get(accessory.UUID)?.endpoint?.parts.size).toBe(0);
+      expect(accessories.get(accessory.UUID)?.endpoint).not.toBe(initialEndpoint);
+      accessories.get(accessory.UUID)!._restoredFromCache = true;
+      const restoredPm = createMatterAccessory(api, () => purifier(30), vi.fn(), [], undefined, 0.5)!;
+      await manager.registerAccessory('homebridge-hejhome', 'Hejhome', restoredPm, deps);
+      expect(restoredPm.UUID).toBe(accessory.UUID);
+      expect(accessories.get(accessory.UUID)?._parts?.[0]?.id).toBe('air-quality');
     } finally {
       await node.close();
     }

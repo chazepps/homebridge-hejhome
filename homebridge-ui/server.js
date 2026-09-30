@@ -10,7 +10,7 @@ import { HejAuthClient } from '../dist/hej/auth.js';
 import { HejRestClient } from '../dist/hej/rest.js';
 import { DeviceSnapshotStore } from '../dist/storage/deviceSnapshotStore.js';
 import { LogStore } from '../dist/storage/logStore.js';
-import { SessionStore } from '../dist/storage/sessionStore.js';
+import { SessionStore, sessionFingerprint } from '../dist/storage/sessionStore.js';
 import {
   createDeviceSupportSummary,
   createUnsupportedDeviceIssueTemplate,
@@ -18,7 +18,7 @@ import {
 } from '../dist/utils/deviceSupport.js';
 import { sanitizeForLog } from '../dist/utils/redact.js';
 import { createSessionLogContext } from '../dist/utils/sessionDiagnostics.js';
-import { getDeviceCapability } from '../dist/devices/capabilities.js';
+import { getDeviceCapability, supportsDeviceRole } from '../dist/devices/capabilities.js';
 
 class HejhomeUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -33,13 +33,18 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     this.verifiedIdentifiers = new Set();
     this.configWrites = Promise.resolve();
     this.statusFile = path.join(this.homebridgeStoragePath, 'hejhome', 'runtime-status.json');
+    this.sessionFile = path.join(this.homebridgeStoragePath, 'hejhome', 'session.json');
     this.onStatusChanged = (current, previous) => {
       if (current.mtimeMs !== previous.mtimeMs) {
         this.pushEvent('hejhome-status-changed', { updated: true });
       }
     };
     watchFile(this.statusFile, { interval: 1500, persistent: false }, this.onStatusChanged);
-    process.once('exit', () => unwatchFile(this.statusFile, this.onStatusChanged));
+    watchFile(this.sessionFile, { interval: 1500, persistent: false }, this.onStatusChanged);
+    process.once('exit', () => {
+      unwatchFile(this.statusFile, this.onStatusChanged);
+      unwatchFile(this.sessionFile, this.onStatusChanged);
+    });
 
     this.onRequest('/send-verification', this.handleSendVerification.bind(this));
     this.onRequest('/verify-code', this.handleVerifyCode.bind(this));
@@ -53,6 +58,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     this.onRequest('/save-device-settings', this.handleSaveDeviceSettings.bind(this));
     this.onRequest('/remote-command', this.handleRemoteCommand.bind(this));
     this.onRequest('/air-conditioner-command', this.handleAirConditionerCommand.bind(this));
+    this.onRequest('/purifier-command', this.handlePurifierCommand.bind(this));
     this.onRequest('/ui-event', this.handleUiEvent.bind(this));
 
     this.log('ui-server.ready', {
@@ -111,7 +117,9 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       });
       this.log('login.session-created', createSessionLogContext(session));
       const saveStartedAt = performance.now();
+      await this.clearPreviousDeviceState();
       await this.sessionStore.save(session);
+      this.pushEvent('hejhome-status-changed', { updated: true });
       this.log('login.session-saved', {
         durationMs: elapsed(saveStartedAt),
         storageScope: 'homebridge-storage/hejhome/session.json',
@@ -128,6 +136,8 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
   async handleLogout() {
     return await this.timedRequest('logout', {}, async () => {
       await this.sessionStore.clear();
+      await this.clearPreviousDeviceState();
+      this.pushEvent('hejhome-status-changed', { updated: true });
       this.verifiedIdentifiers.clear();
       this.log('logout.session-cleared', {
         storageScope: 'homebridge-storage/hejhome/session.json',
@@ -138,8 +148,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleSessionStatus() {
     return await this.timedRequest('session-status', {}, async () => {
-      const session = await this.sessionStore.load();
-      const snapshot = await this.snapshotStore.load();
+      const { session, snapshot, owner } = await this.loadOwnedState();
       const platformConfig = await this.loadPlatformConfig();
       const scope = platformConfig.scope ?? { mode: 'first-family' };
       const deviceSummary = createDeviceSupportSummary(snapshot, scope);
@@ -160,8 +169,9 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       if (session?.accessToken) {
         const sessionContext = createSessionLogContext(session);
         const sessionCheckStartedAt = performance.now();
+        let restClient;
         try {
-          const restClient = new HejRestClient(session, {
+          restClient = new HejRestClient(session, {
             logger: (event) => this.log('rest.request', event),
             requestTimeoutMs: 8000,
           });
@@ -186,7 +196,12 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
             ...sessionContext,
             ...baseStatus,
           };
+        } finally {
+          restClient?.dispose?.();
         }
+      }
+      if (owner && !await this.isCurrentOwner(owner)) {
+        throw new Error('로그인 정보가 변경되었습니다. 다시 확인해 주세요.');
       }
       this.log('session-status.result', {
         configured: result.configured,
@@ -224,14 +239,13 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       const id = String(payload?.deviceId ?? '');
       const normalized = normalizeFeatures({ devices: { [id]: payload?.preference } });
       const preference = normalized.devices?.[id];
-      const snapshot = await this.snapshotStore.load();
+      const { snapshot, owner } = await this.loadOwnedState();
       const device = snapshot?.families.flatMap((family) => family.devices).find((item) => item.id === id);
       if (!device) {
         throw new Error('장비 목록에서 이 장비를 찾을 수 없습니다. 목록을 새로 확인해 주세요.');
       }
-      const capability = getDeviceCapability(device.deviceType);
       if (preference?.role && preference.role !== 'original'
-        && !['multi-switch', 'relay-switch', 'outlet'].includes(capability?.serviceKind)) {
+        && !supportsDeviceRole(device.deviceType)) {
         throw new Error('이 장비는 표시 형태 변경을 지원하지 않습니다.');
       }
       if (preference?.temperatureSensorId) {
@@ -242,8 +256,26 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
           throw new Error('선택한 온도계를 사용할 수 없습니다.');
         }
       }
-      const saved = await this.savePlatformPatch((platform) => {
+      if (preference?.remoteButtons !== undefined) {
+        if (!['IrTv', 'IrSettopbox', 'IrFan'].includes(device.deviceType)
+          || (preference.remoteButtons && ['hidden', 'matter'].includes(preference.visibility))) {
+          throw new Error('이 장치는 Apple Home 리모컨 버튼을 표시할 수 없습니다.');
+        }
+      }
+      if (preference?.pm25Multiplier !== undefined && device.deviceType !== 'Airpurifier') {
+        throw new Error('이 장치에는 PM2.5 보정을 사용할 수 없습니다.');
+      }
+      const saved = await this.savePlatformPatch(async (platform) => {
+        if (!owner || !await this.isCurrentOwner(owner)) {
+          throw new Error('로그인 정보가 변경되었습니다. 다시 확인해 주세요.');
+        }
         const previous = normalizeFeatures(platform.features);
+        if (preference?.freshnessMinutes !== undefined
+          && !['SensorTh', 'SensorTh2', 'SensorRefTh', 'SensorRefTh2'].includes(device.deviceType)
+          && !previous.meters.some((profile) => profile.model === device.modelName)
+          && !(device.deviceType === 'Airpurifier' && preference.pm25Multiplier !== undefined)) {
+          throw new Error('이 장치에는 측정값 유효 시간을 설정할 수 없습니다.');
+        }
         const devices = { ...previous.devices };
         if (Object.keys(preference ?? {}).length === 0) {
           delete devices[id];
@@ -258,10 +290,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleDiagnostics() {
     return await this.timedRequest('diagnostics', {}, async () => {
-      const [{ loadRuntimeStatus }, snapshot, platform] = await Promise.all([
-        import('../dist/runtime/status.js'), this.snapshotStore.load(), this.loadPlatformConfig(),
-      ]);
-      const runtime = await loadRuntimeStatus(this.homebridgeStoragePath);
+      const [{ snapshot, runtime }, platform] = await Promise.all([this.loadOwnedState(), this.loadPlatformConfig()]);
       const features = normalizeFeatures(platform.features);
       const runtimeDevices = new Map((runtime?.devices ?? []).map((device) => [device.id, device]));
       const scope = platform.scope ?? { mode: 'first-family' };
@@ -272,7 +301,6 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
         const inScope = scope.mode === 'all' || (scope.mode === 'custom'
           ? scope.includedFamilyIds?.includes(familyId) && (!roomIds || roomIds.includes(Number(device.roomId)))
           : familyIndex === 0);
-        const capability = getDeviceCapability(device.deviceType);
         return {
           id: device.id,
           name: features.devices?.[device.id]?.name ?? device.name,
@@ -283,12 +311,14 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
           lastControlAt: observed?.lastControlAt ?? null,
           lastControl: observed?.lastControl ?? 'unknown',
           temperatureCelsius: Number.isFinite(observed?.temperatureCelsius) ? observed.temperatureCelsius : null,
+          hvacSettings: device.deviceType === 'IrAirconditioner' ? normalizeHvacSettings(observed?.hvacSettings) : null,
+          purifierSettings: device.deviceType === 'Airpurifier' ? normalizePurifierSettings(observed?.purifierSettings) : null,
           homekit: observed?.homekit ?? false,
           matter: observed?.matter ?? false,
           meterProfileApplied: features.meters.some((profile) => profile.model === device.modelName),
           preference: features.devices?.[device.id] ?? {},
           inScope: Boolean(inScope),
-          roleChangeSupported: ['multi-switch', 'relay-switch', 'outlet'].includes(capability?.serviceKind),
+          roleChangeSupported: supportsDeviceRole(device.deviceType),
         };
       }));
       return {
@@ -328,6 +358,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleRemoteCommand(payload) {
     return await this.timedRequest('remote-command', {}, async () => {
+      await this.requireOwnedDevice(payload?.deviceId, ['IrTv', 'IrSettopbox', 'IrFan']);
       const { sendRuntimeCommand } = await import('../dist/runtime/commands.js');
       await sendRuntimeCommand(this.homebridgeStoragePath,
         { deviceId: String(payload?.deviceId ?? ''), kind: 'remote', command: payload?.command });
@@ -337,6 +368,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleAirConditionerCommand(payload) {
     return await this.timedRequest('air-conditioner-command', {}, async () => {
+      await this.requireOwnedDevice(payload?.deviceId, ['IrAirconditioner']);
       const { sendRuntimeCommand } = await import('../dist/runtime/commands.js');
       await sendRuntimeCommand(this.homebridgeStoragePath,
         { deviceId: String(payload?.deviceId ?? ''), kind: 'air-conditioner', command: payload?.command });
@@ -344,11 +376,21 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     }, '에어컨 명령을 보내지 못했습니다.');
   }
 
+  async handlePurifierCommand(payload) {
+    return await this.timedRequest('purifier-command', {}, async () => {
+      await this.requireOwnedDevice(payload?.deviceId, ['Airpurifier']);
+      const { sendRuntimeCommand } = await import('../dist/runtime/commands.js');
+      await sendRuntimeCommand(this.homebridgeStoragePath,
+        { deviceId: String(payload?.deviceId ?? ''), kind: 'purifier', command: payload?.command });
+      return { ok: true };
+    }, '공기청정기 명령을 보내지 못했습니다.');
+  }
+
   async handleSaveScope(payload) {
     return await this.timedRequest('scope.save', payload, async () => {
       const scope = normalizeScope(payload?.scope);
       await this.savePlatformScope(scope);
-      const snapshot = await this.snapshotStore.load();
+      const { snapshot } = await this.loadOwnedState();
       const deviceSummary = createDeviceSupportSummary(snapshot, scope);
       this.log('scope.save.persisted', {
         mode: scope.mode,
@@ -361,6 +403,44 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
         issueTemplate: createUnsupportedDeviceIssueTemplate(deviceSummary),
       };
     }, '집/방 설정 저장에 실패했습니다.');
+  }
+
+  async isCurrentOwner(owner) {
+    const current = await this.sessionStore.load();
+    return Boolean(current && sessionFingerprint(current) === owner);
+  }
+
+  async loadOwnedState() {
+    const session = await this.sessionStore.load();
+    const owner = session ? sessionFingerprint(session) : null;
+    const [snapshot, runtime] = await Promise.all([
+      this.snapshotStore.load(),
+      import('../dist/runtime/status.js').then(({ loadRuntimeStatus }) => loadRuntimeStatus(this.homebridgeStoragePath)),
+    ]);
+    if (!owner || !await this.isCurrentOwner(owner)) {
+      return { session: null, owner: null, snapshot: null, runtime: null };
+    }
+    return {
+      session, owner,
+      snapshot: snapshot?.ownerFingerprint === owner ? snapshot : null,
+      runtime: runtime?.ownerFingerprint === owner ? runtime : null,
+    };
+  }
+
+  async requireOwnedDevice(value, types) {
+    const id = String(value ?? '');
+    const { snapshot, owner } = await this.loadOwnedState();
+    const device = snapshot?.families.flatMap((entry) => entry.devices).find((entry) => entry.id === id);
+    if (!owner || !device || !types.includes(device.deviceType) || !await this.isCurrentOwner(owner)) {
+      throw new Error('현재 로그인에서 이 장치를 사용할 수 없습니다. 장치 목록을 다시 확인해 주세요.');
+    }
+    return device;
+  }
+
+  async clearPreviousDeviceState() {
+    await Promise.all([
+      fs.rm(this.snapshotStore.path, { force: true }), fs.rm(this.statusFile, { force: true }),
+    ]);
   }
 
   async loadPlatformConfig() {
@@ -383,7 +463,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     const platforms = Array.isArray(config.platforms) ? config.platforms : [];
     const platformIndex = platforms.findIndex((entry) => entry?.platform === 'Hejhome');
     const previous = platformIndex >= 0 ? platforms[platformIndex] : { name: 'Hejhome', platform: 'Hejhome' };
-    const nextPlatform = { ...previous, ...(typeof patch === 'function' ? patch(previous) : patch) };
+    const nextPlatform = { ...previous, ...(typeof patch === 'function' ? await patch(previous) : patch) };
     const nextPlatforms = platformIndex >= 0
       ? platforms.map((entry, index) => index === platformIndex ? nextPlatform : entry)
       : [...platforms, nextPlatform];
@@ -583,6 +663,25 @@ function toRequestError(message, error) {
   return new RequestError(message, {
     detail: sanitizeForLog(error instanceof Error ? error.message : String(error)),
   });
+}
+
+function normalizeHvacSettings(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    power: typeof source.power === 'boolean' ? source.power : null,
+    targetTemperature: Number.isInteger(source.targetTemperature)
+      && source.targetTemperature >= 16 && source.targetTemperature <= 30 ? source.targetTemperature : null,
+    mode: ['cool', 'heat', 'auto', 'fan', 'dry'].includes(source.mode) ? source.mode : null,
+    fanSpeed: ['auto', 'low', 'medium', 'high'].includes(source.fanSpeed) ? source.fanSpeed : null,
+  };
+}
+
+function normalizePurifierSettings(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    power: typeof source.power === 'boolean' ? source.power : null,
+    mode: ['auto', 'manual', 'sleep'].includes(source.mode) ? source.mode : null,
+  };
 }
 
 (() => new HejhomeUiServer())();

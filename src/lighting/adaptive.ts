@@ -15,7 +15,13 @@ export class AdaptiveLightingSession {
     if (!this.controller.isAdaptiveLightingActive()) {
       return;
     }
-    if (patch.temperature !== undefined && !this.expected.has(Number(patch.temperature))) {
+    const mode = typeof patch.lightMode === 'string' ? patch.lightMode.toUpperCase() : '';
+    const manualColor = ['COLOR', 'COLOUR', 'SCENE'].includes(mode);
+    const temperature = typeof patch.temperature === 'number' || (typeof patch.temperature === 'string' && patch.temperature.trim() !== '')
+      ? Number(patch.temperature) : NaN;
+    const changedTemperature = Number.isFinite(temperature) && temperature >= 0 && temperature <= 100 && !this.expected.has(temperature);
+    // Stored HSV and scene recipe values can be reported while WHITE remains active. They are not a mode change.
+    if (manualColor || changedTemperature) {
       this.controller.disableAdaptiveLighting();
     }
   }

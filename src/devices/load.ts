@@ -6,13 +6,13 @@ export class OutletLoadTracker {
   private observedAt: number | null = null;
   private pending: { value: boolean; since: number } | null = null;
 
-  constructor(private readonly source: MeterSource) {}
+  constructor(private readonly source: MeterSource, private readonly freshnessMs = 300000) {}
 
   observe(patch: Record<string, unknown>, now = Date.now()): void {
     if (!(this.source.field in patch)) {
       return;
     }
-    if (this.observedAt !== null && now - this.observedAt > 300000) {
+    if (this.observedAt !== null && (now < this.observedAt || now - this.observedAt >= this.freshnessMs)) {
       this.value = null;
       this.pending = null;
     }
@@ -39,7 +39,13 @@ export class OutletLoadTracker {
     }
   }
 
+  invalidate(): void {
+    this.value = null;
+    this.observedAt = null;
+    this.pending = null;
+  }
+
   read(now = Date.now()): boolean | null {
-    return this.observedAt === null || now - this.observedAt > 300000 ? null : this.value;
+    return this.observedAt === null || (now < this.observedAt || now - this.observedAt >= this.freshnessMs) ? null : this.value;
   }
 }

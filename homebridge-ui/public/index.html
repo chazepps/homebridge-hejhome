@@ -374,6 +374,68 @@
     margin-top: 16px;
   }
 
+  .hej-actions label {
+    color: var(--hej-muted);
+    display: grid;
+    gap: 4px;
+  }
+
+  .hej-actions input,
+  .hej-actions select {
+    background: var(--hej-card);
+    border: 1px solid var(--hej-border);
+    border-radius: 5px;
+    color: var(--hej-text);
+    min-height: 42px;
+    padding: 5px;
+  }
+
+  .hej-actions input[type="number"] { width: 104px; }
+
+  .hej-command-panel {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+    width: 100%;
+  }
+
+  .hej-command-row {
+    align-items: end;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-width: 0;
+  }
+
+  .hej-command-row.is-power {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hej-command-row.is-power .hej-action {
+    min-width: 0;
+    padding: 8px;
+    white-space: normal;
+  }
+
+  .hej-command-row label {
+    color: var(--hej-muted);
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .hej-command-row input,
+  .hej-command-row select {
+    background: var(--hej-card);
+    border: 1px solid var(--hej-border);
+    border-radius: 5px;
+    color: var(--hej-text);
+    min-height: 42px;
+    min-width: 0;
+    padding: 5px;
+    width: 100%;
+  }
+
   .hej-stats {
     display: grid;
     gap: 12px;
@@ -545,11 +607,11 @@
 </div>
 
 <div class="hej-settings is-hidden" id="settingsView" aria-live="polite">
-    <section class="hej-section hej-upgrade-warning" aria-label="Hejhome v2 upgrade notice">
+    <section class="hej-section hej-upgrade-warning" aria-label="Hejhome 3.0 update notice">
       <p>
-        <strong>업그레이드 안내:</strong>
-        v1에서 v2로 업그레이드되면서 변화가 많습니다. 문제가 있다면 Homebridge 플러그인 메뉴에서
-        <strong>액세서리 초기화</strong>를 실행한 뒤 다시 로그인해 주세요.
+        <strong>3.0 안내:</strong>
+        센서 측정값, 에어컨 설정, Apple Home 리모컨 버튼의 표시가 바뀔 수 있습니다.
+        기존 장치를 변경하기 전에 3.0 베타 안내를 확인해 주세요.
       </p>
     </section>
 
@@ -705,10 +767,8 @@
       '아직 지원하지 않는 제품': 'Products not yet supported', '사용할 수 있는 모델': 'Supported models',
       '지원 요청용 GitHub 글': 'GitHub support request',
       '연결 상태 살펴보기': 'Connection status', '개인 정보 없는 진단 내용 보기': 'View anonymous diagnostics',
-      '업그레이드 안내:': 'Upgrade note:',
-      'v1에서 v2로 업그레이드되면서 변화가 많습니다. 문제가 있다면 Homebridge 플러그인 메뉴에서': 'Upgrading from v1 to v2 changes how devices appear. If needed, open the Homebridge plugin menu and choose',
-      '액세서리 초기화': 'Reset accessories',
-      '를 실행한 뒤 다시 로그인해 주세요.': ', then sign in again.',
+      '3.0 안내:': '3.0 update:',
+      '센서 측정값, 에어컨 설정, Apple Home 리모컨 버튼의 표시가 바뀔 수 있습니다. 기존 장치를 변경하기 전에 3.0 베타 안내를 확인해 주세요.': 'Display of sensor readings, AC settings, and Apple Home remote buttons may change. Review the 3.0 beta guide before changing existing devices.',
       'Hejhome Web 로그인 정보를 Homebridge 저장 공간에 보관하고, 발견한 장비를 Home 앱에 보여줍니다.': 'Hejhome sign-in data is kept in Homebridge storage, and discovered devices appear in Apple Home.',
       'Google Home·SmartThings 등에서 사용할 장치를 Matter로 노출합니다. Homebridge의 해당 브리지에서도 Matter를 켜고 표시된 QR로 연결해 주세요. 이미 HomeKit에 연결된 장치를 같은 앱에 다시 연결하면 중복 표시될 수 있습니다.': 'Connect devices to Google Home, SmartThings, or other apps through Matter. Turn on Matter for the bridge in Homebridge and use its QR code. A device already connected through Apple Home may appear twice.',
       '지원하는 조명에 Apple Home의 시간대별 자동 조명을 제공합니다. Home 앱에서도 적응형 조명을 켜야 합니다. 클라우드에 주기적으로 명령을 전송합니다.': 'Supported lights can follow Apple Home adaptive lighting. Turn it on in Apple Home too. This sends commands to the cloud regularly.',
@@ -778,6 +838,7 @@
   let diagnosticsGeneration = 0;
   let deviceListSignature = '';
   const deviceDrafts = new Map();
+  const deviceControlDrafts = new Map();
   let themeTimer = null;
   let diagnosticsTimer = null;
   let diagnosticsSubscribed = false;
@@ -789,7 +850,7 @@
   function controlsAreReady() {
     const updated = Date.parse(currentDiagnostics?.updatedAt ?? '');
     return currentDiagnostics?.controlsAvailable === true && Number.isFinite(updated)
-      && Date.now() - updated <= 30000;
+      && Date.now() - updated <= 30000 && currentDiagnostics.connection?.session === 'valid';
   }
 
   document.getElementById('saveFeatures').addEventListener('click', async () => {
@@ -802,7 +863,9 @@
         adaptiveLighting: document.getElementById('adaptiveFeature').checked,
         meters: readMeterRows(),
       };
-      await requestWithTimeout('/save-features', { features }, 15000, '베타 기능 저장');
+      const saved = await requestWithTimeout('/save-features', { features }, 15000, tr('베타 기능 저장', 'Save beta features'));
+      if (currentStatus) currentStatus.features = saved.features ?? features;
+      void refreshDiagnostics();
       status.textContent = tr('저장했습니다. Homebridge를 다시 시작하면 적용됩니다.', 'Saved. Restart Homebridge to apply the changes.');
     } catch (error) {
       status.textContent = tr(`저장하지 못했습니다: ${error.message}`, `Could not save: ${error.message}`);
@@ -953,6 +1016,43 @@
         temperatureSensor.value = draft?.temperatureSensorId ?? device.preference?.temperatureSensorId ?? '';
         controls.append(settingLabel(tr('현재 온도를 확인할 온도계', 'Thermometer for current temperature'), temperatureSensor));
       }
+      let freshness;
+      if (sensorTypes.has(device.deviceType) || device.meterProfileApplied || device.deviceType === 'Airpurifier') {
+        freshness = document.createElement('input');
+        freshness.type = 'number'; freshness.min = '5'; freshness.max = '1440'; freshness.step = '1';
+        freshness.dataset.deviceControl = 'freshness';
+        freshness.value = draft?.freshnessMinutes ?? device.preference?.freshnessMinutes ?? '';
+        freshness.placeholder = tr('자동', 'Automatic');
+        if (device.deviceType === 'Airpurifier') {
+          freshness.disabled = !(Number(draft?.pm25Multiplier ?? device.preference?.pm25Multiplier) > 0);
+        }
+        controls.append(settingLabel(tr('측정값 유효 시간(분)', 'Measurement validity (minutes)'), freshness));
+      }
+      let remoteButtons;
+      if (['IrTv', 'IrSettopbox', 'IrFan'].includes(device.deviceType)) {
+        remoteButtons = document.createElement('input');
+        remoteButtons.type = 'checkbox'; remoteButtons.dataset.deviceControl = 'remoteButtons';
+        remoteButtons.checked = draft?.remoteButtons ?? device.preference?.remoteButtons ?? false;
+        remoteButtons.disabled = ['hidden', 'matter'].includes(visibility.value);
+        controls.append(settingLabel(tr('리모컨 버튼을 Apple Home에 표시', 'Show remote buttons in Apple Home'), remoteButtons));
+      }
+      let pm25;
+      let pm25Details;
+      if (device.deviceType === 'Airpurifier') {
+        pm25Details = document.createElement('details');
+        pm25Details.className = 'hej-device-note';
+        const summary = document.createElement('summary');
+        summary.textContent = tr('고급: PM2.5 측정값 보정', 'Advanced: PM2.5 measurement correction');
+        const explanation = document.createElement('p');
+        explanation.className = 'hej-muted';
+        explanation.textContent = tr('기기가 보내는 값에 이 배율을 곱해 µg/m³로 표시합니다. 모델의 단위가 확인된 경우에만 설정하세요.',
+          'The device value is multiplied by this factor and shown in µg/m³. Set it only when the model unit is known.');
+        pm25 = document.createElement('input');
+        pm25.type = 'number'; pm25.step = 'any'; pm25.dataset.deviceControl = 'pm25Multiplier'; pm25.className = 'hej-input';
+        pm25.value = draft?.pm25Multiplier ?? device.preference?.pm25Multiplier ?? '';
+        pm25.placeholder = tr('사용 안 함', 'Not used');
+        pm25Details.append(summary, explanation, settingLabel(tr('보정 배율', 'Correction factor'), pm25));
+      }
       const note = document.createElement('p');
       note.className = 'hej-muted hej-device-note';
       const impact = () => {
@@ -970,10 +1070,26 @@
         }
         if (temperatureSensor) note.textContent += ` ${tr('현재 온도는 선택한 온도계의 최근 측정값만 표시합니다. 설정 온도와는 별개입니다.',
           'Current temperature comes from the selected thermometer only. It is separate from the target temperature.')}`;
+        if (remoteButtons) note.textContent += ` ${tr('리모컨 버튼은 누를 때 명령을 한 번 보냅니다. 실제 기기 동작 상태는 표시하지 않습니다.',
+          'Each remote button sends one command. It does not show the device’s actual state.')}`;
+        if (freshness) note.textContent += ` ${tr('비워 두면 권장 시간을 자동으로 사용합니다. 센서와 PM2.5는 90분, 전력 측정은 5분입니다.',
+          'Leave blank to use the recommended time: 90 minutes for sensors and PM2.5, 5 minutes for power measurements.')}`;
       };
-      for (const input of [visibility, name, role, temperatureSensor].filter(Boolean)) input.addEventListener('input', () => {
+      for (const input of [visibility, name, role, temperatureSensor, freshness, remoteButtons, pm25].filter(Boolean)) input.addEventListener('input', () => {
+        if (remoteButtons && ['hidden', 'matter'].includes(visibility.value)) {
+          remoteButtons.checked = false;
+          remoteButtons.disabled = true;
+        } else if (remoteButtons) {
+          remoteButtons.disabled = false;
+        }
+        if (pm25 && freshness) {
+          freshness.disabled = !(Number(pm25.value) > 0);
+          if (freshness.disabled) freshness.value = '';
+        }
         deviceDrafts.set(device.id, { visibility: visibility.value, name: name.value,
-          role: role?.value ?? 'original', temperatureSensorId: temperatureSensor?.value ?? '' });
+          role: role?.value ?? 'original', temperatureSensorId: temperatureSensor?.value ?? '',
+          freshnessMinutes: freshness?.value ?? '', remoteButtons: remoteButtons?.checked ?? false,
+          pm25Multiplier: pm25?.value ?? '' });
         impact();
       });
       impact();
@@ -987,6 +1103,25 @@
         if (name.value.trim()) preference.name = name.value.trim();
         if (role && role.value !== 'original') preference.role = role.value;
         if (temperatureSensor?.value) preference.temperatureSensorId = temperatureSensor.value;
+        if (freshness?.value) {
+          const minutes = Number(freshness.value);
+          if (!Number.isInteger(minutes) || minutes < 5 || minutes > 1440) {
+            window.homebridge.toast.error(tr('측정값 유효 시간은 5분부터 1440분까지 입력해 주세요.',
+              'Enter a measurement validity time from 5 to 1440 minutes.'));
+            save.disabled = false; return;
+          }
+          preference.freshnessMinutes = minutes;
+        }
+        if (remoteButtons?.checked) preference.remoteButtons = true;
+        if (pm25?.value) {
+          const multiplier = Number(pm25.value);
+          if (!Number.isFinite(multiplier) || multiplier <= 0) {
+            window.homebridge.toast.error(tr('PM2.5 보정 배율은 0보다 큰 숫자로 입력해 주세요.',
+              'Enter a PM2.5 correction factor greater than zero.'));
+            save.disabled = false; return;
+          }
+          preference.pm25Multiplier = multiplier;
+        }
         try {
           await requestWithTimeout('/save-device-settings', { deviceId: device.id, preference }, 15000,
             tr('장치 설정 저장', 'Save device settings'));
@@ -994,6 +1129,7 @@
           deviceDrafts.delete(device.id);
           diagnosticsGeneration += 1;
           impact();
+          void refreshDiagnostics();
           const status = document.getElementById('deviceSettingsStatus');
           status.textContent = tr('저장했습니다. Homebridge를 다시 시작해 주세요.', 'Saved. Please restart Homebridge.');
           status.classList.add('is-visible');
@@ -1001,7 +1137,9 @@
           window.homebridge.toast.error(error.message);
         } finally { save.disabled = false; }
       });
-      item.append(title, controls, note, save);
+      item.append(title, controls);
+      if (pm25Details) item.append(pm25Details);
+      item.append(note, save);
       renderDeviceCommands(item, device);
       deviceSettingsList.append(item);
     }
@@ -1020,6 +1158,7 @@
   function renderDeviceCommands(item, device) {
     const commands = [];
     const controlsAvailable = controlsAreReady();
+    const commandDraft = deviceControlDrafts.get(device.id) ?? {};
     if (['IrTv', 'IrSettopbox'].includes(device.deviceType)) {
       commands.push([tr('소리 크게', 'Volume up'), { type: 'volume', direction: 'up' }],
         [tr('소리 작게', 'Volume down'), { type: 'volume', direction: 'down' }],
@@ -1056,6 +1195,11 @@
       if (['IrTv', 'IrSettopbox'].includes(device.deviceType)) {
         const channel = document.createElement('input');
         channel.type = 'number'; channel.min = '0'; channel.max = '999'; channel.step = '1';
+        channel.dataset.deviceControl = 'channel';
+        channel.value = commandDraft.channel ?? '';
+        channel.addEventListener('input', () => {
+          deviceControlDrafts.set(device.id, { ...deviceControlDrafts.get(device.id), channel: channel.value });
+        });
         channel.setAttribute('aria-label', tr('채널 번호', 'Channel number'));
         const go = document.createElement('button');
         go.type = 'button'; go.className = 'hej-action secondary'; go.textContent = tr('채널 이동', 'Go to channel');
@@ -1079,18 +1223,26 @@
       item.append(group, status);
     }
     if (device.deviceType === 'IrAirconditioner') renderAirConditionerControls(item, device);
+    if (device.deviceType === 'Airpurifier') renderPurifierControls(item, device);
   }
 
   function renderAirConditionerControls(item, device) {
     const controlsAvailable = controlsAreReady();
+    const commandDraft = deviceControlDrafts.get(device.id) ?? {};
     const group = document.createElement('div');
-    group.className = 'hej-actions';
+    group.className = 'hej-command-panel';
+    const powerRow = document.createElement('div');
+    powerRow.className = 'hej-command-row is-power';
     const status = document.createElement('p');
     status.className = 'hej-muted hej-device-note'; status.setAttribute('role', 'status');
     const currentTemperature = document.createElement('p');
     currentTemperature.className = 'hej-muted hej-device-note';
     currentTemperature.dataset.temperatureDeviceId = device.id;
     currentTemperature.textContent = tr('현재 온도: 확인할 수 없음', 'Current temperature: unavailable');
+    const currentSettings = document.createElement('p');
+    currentSettings.className = 'hej-muted hej-device-note';
+    currentSettings.dataset.hvacDeviceId = device.id;
+    currentSettings.textContent = tr('마지막으로 읽은 설정: 확인할 수 없음', 'Last reported settings: unavailable');
     if (!controlsAvailable) status.textContent = tr('Homebridge에서 에어컨 조작을 사용할 준비가 되지 않았습니다.',
       'Air conditioner controls are not ready in Homebridge.');
     const send = async (command, button) => {
@@ -1106,10 +1258,15 @@
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'hej-action secondary'; button.textContent = label;
       button.disabled = !controlsAvailable;
-      button.addEventListener('click', () => send({ power }, button)); group.append(button);
+      button.addEventListener('click', () => send({ power }, button)); powerRow.append(button);
     }
     const temperature = document.createElement('input');
     temperature.type = 'number'; temperature.min = '16'; temperature.max = '30'; temperature.step = '1';
+    temperature.dataset.deviceControl = 'targetTemperature';
+    temperature.value = commandDraft.targetTemperature ?? '';
+    temperature.addEventListener('input', () => {
+      deviceControlDrafts.set(device.id, { ...deviceControlDrafts.get(device.id), targetTemperature: temperature.value });
+    });
     temperature.setAttribute('aria-label', tr('설정 온도', 'Target temperature'));
     const setTemperature = document.createElement('button');
     setTemperature.type = 'button'; setTemperature.className = 'hej-action secondary';
@@ -1123,23 +1280,91 @@
       void send({ temperature: value }, setTemperature);
     });
     const mode = document.createElement('select');
+    mode.dataset.deviceControl = 'hvacMode';
     mode.setAttribute('aria-label', tr('운전 방식', 'Mode'));
     for (const [value, label] of [['cool', tr('냉방', 'Cool')], ['heat', tr('난방', 'Heat')],
       ['auto', tr('자동', 'Auto')], ['fan', tr('송풍', 'Fan')], ['dry', tr('제습', 'Dry')]]) mode.append(option(value, label));
+    mode.value = commandDraft.hvacMode ?? 'cool';
+    mode.addEventListener('input', () => {
+      deviceControlDrafts.set(device.id, { ...deviceControlDrafts.get(device.id), hvacMode: mode.value });
+    });
     const setMode = document.createElement('button');
     setMode.type = 'button'; setMode.className = 'hej-action secondary'; setMode.textContent = tr('운전 방식 설정', 'Set mode');
     setMode.disabled = !controlsAvailable;
     setMode.addEventListener('click', () => send({ mode: mode.value }, setMode));
     const speed = document.createElement('select');
+    speed.dataset.deviceControl = 'hvacFanSpeed';
     speed.setAttribute('aria-label', tr('바람 세기', 'Fan speed'));
     for (const [value, label] of [['auto', tr('자동', 'Auto')], ['low', tr('약', 'Low')],
       ['medium', tr('중', 'Medium')], ['high', tr('강', 'High')]]) speed.append(option(value, label));
+    speed.value = commandDraft.hvacFanSpeed ?? 'auto';
+    speed.addEventListener('input', () => {
+      deviceControlDrafts.set(device.id, { ...deviceControlDrafts.get(device.id), hvacFanSpeed: speed.value });
+    });
     const setSpeed = document.createElement('button');
     setSpeed.type = 'button'; setSpeed.className = 'hej-action secondary'; setSpeed.textContent = tr('바람 세기 설정', 'Set fan speed');
     setSpeed.disabled = !controlsAvailable;
     setSpeed.addEventListener('click', () => send({ fanSpeed: speed.value }, setSpeed));
-    group.append(temperature, setTemperature, mode, setMode, speed, setSpeed);
-    item.append(currentTemperature, group, status);
+    const temperatureRow = document.createElement('div');
+    temperatureRow.className = 'hej-command-row';
+    temperatureRow.append(settingLabel(tr('바꿀 설정 온도(°C)', 'New target temperature (°C)'), temperature), setTemperature);
+    const modeRow = document.createElement('div');
+    modeRow.className = 'hej-command-row';
+    modeRow.append(settingLabel(tr('바꿀 운전 방식', 'New mode'), mode), setMode);
+    const speedRow = document.createElement('div');
+    speedRow.className = 'hej-command-row';
+    speedRow.append(settingLabel(tr('바꿀 바람 세기', 'New fan speed'), speed), setSpeed);
+    group.append(powerRow, temperatureRow, modeRow, speedRow);
+    item.append(currentTemperature, currentSettings, group, status);
+  }
+
+  function renderPurifierControls(item, device) {
+    const available = controlsAreReady();
+    const commandDraft = deviceControlDrafts.get(device.id) ?? {};
+    const currentSettings = document.createElement('p');
+    currentSettings.className = 'hej-muted hej-device-note';
+    currentSettings.dataset.purifierDeviceId = device.id;
+    currentSettings.textContent = tr('마지막으로 읽은 설정: 확인할 수 없음', 'Last reported settings: unavailable');
+    const group = document.createElement('div'); group.className = 'hej-command-panel';
+    const powerRow = document.createElement('div'); powerRow.className = 'hej-command-row is-power';
+    const status = document.createElement('p');
+    status.className = 'hej-muted hej-device-note'; status.setAttribute('role', 'status');
+    if (!available) status.textContent = tr('Homebridge에서 공기청정기 조작을 사용할 준비가 되지 않았습니다.',
+      'Air purifier controls are not ready in Homebridge.');
+    const send = async (command, button) => {
+      button.disabled = true;
+      try {
+        await requestWithTimeout('/purifier-command', { deviceId: device.id, command }, 15000,
+          tr('공기청정기 명령', 'Air purifier command'));
+        status.textContent = tr('명령 전송 완료', 'Command sent');
+      } catch { status.textContent = tr('명령을 보내지 못했습니다.', 'Could not send the command.'); }
+      finally { button.disabled = !available; }
+    };
+    for (const [label, power] of [[tr('공기청정기 켜기', 'Turn on purifier'), true],
+      [tr('공기청정기 끄기', 'Turn off purifier'), false]]) {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'hej-action secondary'; button.textContent = label;
+      button.disabled = !available;
+      button.addEventListener('click', () => send({ power }, button));
+      powerRow.append(button);
+    }
+    const mode = document.createElement('select');
+    mode.dataset.deviceControl = 'purifierMode';
+    mode.setAttribute('aria-label', tr('공기청정기 운전 방식', 'Air purifier mode'));
+    for (const [value, label] of [['auto', tr('자동', 'Auto')], ['manual', tr('수동', 'Manual')],
+      ['sleep', tr('취침', 'Sleep')]]) mode.append(option(value, label));
+    mode.value = commandDraft.purifierMode ?? 'auto';
+    mode.addEventListener('input', () => {
+      deviceControlDrafts.set(device.id, { ...deviceControlDrafts.get(device.id), purifierMode: mode.value });
+    });
+    const setMode = document.createElement('button');
+    setMode.type = 'button'; setMode.className = 'hej-action secondary';
+    setMode.textContent = tr('운전 방식 설정', 'Set mode'); setMode.disabled = !available;
+    setMode.addEventListener('click', () => send({ mode: mode.value }, setMode));
+    const modeRow = document.createElement('div'); modeRow.className = 'hej-command-row';
+    modeRow.append(settingLabel(tr('바꿀 운전 방식', 'New mode'), mode), setMode);
+    group.append(powerRow, modeRow);
+    item.append(currentSettings, group, status);
   }
 
   function updateTemperatureDisplays(diagnostics) {
@@ -1152,6 +1377,24 @@
         ? tr(`현재 온도: ${temperature}°C (선택한 온도계에서 받음)`,
           `Current temperature: ${temperature}°C (from the selected thermometer)`)
         : tr('현재 온도: 확인할 수 없음', 'Current temperature: unavailable');
+    }
+    const hvacMode = { cool: tr('냉방', 'Cool'), heat: tr('난방', 'Heat'), auto: tr('자동', 'Auto'),
+      fan: tr('송풍', 'Fan'), dry: tr('제습', 'Dry') };
+    const fanSpeed = { auto: tr('자동', 'Auto'), low: tr('약', 'Low'), medium: tr('중', 'Medium'),
+      high: tr('강', 'High') };
+    const purifierMode = { auto: tr('자동', 'Auto'), manual: tr('수동', 'Manual'), sleep: tr('취침', 'Sleep') };
+    const unknown = tr('확인할 수 없음', 'Unknown');
+    const powerText = (power) => power === true ? tr('켜짐', 'On') : power === false ? tr('꺼짐', 'Off') : unknown;
+    for (const element of deviceSettingsList.querySelectorAll('[data-hvac-device-id]')) {
+      const settings = !stale && (diagnostics.devices ?? []).find((item) => item.id === element.dataset.hvacDeviceId)?.hvacSettings;
+      const target = Number.isInteger(settings?.targetTemperature) ? `${settings.targetTemperature}°C` : unknown;
+      element.textContent = tr(`마지막으로 읽은 설정: 전원 ${powerText(settings?.power)} · 설정 온도 ${target} · 운전 방식 ${hvacMode[settings?.mode] ?? unknown} · 바람 세기 ${fanSpeed[settings?.fanSpeed] ?? unknown}. 실제 냉난방 동작 여부는 확인할 수 없습니다.`,
+        `Last reported settings: power ${powerText(settings?.power)} · target temperature ${target} · mode ${hvacMode[settings?.mode] ?? unknown} · fan speed ${fanSpeed[settings?.fanSpeed] ?? unknown}. Actual heating or cooling is not confirmed.`);
+    }
+    for (const element of deviceSettingsList.querySelectorAll('[data-purifier-device-id]')) {
+      const settings = !stale && (diagnostics.devices ?? []).find((item) => item.id === element.dataset.purifierDeviceId)?.purifierSettings;
+      element.textContent = tr(`마지막으로 읽은 설정: 전원 ${powerText(settings?.power)} · 운전 방식 ${purifierMode[settings?.mode] ?? unknown}. 실제 동작 여부는 확인할 수 없습니다.`,
+        `Last reported settings: power ${powerText(settings?.power)} · mode ${purifierMode[settings?.mode] ?? unknown}. Actual operation is not confirmed.`);
     }
   }
 
@@ -1176,10 +1419,15 @@
         window.homebridge?.getCachedMatterAccessories?.().catch(() => []) ?? [],
       ]);
       if (generation !== diagnosticsGeneration || settingsView.classList.contains('is-hidden')) return;
+      if (currentDiagnostics?.devices?.length && !(diagnostics.devices ?? []).length) {
+        deviceDrafts.clear();
+        deviceControlDrafts.clear();
+      }
       currentDiagnostics = diagnostics;
       renderDiagnostics(diagnostics, cacheIds(hapCache, 'hap'), cacheIds(matterCache, 'matter'));
       const signature = JSON.stringify([controlsAreReady(),
-        (diagnostics.devices ?? []).map((device) => [device.id, device.name, device.deviceType, device.inScope])]);
+        (diagnostics.devices ?? []).map((device) => [device.id, device.name, device.deviceType,
+          device.inScope, device.meterProfileApplied, device.preference])]);
       if (signature !== deviceListSignature) {
         deviceListSignature = signature;
         renderDeviceSettings(diagnostics.devices ?? []);
@@ -1199,14 +1447,21 @@
     const discoveredAt = Date.parse(diagnostics.generatedAt ?? '');
     const oldDiscovery = !Number.isFinite(discoveredAt) || Date.now() - discoveredAt > 300000;
     diagnosticsBadge.textContent = stale ? tr('최근 상태 확인 불가', 'Recent status unavailable')
-      : tr('상태 수신 중', 'Receiving updates');
+      : diagnostics.connection?.realtime === 'disconnected'
+        ? tr('장치 상태 연결 끊김', 'Device updates disconnected')
+        : diagnostics.connection?.realtime === 'connecting'
+          ? tr('장치 상태 연결 중', 'Connecting to device updates')
+          : diagnostics.connection?.realtime === 'connected'
+            ? tr('상태 수신 중', 'Receiving updates') : tr('장치 상태 확인 불가', 'Device updates unavailable');
     const session = stale ? 'unknown' : diagnostics.connection?.session;
     const realtime = stale ? 'unknown' : diagnostics.connection?.realtime;
     const sessionText = session === 'valid' ? tr('로그인 정상', 'Signed in')
       : session === 'expired' ? tr('로그인이 만료됐어요. 다시 로그인해 주세요.', 'Sign-in expired. Please sign in again.')
+        : session === 'missing' ? tr('로그인이 필요합니다.', 'Please sign in.')
         : tr('로그인 상태를 확인할 수 없음', 'Sign-in status unavailable');
     const realtimeText = realtime === 'connected' ? tr('장치 상태 수신 중', 'Receiving device updates')
       : realtime === 'connecting' ? tr('장치 상태 연결 중', 'Connecting to device updates')
+        : realtime === 'disconnected' ? tr('장치 상태 연결 끊김', 'Device updates disconnected')
         : tr('장치 상태를 확인할 수 없음', 'Device updates unavailable');
     connectionSummary.textContent = `${sessionText} · ${realtimeText}`;
     diagnosticsList.replaceChildren();
@@ -1216,12 +1471,20 @@
       const state = document.createElement('p'); state.className = 'hej-muted hej-device-note';
       const discovered = oldDiscovery ? tr('이전에 찾은 장치', 'Previously found device')
         : tr('장치 목록에 있음', 'In the device list');
-      const apple = device.homekit && !stale ? tr('Apple Home 연결용으로 준비됨', 'Prepared for Apple Home')
+      const visibility = device.preference?.visibility ?? 'both';
+      const apple = visibility === 'hidden' || visibility === 'matter'
+        ? tr('Apple Home에 표시하지 않음', 'Not shown in Apple Home')
+        : device.homekit && !stale ? tr('Apple Home 연결용으로 준비됨', 'Prepared for Apple Home')
         : hapCache.has(device.id) ? tr('Apple Home: 이전에 저장된 장치', 'Apple Home: previously saved device')
           : tr('Apple Home: 등록 확인 안 됨', 'Apple Home: registration unconfirmed');
-      const matter = device.matter && !stale ? tr('Matter 연결용으로 준비됨', 'Prepared for Matter')
+      const matter = visibility === 'hidden' || visibility === 'homekit'
+        ? tr('Matter에 표시하지 않음', 'Not shown in Matter')
+        : device.matter && !stale ? tr('Matter 연결용으로 준비됨', 'Prepared for Matter')
         : matterCache.has(device.id) ? tr('Matter: 이전에 저장된 장치', 'Matter: previously saved device')
           : tr('Matter: 등록 확인 안 됨', 'Matter: registration unconfirmed');
+      const online = stale || device.online === null ? tr('최근 연결 상태 확인 불가', 'Recent connection unknown')
+        : device.online === true ? tr('장치 연결됨', 'Device connected')
+          : tr('장치와 연결되지 않음', 'Device disconnected');
       const lastSeen = device.lastSeenAt ? tr(`마지막 장치 상태: ${formatKstDateTime(device.lastSeenAt)}`,
         `Last device update: ${formatKstDateTime(device.lastSeenAt)}`)
         : tr('장치 상태 수신 기록 없음', 'No device update received');
@@ -1230,7 +1493,7 @@
           : tr('명령 전송 기록 없음', 'No command recorded');
       const metering = device.meterProfileApplied ? tr('전력 측정 설정 적용', 'Meter setup applied')
         : tr('전력 측정 설정 없음', 'No meter setup');
-      state.textContent = `${discovered} · ${apple} · ${matter} · ${lastSeen} · ${lastControl} · ${metering}`;
+      state.textContent = `${discovered} · ${online} · ${apple} · ${matter} · ${lastSeen} · ${lastControl} · ${metering}`;
       row.append(name, state);
       diagnosticsList.append(row);
     }
@@ -1375,6 +1638,8 @@
 
 	  function showLoginView() {
 	    diagnosticsGeneration += 1;
+	    deviceDrafts.clear();
+	    deviceControlDrafts.clear();
 	    settingsView.classList.add('is-hidden');
 	    loginView.classList.remove('is-hidden');
 	    loginCompleted = false;
@@ -1467,6 +1732,13 @@
 	        detail.className = 'hej-muted hej-device-note';
 	        detail.textContent = tr('전원 상태가 확인되면 선풍기, 확인되지 않으면 전원 버튼으로 보입니다. 바람 세기와 회전 상태는 표시하지 않습니다.',
           'Shows as a fan when power status is available; otherwise a power button. Fan speed and swing status are not shown.');
+	        item.append(detail);
+	      }
+	      if (model.deviceType === 'ZigbeeDoorlock') {
+	        const detail = document.createElement('p');
+	        detail.className = 'hej-muted hej-device-note';
+	        detail.textContent = tr('문 열림만 보여줍니다. 잠금 상태 확인이나 잠금·해제 조작은 할 수 없습니다.',
+          'Shows door open or closed only. Lock status and lock or unlock controls are unavailable.');
 	        item.append(detail);
 	      }
 		      return item;

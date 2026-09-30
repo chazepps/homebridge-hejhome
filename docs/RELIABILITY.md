@@ -29,3 +29,11 @@ All thrown errors at cloud and UI boundaries must be caught, logged or returned 
 - Continuous Matter dimming is limited per device across restarts of a move; late expected reports are bounded observations, not guaranteed attribution.
 - Runtime status writes keep one active write and the latest pending snapshot. Shutdown cancels timers and flushes status.
 - Physical device/controller acceptance remains separate from the code tests in the implementation record.
+
+## Matter PM2.5 cache restoration
+
+Homebridge's Matter accessory cache does not retain the explicitly composed optional `NumericMeasurement` behavior of the PM2.5 child. A restored cached endpoint can therefore lack the measurement state needed for nullable PM2.5 updates.
+
+After fresh discovery, the plugin repairs the affected PM2.5 endpoint through the public unregister/register lifecycle. It reuses the logical accessory UUID and the fixed `air-quality` part ID. This recovery is limited to the affected PM2.5 registration; it does not use private host mutations or assume that cached metadata restores the optional behavior.
+
+The native endpoint object and endpoint number can change during this repair. Preserved logical UUID/part IDs do not establish that a controller keeps its automation bindings. Native host tests cover endpoint reconstruction and nullable measurement updates; PM2.5 display and automation continuity after restart still require validation in a paired physical controller. Users should check both in their connected app after restarting.

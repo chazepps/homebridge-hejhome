@@ -3,12 +3,17 @@ import type { AdaptiveLightingController, PlatformAccessory, Service as Homebrid
 import type { HejRestClient } from './hej/rest.js';
 import type { HejhomePlatform } from './platform.js';
 import type { HejDevice, HejDeviceState } from './types.js';
-import { getDeviceCapability, type DeviceCapability } from './devices/capabilities.js';
+import { getDeviceCapability, supportsDeviceRole, type DeviceCapability } from './devices/capabilities.js';
 
 import { isMomentaryPowerDevice, readVendorPower } from './devices/power.js';
+import { decodeAirPurifierPower } from './devices/purifier.js';
+import { calibratePm25 } from './devices/airQuality.js';
 import { OutletLoadTracker } from './devices/load.js';
+import { measurementFreshnessMs } from './runtime/health.js';
+import { IrHapButtons } from './media/irHapButtons.js';
 
 import { AdaptiveLightingSession } from './lighting/adaptive.js';
+import { whiteMiredToTemperaturePercent, whiteTemperaturePercentToMired } from './lighting/temperature.js';
 
 type PowerKey = `power${number}` | 'power';
 type ServiceType = WithUUID<typeof HomebridgeService>;
@@ -21,9 +26,15 @@ export class HejhomePlatformAccessory {
   private adaptiveController: AdaptiveLightingController | undefined;
   private adaptiveSession: AdaptiveLightingSession | undefined;
   private disposed = false;
+  private colorControlQueue: Promise<void> = Promise.resolve();
+  private lightingObservationRevision = 0;
+  private readonly observedColor = new Map<'hue' | 'saturation' | 'brightness', { revision: number; value: number }>();
+  private observedLightMode: { revision: number; mode: 'white' | 'color' | 'scene' } | undefined;
   private readonly momentaryPower: boolean;
   private readonly loadTracker: OutletLoadTracker | undefined;
+  private readonly loadField: string | undefined;
   private readonly capability: DeviceCapability;
+  private readonly irButtons: IrHapButtons;
   private canonicalRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private powerResetTimer: ReturnType<typeof setTimeout> | null = null;
   private analogControlTimer: ReturnType<typeof setTimeout> | null = null;
@@ -46,17 +57,28 @@ export class HejhomePlatformAccessory {
       homeKitServices: [],
     };
 
-    this.accessory.getService(this.platform.Service.AccessoryInformation)!
+    this.baseService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Hejhome')
       .setCharacteristic(this.platform.Characteristic.Model, device.modelName ?? device.deviceType)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, device.id);
 
     const meter = this.platform.features?.meters?.find((profile) => profile.model === device.modelName);
     if (meter?.power) {
-      this.loadTracker = new OutletLoadTracker(meter.power);
+      this.loadField = meter.power.field;
+      this.loadTracker = new OutletLoadTracker(meter.power, measurementFreshnessMs(device, meter.power.field, this.platform.features) ?? 300000);
     }
     this.removeStaleBaseServices();
     this.configureServices();
+    this.configureAirQuality();
+    this.irButtons = new IrHapButtons({
+      accessory: this.accessory, Service: this.platform.Service, Characteristic: this.platform.Characteristic,
+      deviceType: device.deviceType, enabled: this.platform.features?.devices?.[device.id]?.remoteButtons === true,
+      send: (command) => this.platform.controlRemoteButton(device.id, command),
+      ensureAvailable: () => {
+        this.readDevice();
+        this.requireClient();
+      },
+    });
     this.configureSensorFaults();
     this.updateDevice(device);
   }
@@ -66,6 +88,25 @@ export class HejhomePlatformAccessory {
   }
 
   observeExternal(patch: HejDeviceState): void {
+    const reportedMode = normalizedLightMode(patch.lightMode);
+    this.lightingObservationRevision++;
+    if (reportedMode) {
+      this.observedLightMode = { revision: this.lightingObservationRevision, mode: reportedMode };
+    }
+    const observation = mergeDeviceState(this.currentDevice(), patch);
+    const activeMode = normalizedLightMode(observation.deviceState?.lightMode);
+    const changedColorKeys: Array<'hue' | 'saturation' | 'brightness'> = activeMode === 'white'
+      ? patch.brightness !== undefined ? ['brightness'] : []
+      : patch.hsvColor ? ['hue', 'saturation', 'brightness'] : [];
+    for (const key of changedColorKeys) {
+      const value = knownColorComponent(observation, key);
+      if (value !== undefined) {
+        this.observedColor.set(key, { revision: this.lightingObservationRevision, value });
+      }
+    }
+    if (reportedMode && reportedMode !== normalizedLightMode(this.currentDevice().deviceState?.lightMode)) {
+      this.cancelAnalogControlSet('newer-light-mode');
+    }
     if (this.pendingAnalogControlRequirements) {
       const pending = this.pendingAnalogControlRequirements;
       for (const key of Object.keys(patch)) {
@@ -81,13 +122,18 @@ export class HejhomePlatformAccessory {
 
   prepareExternalControl(requirements: Record<string, unknown>): void {
     this.cancelAnalogControlSet('external-control');
-    if (requirements.temperature !== undefined) {
+    if (requirements.temperature !== undefined || requirements.hsvColor !== undefined
+      || requirements.lightMode !== undefined || requirements.sceneValues !== undefined) {
       this.adaptiveController?.disableAdaptiveLighting();
     }
   }
 
   dispose(reason: 'shutdown' | 'removal' = 'removal'): void {
     this.disposed = true;
+    this.irButtons.dispose();
+    if (this.momentaryPower) {
+      this.baseService(this.platform.Service.Switch)?.updateCharacteristic(this.platform.Characteristic.On, false);
+    }
     this.cancelAnalogControlSet('shutdown-or-removal');
     if (this.canonicalRefreshTimer) {
       clearTimeout(this.canonicalRefreshTimer);
@@ -165,6 +211,7 @@ export class HejhomePlatformAccessory {
         this.updateBatteryService(device);
         break;
     }
+    this.updateAirQuality(device);
     this.updateSensorFaults();
   }
 
@@ -174,8 +221,9 @@ export class HejhomePlatformAccessory {
       [this.platform.Service.MotionSensor, 'motionDetected'], [this.platform.Service.ContactSensor, 'state'],
       [this.platform.Service.LeakSensor, 'alarm'], [this.platform.Service.SmokeSensor, 'alarm'],
       [this.platform.Service.TemperatureSensor, 'temperature'], [this.platform.Service.HumiditySensor, 'humidity'],
+      [this.platform.Service.AirQualitySensor, 'pm25'],
     ] as const) {
-      const service = this.accessory.getService(type);
+      const service = this.baseService(type);
       if (service) {
         result.push([service, key]);
       }
@@ -186,7 +234,9 @@ export class HejhomePlatformAccessory {
   private sensorFault(key: string): number {
     try {
       const device = this.readDevice();
-      if (['temperature', 'humidity'].includes(key)) {
+      if (key === 'pm25') {
+        this.readPm25();
+      } else if (['temperature', 'humidity'].includes(key)) {
         this.readMeasurement(key);
       } else if (!hasSensorState(device, key)) {
         throw this.communicationError();
@@ -212,6 +262,49 @@ export class HejhomePlatformAccessory {
     }
     for (const [service, key] of this.sensorServices()) {
       service.updateCharacteristic(this.platform.Characteristic.StatusFault, this.sensorFault(key));
+    }
+  }
+
+  private hasCalibratedAirQuality(): boolean {
+    const multiplier = this.platform.features?.devices?.[this.device.id]?.pm25Multiplier;
+    return this.device.deviceType === 'Airpurifier' && typeof multiplier === 'number' && Number.isFinite(multiplier) && multiplier > 0;
+  }
+
+  private readPm25(): number {
+    const device = this.readDevice();
+    const multiplier = this.platform.features?.devices?.[device.id]?.pm25Multiplier;
+    const value = calibratePm25(device.deviceState?.pm25, multiplier);
+    if (value === null || this.platform.getMeasurementHealth?.(device.id, 'pm25')?.reachable === false) {
+      throw this.communicationError();
+    }
+    return value;
+  }
+
+  private configureAirQuality(): void {
+    if (!this.hasCalibratedAirQuality()) {
+      return;
+    }
+    const service = this.service(this.platform.Service.AirQualitySensor, `${this.device.name} 미세먼지`);
+    service.getCharacteristic(this.platform.Characteristic.AirQuality).onGet(() => {
+      this.readDevice();
+      return this.platform.Characteristic.AirQuality.UNKNOWN;
+    });
+    service.getCharacteristic(this.platform.Characteristic.PM2_5Density)
+      .setProps({ minStep: null }).onGet(() => this.readPm25());
+  }
+
+  private updateAirQuality(device: HejDevice): void {
+    if (!this.hasCalibratedAirQuality()) {
+      return;
+    }
+    const service = this.baseService(this.platform.Service.AirQualitySensor);
+    if (!service) {
+      return;
+    }
+    service.updateCharacteristic(this.platform.Characteristic.AirQuality, this.platform.Characteristic.AirQuality.UNKNOWN);
+    const value = calibratePm25(device.deviceState?.pm25, this.platform.features?.devices?.[device.id]?.pm25Multiplier);
+    if (value !== null && this.platform.getMeasurementHealth?.(device.id, 'pm25')?.reachable !== false) {
+      service.updateCharacteristic(this.platform.Characteristic.PM2_5Density, value);
     }
   }
 
@@ -297,14 +390,14 @@ export class HejhomePlatformAccessory {
       .onGet(() => this.readPower('power'))
       .onSet((value) => this.handleControlSet({ power: Boolean(value) }, 'on'));
     light.getCharacteristic(this.platform.Characteristic.Brightness)
-      .onGet(() => readHsvState(this.readDevice()).brightness)
-      .onSet((value) => this.handleColorLightBrightnessSet(Number(value)));
+      .onGet(() => this.readColorComponent('brightness'))
+      .onSet((value) => this.enqueueColorControl(() => this.handleColorLightBrightnessSet(Number(value))));
     light.getCharacteristic(this.platform.Characteristic.Hue)
-      .onGet(() => readHsvState(this.readDevice()).hue)
-      .onSet((value) => this.handleHsvSet({ hue: Number(value) }, true));
+      .onGet(() => this.readColorComponent('hue'))
+      .onSet((value) => this.enqueueColorControl(() => this.handleHsvSet({ hue: Number(value) }, true)));
     light.getCharacteristic(this.platform.Characteristic.Saturation)
-      .onGet(() => readHsvState(this.readDevice()).saturation)
-      .onSet((value) => this.handleSaturationSet(Number(value)));
+      .onGet(() => this.readColorComponent('saturation'))
+      .onSet((value) => this.enqueueColorControl(() => this.handleSaturationSet(Number(value))));
   }
 
   private configureWhiteLight(): void {
@@ -313,15 +406,24 @@ export class HejhomePlatformAccessory {
       .onGet(() => this.readPower('power'))
       .onSet((value) => this.handleControlSet({ power: Boolean(value) }, 'white-light.on'));
     light.getCharacteristic(this.platform.Characteristic.Brightness)
-      .onGet(() => readNumberState(this.readDevice(), 'brightness', 100))
+      .onGet(() => this.readWhitePercent('brightness'))
       .onSet((value) => this.scheduleAnalogControlSet({ brightness: clampNumber(Number(value), 0, 100) }, 'white-light.brightness'));
-    light.getCharacteristic(this.platform.Characteristic.ColorTemperature)
-      .updateValue?.(temperaturePercentToMired(readNumberState(this.currentDevice(), 'temperature', 100)));
-    light.getCharacteristic(this.platform.Characteristic.ColorTemperature)
-      .onGet(() => temperaturePercentToMired(readNumberState(this.readDevice(), 'temperature', 100)))
+    const colorTemperature = light.getCharacteristic(this.platform.Characteristic.ColorTemperature);
+    const initialTemperature = whiteTemperaturePercentToMired(this.currentDevice().deviceState?.temperature);
+    if (initialTemperature !== null) {
+      colorTemperature.updateValue?.(initialTemperature);
+    } else if (typeof colorTemperature.value === 'number' && (colorTemperature.value < 154 || colorTemperature.value > 333)) {
+      // A newly constructed HAP characteristic defaults to 140 mired. Do not publish a made-up measured value.
+      colorTemperature.value = null;
+    }
+    colorTemperature
+      .onGet(() => whiteTemperaturePercentToMired(this.readWhitePercent('temperature'))!)
       .setProps({ minValue: 154, maxValue: 333 })
       .onSet((value) => {
-        const temperature = miredToTemperaturePercent(Number(value));
+        const temperature = whiteMiredToTemperaturePercent(value);
+        if (temperature === null) {
+          throw this.communicationError();
+        }
         this.adaptiveSession?.commanded(temperature);
         this.scheduleAnalogControlSet({ temperature }, 'white-light.temperature');
       });
@@ -457,8 +559,14 @@ export class HejhomePlatformAccessory {
     try {
       if (this.platform.controlDevice) {
         await this.platform.controlDevice(this.device.id, requirements, 'hap');
+        if (this.disposed) {
+          throw this.communicationError();
+        }
       } else {
         await this.client.controlDevice(this.device.id, requirements);
+        if (this.disposed) {
+          throw this.communicationError();
+        }
         const patch = { ...requirements };
         if (this.momentaryPower) {
           delete patch.power;
@@ -564,6 +672,31 @@ export class HejhomePlatformAccessory {
     return this.client;
   }
 
+  private enqueueColorControl(action: () => Promise<void>): Promise<void> {
+    const command = this.colorControlQueue.catch(() => undefined).then(() => {
+      this.requireClient();
+      return action();
+    });
+    this.colorControlQueue = command;
+    return command;
+  }
+
+  private readColorComponent(key: 'hue' | 'saturation' | 'brightness'): number {
+    const value = knownColorComponent(this.readDevice(), key);
+    if (value === undefined) {
+      throw this.communicationError();
+    }
+    return value;
+  }
+
+  private readWhitePercent(key: 'brightness' | 'temperature'): number {
+    const value = numericState(this.readDevice(), key);
+    if (value === null || value < 0 || value > 100) {
+      throw this.communicationError();
+    }
+    return value;
+  }
+
   private async handleColorLightBrightnessSet(value: number): Promise<void> {
     const currentDevice = this.currentDevice();
     const brightness = clampNumber(value, 0, 100);
@@ -571,14 +704,23 @@ export class HejhomePlatformAccessory {
       this.scheduleAnalogControlSet({ brightness }, 'light.white.brightness');
       return;
     }
-    await this.handleHsvSet({ brightness }, false);
+    await this.handleHsvSet({ brightness }, currentDevice.deviceState?.lightMode === 'SCENE');
   }
 
   private async handleSaturationSet(value: number): Promise<void> {
     const saturation = clampNumber(value, 0, 100);
     if (saturation === 0) {
+      this.readColorComponent('brightness');
+      const currentDevice = this.currentDevice();
+      const revision = this.lightingObservationRevision;
       this.cancelAnalogControlSet('light.mode.white');
-      await this.handleControlSet({ lightMode: 'white' }, 'light.mode.white');
+      if (currentDevice.deviceState?.lightMode !== 'WHITE') {
+        await this.handleControlSet({ lightMode: 'white' }, 'light.mode.white');
+      }
+      const basis = this.colorStateAfterMode(currentDevice, revision, 'white');
+      if (basis && basis.brightness !== undefined) {
+        this.scheduleAnalogControlSet({ brightness: basis.brightness }, 'light.white.brightness');
+      }
       return;
     }
     await this.handleHsvSet({ saturation }, true);
@@ -589,22 +731,53 @@ export class HejhomePlatformAccessory {
     forceColorMode: boolean,
   ): Promise<void> {
     const currentDevice = this.currentDevice();
-    const nextHsv = {
-      ...readHsvState(currentDevice),
-      ...partial,
-    };
-    if (forceColorMode && nextHsv.saturation === 0) {
-      nextHsv.saturation = 100;
-    }
+    const observationRevision = this.lightingObservationRevision;
+    this.completeColorCommand({ ...this.colorStateAfterMode(currentDevice, observationRevision, 'color'), ...partial }, forceColorMode);
     if (forceColorMode && !['COLOR', 'COLOUR'].includes(String(currentDevice.deviceState?.lightMode))) {
       this.cancelAnalogControlSet('light.mode.colour');
       await this.handleControlSet({ lightMode: 'colour' }, 'light.mode');
     }
+    const basis = this.colorStateAfterMode(currentDevice, observationRevision, 'color');
+    if (!basis) {
+      return;
+    }
+    const nextHsv = this.completeColorCommand({ ...basis, ...partial }, forceColorMode);
     this.scheduleAnalogControlSet({ hsvColor: nextHsv }, 'light.hsv');
   }
 
+  private colorStateAfterMode(device: HejDevice, revision: number, target: 'white' | 'color') {
+    const mode = this.observedLightMode;
+    if (mode && mode.revision > revision && mode.mode !== normalizedLightMode(device.deviceState?.lightMode) && mode.mode !== target) {
+      return undefined;
+    }
+    const basis = { hue: knownColorComponent(device, 'hue'), saturation: knownColorComponent(device, 'saturation'),
+      brightness: knownColorComponent(device, 'brightness') };
+    // A mode echo alone is not a new sample of the destination mode's stored brightness/color.
+    for (const [key, observed] of this.observedColor) {
+      if (observed.revision > revision) {
+        basis[key] = observed.value;
+      }
+    }
+    return basis;
+  }
+
+  private completeColorCommand(
+    value: { hue?: number | undefined; saturation?: number | undefined; brightness?: number | undefined },
+    forceColorMode: boolean,
+  ): { hue: number; saturation: number; brightness: number } {
+    const { hue, brightness } = value;
+    const saturation = forceColorMode && value.saturation === 0 ? 100 : value.saturation;
+    if (hue === undefined || saturation === undefined || brightness === undefined
+      || !Number.isFinite(hue) || hue < 0 || hue > 360
+      || !Number.isFinite(saturation) || saturation < 0 || saturation > 100
+      || !Number.isFinite(brightness) || brightness < 0 || brightness > 100) {
+      throw this.communicationError();
+    }
+    return { hue, saturation, brightness };
+  }
+
   private updateColorLight(device: HejDevice): void {
-    const light = this.accessory.getService(this.platform.Service.Lightbulb);
+    const light = this.baseService(this.platform.Service.Lightbulb);
     if (!light) {
       return;
     }
@@ -612,14 +785,19 @@ export class HejhomePlatformAccessory {
     if (power !== undefined) {
       light.updateCharacteristic(this.platform.Characteristic.On, power);
     }
-    const hsv = readHsvState(device);
-    light.updateCharacteristic(this.platform.Characteristic.Brightness, hsv.brightness);
-    light.updateCharacteristic(this.platform.Characteristic.Hue, hsv.hue);
-    light.updateCharacteristic(this.platform.Characteristic.Saturation, hsv.saturation);
+    for (const [key, characteristic] of [
+      ['brightness', this.platform.Characteristic.Brightness], ['hue', this.platform.Characteristic.Hue],
+      ['saturation', this.platform.Characteristic.Saturation],
+    ] as const) {
+      const value = knownColorComponent(device, key);
+      if (value !== undefined) {
+        light.updateCharacteristic(characteristic, value);
+      }
+    }
   }
 
   private updateWhiteLight(device: HejDevice): void {
-    const light = this.accessory.getService(this.platform.Service.Lightbulb);
+    const light = this.baseService(this.platform.Service.Lightbulb);
     if (!light) {
       return;
     }
@@ -627,11 +805,14 @@ export class HejhomePlatformAccessory {
     if (power !== undefined) {
       light.updateCharacteristic(this.platform.Characteristic.On, power);
     }
-    light.updateCharacteristic(this.platform.Characteristic.Brightness, readNumberState(device, 'brightness', 100));
-    light.updateCharacteristic(
-      this.platform.Characteristic.ColorTemperature,
-      temperaturePercentToMired(readNumberState(device, 'temperature', 100)),
-    );
+    const brightness = numericState(device, 'brightness');
+    const temperature = numericState(device, 'temperature');
+    if (brightness !== null && brightness >= 0 && brightness <= 100) {
+      light.updateCharacteristic(this.platform.Characteristic.Brightness, brightness);
+    }
+    if (temperature !== null && temperature >= 0 && temperature <= 100) {
+      light.updateCharacteristic(this.platform.Characteristic.ColorTemperature, whiteTemperaturePercentToMired(temperature)!);
+    }
   }
 
   private updatePowerServices(device: HejDevice, keys: PowerKey[], serviceType: ServiceType): void {
@@ -642,7 +823,7 @@ export class HejhomePlatformAccessory {
 
   private updatePowerService(device: HejDevice, key: PowerKey, serviceType: ServiceType): void {
     const service = this.accessory.getServiceById?.(serviceType, key)
-      ?? this.accessory.getService(serviceType);
+      ?? this.baseService(serviceType);
     if (!service) {
       return;
     }
@@ -656,7 +837,7 @@ export class HejhomePlatformAccessory {
   }
 
   private updateOutlet(device: HejDevice): void {
-    const outlet = this.accessory.getService(this.powerServiceType(this.platform.Service.Outlet));
+    const outlet = this.baseService(this.powerServiceType(this.platform.Service.Outlet));
     if (!outlet) {
       return;
     }
@@ -666,7 +847,7 @@ export class HejhomePlatformAccessory {
     }
     outlet.updateCharacteristic(this.platform.Characteristic.On, power);
     if (this.powerServiceType(this.platform.Service.Outlet) === this.platform.Service.Outlet) {
-      const load = this.loadTracker ? this.loadTracker.read() : power;
+      const load = this.loadTracker ? this.calibratedOutletLoad() : power;
       if (load !== null) {
         outlet.updateCharacteristic(this.platform.Characteristic.OutletInUse, load);
       }
@@ -674,7 +855,7 @@ export class HejhomePlatformAccessory {
   }
 
   private updateWindowCovering(device: HejDevice): void {
-    const covering = this.accessory.getService(this.platform.Service.WindowCovering);
+    const covering = this.baseService(this.platform.Service.WindowCovering);
     if (!covering) {
       return;
     }
@@ -696,7 +877,7 @@ export class HejhomePlatformAccessory {
     if (!hasSensorState(device, 'motionDetected')) {
       return;
     }
-    this.accessory.getService(this.platform.Service.MotionSensor)
+    this.baseService(this.platform.Service.MotionSensor)
       ?.updateCharacteristic(this.platform.Characteristic.MotionDetected, readMotionState(device));
   }
 
@@ -704,7 +885,7 @@ export class HejhomePlatformAccessory {
     if (!hasSensorState(device, 'state')) {
       return;
     }
-    this.accessory.getService(this.platform.Service.ContactSensor)
+    this.baseService(this.platform.Service.ContactSensor)
       ?.updateCharacteristic(this.platform.Characteristic.ContactSensorState, readContactState(this.platform, device));
   }
 
@@ -715,7 +896,7 @@ export class HejhomePlatformAccessory {
     ] as const) {
       const value = numericState(device, key);
       if (value !== null) {
-        this.accessory.getService(type)?.updateCharacteristic(characteristic, value);
+        this.baseService(type)?.updateCharacteristic(characteristic, value);
       }
     }
   }
@@ -724,7 +905,7 @@ export class HejhomePlatformAccessory {
     if (!hasSensorState(device, 'alarm')) {
       return;
     }
-    this.accessory.getService(this.platform.Service.LeakSensor)
+    this.baseService(this.platform.Service.LeakSensor)
       ?.updateCharacteristic(this.platform.Characteristic.LeakDetected, readLeakState(this.platform, device));
   }
 
@@ -732,12 +913,12 @@ export class HejhomePlatformAccessory {
     if (!hasSensorState(device, 'alarm')) {
       return;
     }
-    this.accessory.getService(this.platform.Service.SmokeSensor)
+    this.baseService(this.platform.Service.SmokeSensor)
       ?.updateCharacteristic(this.platform.Characteristic.SmokeDetected, readSmokeState(this.platform, device));
   }
 
   private updateBatteryService(device: HejDevice): void {
-    const battery = this.accessory.getService(this.batteryServiceType());
+    const battery = this.baseService(this.batteryServiceType());
     if (!battery) {
       return;
     }
@@ -760,21 +941,40 @@ export class HejhomePlatformAccessory {
     const activeCharacteristic = this.platform.Characteristic.Active ?? this.platform.Characteristic.On;
     const power = readPowerState(device);
     if (power !== undefined) {
-      this.accessory.getService(fanServiceType)?.updateCharacteristic(activeCharacteristic, power ? 1 : 0);
+      this.baseService(fanServiceType)?.updateCharacteristic(activeCharacteristic, power ? 1 : 0);
     }
+  }
+
+  private baseService(serviceType: ServiceType): HomebridgeService | undefined {
+    const first = this.accessory.getService(serviceType);
+    if (!first?.subtype) {
+      return first;
+    }
+    // Stable remote-* switches must never be reused as the device's base power service.
+    return this.accessory.services.find((service) => service.UUID === first.UUID && !service.subtype);
   }
 
   private service(serviceType: ServiceType, name: string, subtype?: string): HomebridgeService {
     const service = subtype
       ? this.accessory.getServiceById?.(serviceType, subtype)
-      : this.accessory.getService(serviceType);
+      : this.baseService(serviceType);
     if (service) {
       return service;
     }
     const addService = this.accessory.addService as unknown as AddServiceByType;
+    // HAP requires a subtype-less service to be inserted before siblings of the same type.
+    // Cached remote buttons can precede a newly restored base power service; preserve their objects and subtypes.
+    const siblings = !subtype && Array.isArray(this.accessory.services)
+      ? this.accessory.services.filter((candidate) => candidate.UUID === serviceType.UUID && candidate.subtype) : [];
+    for (const sibling of siblings) {
+      this.accessory.removeService(sibling);
+    }
     const created = subtype
       ? addService.call(this.accessory, serviceType, name, subtype)
       : addService.call(this.accessory, serviceType, name);
+    for (const sibling of siblings) {
+      this.accessory.addService(sibling);
+    }
     return created;
   }
 
@@ -839,9 +1039,17 @@ export class HejhomePlatformAccessory {
     return value;
   }
 
+  private calibratedOutletLoad(): boolean | null {
+    if (this.loadField && this.platform.getMeasurementHealth?.(this.device.id, this.loadField)?.reachable === false) {
+      this.loadTracker?.invalidate();
+      return null;
+    }
+    return this.loadTracker?.read() ?? null;
+  }
+
   private readOutletInUse(): boolean {
     const device = this.readDevice();
-    const load = this.loadTracker ? this.loadTracker.read() : readPowerState(device);
+    const load = this.loadTracker ? this.calibratedOutletLoad() : readPowerState(device);
     if (load === null || load === undefined) {
       throw this.communicationError();
     }
@@ -849,7 +1057,7 @@ export class HejhomePlatformAccessory {
   }
 
   private deviceRole(): 'Lightbulb' | 'Outlet' | 'Switch' | undefined {
-    if (!['relay-switch', 'multi-switch', 'outlet', 'power-strip'].includes(this.capability.serviceKind)) {
+    if (!supportsDeviceRole(this.device.deviceType)) {
       return undefined;
     }
     const role = this.platform.features?.devices?.[this.device.id]?.role;
@@ -872,6 +1080,9 @@ export class HejhomePlatformAccessory {
   }
 
   private relayPowerKey(device: HejDevice): PowerKey {
+    if (device.deviceType === 'Airpurifier') {
+      return 'power';
+    }
     return device.deviceState?.power !== undefined ? 'power' : 'power1';
   }
 
@@ -882,6 +1093,9 @@ export class HejhomePlatformAccessory {
 
   private removeStaleBaseServices(): void {
     const desired = new Set(this.momentaryPower ? ['Switch'] : this.capability.homeKitServices);
+    if (this.hasCalibratedAirQuality()) {
+      desired.add('AirQualitySensor');
+    }
     const role = this.deviceRole();
     if (role) {
       desired.delete('Switch');
@@ -889,6 +1103,7 @@ export class HejhomePlatformAccessory {
       desired.add(role);
     }
     const stale = [
+      ['AirQualitySensor', this.platform.Service.AirQualitySensor],
       ['StatelessProgrammableSwitch', this.platform.Service.StatelessProgrammableSwitch],
       ['Lightbulb', this.platform.Service.Lightbulb],
       ['MotionSensor', this.platform.Service.MotionSensor],
@@ -908,7 +1123,7 @@ export class HejhomePlatformAccessory {
       if (desired.has(name) || !serviceType) {
         continue;
       }
-      const service = this.accessory.getService(serviceType);
+      const service = this.baseService(serviceType);
       if (service) {
         this.accessory.removeService(service);
       }
@@ -924,7 +1139,7 @@ export class HejhomePlatformAccessory {
       const baseServiceType = this.capability.serviceKind === 'multi-switch'
         ? this.powerServiceType(this.platform.Service.Switch)
         : this.powerServiceType(this.platform.Service.Outlet);
-      const baseService = this.accessory.getService(baseServiceType);
+      const baseService = this.baseService(baseServiceType);
       if (baseService) {
         this.accessory.removeService(baseService);
       }
@@ -956,6 +1171,9 @@ export function mergeDeviceState(device: HejDevice, patch: Record<string, unknow
 }
 
 function readPowerState(device: HejDevice): boolean | undefined {
+  if (device.deviceType === 'Airpurifier') {
+    return decodeAirPurifierPower(device.deviceState?.power) ?? undefined;
+  }
   const power = readVendorPower(device);
   if (power !== undefined) {
     return power;
@@ -976,30 +1194,14 @@ function readPowerStateByKey(device: HejDevice, key: PowerKey): boolean | undefi
   return typeof value === 'boolean' ? value : undefined;
 }
 
-function readHsvState(device: HejDevice): { hue: number; saturation: number; brightness: number } {
-  const isWhiteMode = device.deviceState?.lightMode === 'WHITE';
-  return {
-    hue: clampNumber(Number(device.deviceState?.hsvColor?.hue ?? 0), 0, 360),
-    saturation: isWhiteMode
-      ? 0
-      : clampNumber(Number(device.deviceState?.hsvColor?.saturation ?? 0), 0, 100),
-    brightness: clampNumber(
-      Number(isWhiteMode
-        ? device.deviceState?.brightness ?? device.deviceState?.hsvColor?.brightness ?? 100
-        : device.deviceState?.hsvColor?.brightness ?? device.deviceState?.brightness ?? 100),
-      0,
-      100,
-    ),
-  };
-}
-
 function readMotionState(device: HejDevice): boolean {
   return Boolean(device.deviceState?.motionDetected);
 }
 
 function readContactState(platform: HejhomePlatform, device: HejDevice): number {
   const state = String(device.deviceState?.state ?? '').toUpperCase();
-  const opened = state === 'OPEN' || device.deviceState?.doorOpened === true;
+  const opened = device.deviceType === 'ZigbeeDoorlock' ? device.deviceState?.doorOpened === true
+    : state === 'OPEN' || device.deviceState?.doorOpened === true;
   return opened
     ? platform.Characteristic.ContactSensorState.CONTACT_NOT_DETECTED
     : platform.Characteristic.ContactSensorState.CONTACT_DETECTED;
@@ -1033,11 +1235,6 @@ function readPositionState(platform: HejhomePlatform, device: HejDevice): number
   return workState === 'stop' ? platform.Characteristic.PositionState.STOPPED : undefined;
 }
 
-function readNumberState(device: HejDevice, key: keyof HejDeviceState, fallback: number): number {
-  const value = Number(device.deviceState?.[key] ?? fallback);
-  return Number.isFinite(value) ? value : fallback;
-}
-
 function countPowerKeys(state: HejDeviceState | null | undefined): number {
   if (!state) {
     return 1;
@@ -1047,16 +1244,6 @@ function countPowerKeys(state: HejDeviceState | null | undefined): number {
 
 function powerKeys(count: number): PowerKey[] {
   return Array.from({ length: count }, (_, index) => `power${index + 1}` as PowerKey);
-}
-
-function temperaturePercentToMired(value: number): number {
-  const kelvin = 3000 + (clampNumber(value, 0, 100) / 100 * 3500);
-  return clampNumber(1_000_000 / kelvin, 140, 500);
-}
-
-function miredToTemperaturePercent(value: number): number {
-  const kelvin = 1_000_000 / clampNumber(value, 140, 500);
-  return clampNumber(((kelvin - 3000) / 3500) * 100, 0, 100);
 }
 
 function clampNumber(value: number, min: number, max: number): number {
@@ -1078,7 +1265,31 @@ function numericState(device: HejDevice, key: string): number | null {
 function hasSensorState(device: HejDevice, key: string): boolean {
   const state = device.deviceState;
   if (key === 'state') {
+    if (device.deviceType === 'ZigbeeDoorlock') {
+      return typeof state?.doorOpened === 'boolean';
+    }
     return typeof state?.doorOpened === 'boolean' || ['OPEN', 'CLOSED'].includes(String(state?.state).toUpperCase());
   }
   return typeof state?.[key] === 'boolean';
+}
+
+function knownColorComponent(device: HejDevice, key: 'hue' | 'saturation' | 'brightness'): number | undefined {
+  const state = device.deviceState;
+  const white = state?.lightMode === 'WHITE';
+  if (key === 'saturation' && white) {
+    return 0;
+  }
+  const raw = key === 'brightness' && white ? state?.brightness : state?.hsvColor?.[key];
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0 || raw > (key === 'hue' ? 360 : 100)) {
+    return undefined;
+  }
+  return raw;
+}
+
+function normalizedLightMode(value: unknown): 'white' | 'color' | 'scene' | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const mode = value.toLowerCase();
+  return mode === 'colour' || mode === 'color' ? 'color' : mode === 'white' || mode === 'scene' ? mode : undefined;
 }

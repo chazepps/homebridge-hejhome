@@ -1,0 +1,9 @@
+{
+  "name": "homebridge-automation-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "keywords": ["homebridge-plugin", "supports-hap"],
+  "engines": { "homebridge": "^2.4.0", "node": "^22.13.0 || ^24.0.0 || ^26.0.0" }
+}

@@ -1,3 +1,5 @@
+import { isReservedMeasurementField } from './runtime/measurementFields.js';
+
 export interface MeterSource { field: string; multiplier: number }
 export interface MeterProfile {
   model: string;
@@ -11,6 +13,9 @@ export interface DevicePreference {
   name?: string;
   role?: 'original' | 'light' | 'outlet' | 'switch';
   temperatureSensorId?: string;
+  freshnessMinutes?: number;
+  remoteButtons?: boolean;
+  pm25Multiplier?: number;
 }
 export interface FeatureOptions {
   matter: boolean;
@@ -53,6 +58,7 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
       }
       const source = object(profile[kind]);
       if (typeof source.field !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(source.field)
+        || isReservedMeasurementField(source.field)
         || typeof source.multiplier !== 'number' || !Number.isFinite(source.multiplier) || source.multiplier <= 0) {
         throw new Error(`${kind} needs a state field and a positive SI-unit multiplier.`);
       }
@@ -73,7 +79,7 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
       }
       const preference = object(rawPreference);
       for (const key of Object.keys(preference)) {
-        if (!['visibility', 'name', 'role', 'temperatureSensorId'].includes(key)) {
+        if (!['visibility', 'name', 'role', 'temperatureSensorId', 'freshnessMinutes', 'remoteButtons', 'pm25Multiplier'].includes(key)) {
           throw new Error(`Unknown device option: ${key}`);
         }
       }
@@ -103,6 +109,26 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
           throw new Error('Invalid temperature sensor ID.');
         }
         entry.temperatureSensorId = preference.temperatureSensorId;
+      }
+      if (preference.freshnessMinutes !== undefined) {
+        if (typeof preference.freshnessMinutes !== 'number' || !Number.isInteger(preference.freshnessMinutes)
+          || preference.freshnessMinutes < 5 || preference.freshnessMinutes > 1440) {
+          throw new Error('Measurement validity must be 5–1440 minutes.');
+        }
+        entry.freshnessMinutes = preference.freshnessMinutes;
+      }
+      if (preference.remoteButtons !== undefined) {
+        if (typeof preference.remoteButtons !== 'boolean') {
+          throw new Error('Remote buttons must be enabled or disabled.');
+        }
+        entry.remoteButtons = preference.remoteButtons;
+      }
+      if (preference.pm25Multiplier !== undefined) {
+        if (typeof preference.pm25Multiplier !== 'number' || !Number.isFinite(preference.pm25Multiplier)
+          || preference.pm25Multiplier <= 0) {
+          throw new Error('PM2.5 multiplier must be a positive number.');
+        }
+        entry.pm25Multiplier = preference.pm25Multiplier;
       }
       normalized[id] = entry;
     }

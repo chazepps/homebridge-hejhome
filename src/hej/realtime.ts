@@ -85,10 +85,16 @@ export class HejRealtimeClient {
             deviceState.power = status.value;
             break;
           case 'switch': {
-            deviceState.power = status.value;
-            deviceState.state = status.value ? 'OPEN' : 'CLOSED';
+            const power = booleanReport(status.value);
+            deviceState.power = power;
+            if (power !== null) {
+              deviceState.state = power ? 'OPEN' : 'CLOSED';
+            }
             break;
           }
+          case 'door_opened':
+            deviceState.doorOpened = typeof status.value === 'boolean' ? status.value : null;
+            break;
           case 'prm_switch':
             deviceState.state = status.value ? 'OPEN' : 'CLOSED';
             break;

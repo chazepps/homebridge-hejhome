@@ -6,7 +6,7 @@ import { HejhomePlatformAccessory, mergeDeviceState } from './platformAccessory.
 import { resolveDiscoveryScope } from './discovery/scope.js';
 import { DeviceSnapshotStore } from './storage/deviceSnapshotStore.js';
 import { LogStore, type LogLevel } from './storage/logStore.js';
-import { SessionStore } from './storage/sessionStore.js';
+import { SessionStore, sessionFingerprint } from './storage/sessionStore.js';
 import type { HejDevice, HejFamily, HejhomePlatformConfig, HejSession } from './types.js';
 import { sanitizeForLog } from './utils/redact.js';
 import { createSessionLogContext } from './utils/sessionDiagnostics.js';
@@ -15,9 +15,9 @@ import { RuntimeCommandServer, type RuntimeCommandRequest } from './runtime/comm
 import { createIrRemoteRequirements } from './media/irRemoteCommands.js';
 import { getDeviceCapability } from './devices/capabilities.js';
 import { isMomentaryPowerDevice } from './devices/power.js';
-import { encodeHvacControl, type HvacCommand } from './devices/hvac.js';
-import { createHash } from 'node:crypto';
-import { RuntimeHealth, isContinuousMeasurement, type HealthResult } from './runtime/health.js';
+import { encodePurifierControl, decodePurifierSettings } from './devices/purifier.js';
+import { encodeHvacControl, decodeHvacSettings, type HvacCommand } from './devices/hvac.js';
+import { RuntimeHealth, measurementFreshnessMs, type HealthResult } from './runtime/health.js';
 import { RuntimeStatusStore, type RuntimeStatus } from './runtime/status.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
@@ -44,12 +44,13 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private readonly devices = new Map<string, HejDevice>();
   private readonly observations = new StateObservations();
   private readonly matterSettlements = new Map<string, ReturnType<typeof setImmediate>>();
-  private readonly health = new RuntimeHealth();
+  private readonly health: RuntimeHealth;
   private readonly statusStore: RuntimeStatusStore;
   private readonly commandServer: RuntimeCommandServer;
   private readonly controls = new Map<string, { at: string; success: boolean }>();
   private connection: RuntimeStatus['connection'] = { session: 'unknown', realtime: 'unknown' };
   private sessionFingerprint = '';
+  private inventoryOwnerFingerprint = '';
   private generation = 0;
   private sessionChecking = false;
   private discoveryRunning: Promise<void> | null = null;
@@ -72,6 +73,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     public readonly api: API,
   ) {
     this.features = normalizeFeatures(config.features);
+    this.health = new RuntimeHealth(() => Date.now(), this.features);
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
     this.logStore = new LogStore(api.user.storagePath());
@@ -82,7 +84,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
     if (api.matter) {
       this.matter = new MatterAdapter(api.matter, (id, requirements) => this.controlDevice(id, requirements, 'matter'),
-        this.features.meters, (error) => this.warn('matter.update.failed', { error: String(error) }));
+        this.features.meters, (error) => this.warn('matter.update.failed', { error: String(error) }), this.features.devices ?? {});
     } else if (this.features.matter) {
       this.warn('matter.disabled-on-bridge', { message: 'Enable Matter for this bridge in Homebridge UI and restart.' });
     }
@@ -125,6 +127,12 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       if (generation !== this.generation) {
         throw new Error('Hejhome session changed. Try again.');
       }
+      if (this.initialized && !await this.currentSessionMatches()) {
+        throw new Error('Hejhome session changed. Try again.');
+      }
+      if (generation !== this.generation || this.stopping || !this.client || signal?.aborted) {
+        throw new Error('Hejhome session changed. Try again.');
+      }
       if (!this.devices.has(id) || (this.initialized && !this.verifiedDevices.has(id))) {
         throw new Error('Hejhome device is no longer available.');
       }
@@ -139,7 +147,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       const observedAtDispatch = this.observations.capture(id);
       try {
         await this.client.controlDevice(id, requirements);
-        if (generation !== this.generation) {
+        if ((this.initialized && !await this.currentSessionMatches()) || generation !== this.generation) {
           throw new Error('Hejhome session changed. Try again.');
         }
         if (this.stopping) {
@@ -196,6 +204,20 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.matterSettlements.clear();
   }
 
+  private async currentSessionMatches(): Promise<boolean> {
+    const session = await this.sessionStore.load();
+    return !!session && sessionFingerprint(session) === this.sessionFingerprint;
+  }
+
+  public async controlRemoteButton(id: string, command: unknown, signal?: AbortSignal): Promise<void> {
+    const device = this.devices.get(id);
+    if (!device) {
+      throw new Error('기기를 찾을 수 없습니다.');
+    }
+    const requirements = createIrRemoteRequirements(device.deviceType, command);
+    await this.controlDevice(id, requirements, 'ui', signal);
+  }
+
   private executeUiCommand(request: RuntimeCommandRequest, signal: AbortSignal): Promise<void> {
     const device = this.devices.get(request.deviceId);
     if (!device) {
@@ -203,7 +225,12 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     }
     let requirements: Record<string, unknown>;
     if (request.kind === 'remote') {
-      requirements = createIrRemoteRequirements(device.deviceType, request.command);
+      return this.controlRemoteButton(device.id, request.command, signal);
+    } else if (request.kind === 'purifier') {
+      if (device.deviceType !== 'Airpurifier') {
+        return Promise.reject(new Error('지원하지 않는 공기청정기입니다.'));
+      }
+      requirements = encodePurifierControl(request.command);
     } else {
       if (device.deviceType !== 'IrAirconditioner') {
         return Promise.reject(new Error('지원하지 않는 에어컨입니다.'));
@@ -321,7 +348,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.cancelDiscoveryRetry();
     this.realtime?.disconnect();
     this.client?.dispose();
-    this.sessionFingerprint = fingerprint(session);
+    this.sessionFingerprint = sessionFingerprint(session);
     this.connection = { session: session.expiresAt <= Date.now() ? 'expired' : 'unknown', realtime: 'connecting' };
     this.receivedConnection = false;
     this.refreshHealth();
@@ -418,6 +445,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private async collectAndApplyDiscovery(patches: Map<string, Partial<HejDevice>>): Promise<void> {
     const client = this.client;
     const generation = this.generation;
+    const ownerFingerprint = this.sessionFingerprint;
     if (!client || this.stopping) {
       return;
     }
@@ -437,6 +465,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       }
     }
     if (generation !== this.generation || this.stopping) {
+      return;
+    }
+    if (!await this.currentSessionMatches() || generation !== this.generation || this.stopping) {
       return;
     }
     const devices = snapshotFamilies.flatMap((family) => family.devices).map((device) => {
@@ -498,7 +529,11 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     if (generation !== this.generation || this.stopping) {
       return;
     }
-    await this.snapshotStore.save(snapshotFamilies);
+    await this.snapshotStore.save(snapshotFamilies, ownerFingerprint);
+    if (generation !== this.generation || this.stopping) {
+      return;
+    }
+    this.inventoryOwnerFingerprint = ownerFingerprint;
     this.persistStatus();
     this.info('discovery.finished', { activeAccessories: this.accessories.size, deviceCount: devices.length });
   }
@@ -520,7 +555,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private createAccessoryHandler(accessory: PlatformAccessory, device: HejDevice): void {
-    const signature = JSON.stringify([device.deviceType, device.modelName ?? null, isMomentaryPowerDevice(device)]);
+    const signature = JSON.stringify([device.deviceType, device.modelName ?? null, isMomentaryPowerDevice(device),
+      this.features.devices?.[device.id]?.remoteButtons === true, this.features.devices?.[device.id]?.freshnessMinutes ?? null,
+      this.features.devices?.[device.id]?.pm25Multiplier ?? null]);
     const existing = this.accessoryHandlers.get(accessory.UUID);
     if (existing && this.handlerSignatures.get(accessory.UUID) === signature) {
       existing.rebindClient(this.client);
@@ -574,7 +611,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     const retained: NonNullable<HejDevice['deviceState']> = {};
     for (const [key, value] of Object.entries(this.reportedStates.get(device.id) ?? {})) {
       const receivedAt = this.reportedAt.get(device.id)?.get(key) ?? 0;
-      const keep = isContinuousMeasurement(device.deviceType, key)
+      const keep = measurementFreshnessMs(device, key, this.features) !== null
         ? this.health.measurement(device.id, key).reachable
         : Date.now() - receivedAt <= 5000;
       if (keep) {
@@ -728,7 +765,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
           this.sessionFingerprint = '';
         }
         this.connection = { session: 'missing', realtime: 'disconnected' };
-      } else if (fingerprint(session) !== this.sessionFingerprint) {
+      } else if (sessionFingerprint(session) !== this.sessionFingerprint) {
         await this.replaceSession(session);
       }
       if (this.initialized && !this.discoveryRunning && Date.now() - this.lastDiscoveryAt >= 300000) {
@@ -743,15 +780,19 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private persistStatus(): void {
-    const status: RuntimeStatus = { version: 1, controlsAvailable: this.commandServer.available && !this.stopping,
+    const ownedDevices = this.sessionFingerprint && this.inventoryOwnerFingerprint === this.sessionFingerprint ? [...this.devices.values()] : [];
+    const status: RuntimeStatus = { version: 1, ...(this.sessionFingerprint ? { ownerFingerprint: this.sessionFingerprint } : {}),
+      controlsAvailable: this.commandServer.available && !this.stopping,
       updatedAt: new Date().toISOString(), connection: { ...this.connection },
-      devices: [...this.devices.values()].map((device) => {
+      devices: ownedDevices.map((device) => {
         const control = this.controls.get(device.id);
         const sensor = ['SensorTh', 'SensorTh2', 'SensorRefTh', 'SensorRefTh2'].includes(device.deviceType);
         const linkedHvac = device.deviceType === 'IrAirconditioner'
           && !!this.features.devices?.[device.id]?.temperatureSensorId;
         const temperatureCelsius = sensor ? this.measuredTemperature(device.id) : this.getDeviceTemperature(device.id);
         return { ...(sensor || linkedHvac ? { temperatureCelsius: temperatureCelsius ?? null } : {}),
+          ...(device.deviceType === 'IrAirconditioner' ? { hvacSettings: decodeHvacSettings(device.deviceState) } : {}),
+          ...(device.deviceType === 'Airpurifier' ? { purifierSettings: decodePurifierSettings(device.deviceState) } : {}),
           id: device.id, name: device.name, deviceType: device.deviceType,
           online: device.online ?? null, lastSeenAt: this.health.lastSeen(device.id),
           lastControlAt: control?.at ?? null, lastControl: control ? (control.success ? 'success' : 'failed') : 'unknown',
@@ -798,8 +839,4 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     }
     this.log.info(message, safeData);
   }
-}
-
-function fingerprint(session: HejSession): string {
-  return createHash('sha256').update(JSON.stringify(session)).digest('hex');
 }

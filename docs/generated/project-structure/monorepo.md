@@ -25,6 +25,8 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   └── README.md
 │   ├── design-docs
 │   │   ├── 2.1.0-beta.md
+│   │   ├── device-contracts-3.0.md
+│   │   ├── device-history.md
 │   │   ├── media-security-contracts.md
 │   │   └── README.md
 │   ├── DESIGN.md
@@ -77,10 +79,12 @@ Generated from the current repository tree. Generated project-structure snapshot
 ├── README.md
 ├── src
 │   ├── devices
+│   │   ├── airQuality.ts
 │   │   ├── capabilities.ts
 │   │   ├── hvac.ts
 │   │   ├── load.ts
-│   │   └── power.ts
+│   │   ├── power.ts
+│   │   └── purifier.ts
 │   ├── discovery
 │   │   └── scope.ts
 │   ├── features.ts
@@ -90,18 +94,22 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   └── rest.ts
 │   ├── index.ts
 │   ├── lighting
-│   │   └── adaptive.ts
+│   │   ├── adaptive.ts
+│   │   └── temperature.ts
 │   ├── matter
 │   │   ├── accessory.ts
 │   │   ├── adapter.ts
 │   │   └── metering.ts
 │   ├── media
+│   │   ├── cameraSignalling.ts
+│   │   ├── irHapButtons.ts
 │   │   └── irRemoteCommands.ts
 │   ├── platform.ts
 │   ├── platformAccessory.ts
 │   ├── runtime
 │   │   ├── commands.ts
 │   │   ├── health.ts
+│   │   ├── measurementFields.ts
 │   │   ├── observations.ts
 │   │   └── status.ts
 │   ├── settings.ts
@@ -119,24 +127,30 @@ Generated from the current repository tree. Generated project-structure snapshot
 │       └── config.json
 ├── tests
 │   ├── adaptive-lighting.test.ts
+│   ├── air-quality.test.ts
 │   ├── automation-hap.test.ts
 │   ├── beta-options.test.ts
+│   ├── camera-signalling.test.ts
 │   ├── device-capabilities.test.ts
 │   ├── device-hvac.test.ts
 │   ├── device-load.test.ts
 │   ├── device-snapshot-store.test.ts
 │   ├── device-support.test.ts
+│   ├── device-white-temperature.test.ts
 │   ├── discovery-scope.test.ts
 │   ├── docs-harness.test.ts
 │   ├── fixtures
 │   │   ├── czmm-capability-inventory-20260930.json
 │   │   └── pi-devices-snapshot.json
 │   ├── hap-lifecycle.test.ts
+│   ├── hap-media-review.test.ts
 │   ├── hej-auth.test.ts
 │   ├── hej-rest-lifecycle.test.ts
 │   ├── homebridge-dev-ui.test.ts
+│   ├── ir-hap-buttons.test.ts
 │   ├── ir-remote-commands.test.ts
 │   ├── log-store.test.ts
+│   ├── matter-cache-restore.test.ts
 │   ├── matter-conformance.test.ts
 │   ├── matter-dimming.test.ts
 │   ├── matter.test.ts
@@ -147,13 +161,18 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── platform-beta.test.ts
 │   ├── platform.test.ts
 │   ├── public-surface.test.ts
+│   ├── purifier-contract.test.ts
+│   ├── realtime-purifier-door.test.ts
 │   ├── realtime.test.ts
 │   ├── redaction.test.ts
 │   ├── release-channel.test.ts
+│   ├── release-host-matrix.test.ts
 │   ├── runtime-commands.test.ts
+│   ├── runtime-hap-review.test.ts
 │   ├── runtime-health.test.ts
 │   ├── runtime-lifecycle.test.ts
 │   ├── runtime-observations.test.ts
+│   ├── runtime-session-ownership.test.ts
 │   ├── runtime-status.test.ts
 │   ├── runtime-visibility.test.ts
 │   ├── session-diagnostics.test.ts
@@ -162,14 +181,25 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── appearance.spec.ts
 │   │   ├── beta-features.spec.ts
 │   │   ├── catalog-services.spec.ts
+│   │   ├── device-features.spec.ts
 │   │   ├── device-settings.spec.ts
+│   │   ├── diagnostics-transitions.spec.ts
 │   │   └── login-ui.spec.ts
 │   ├── ui-diagnostics-server.test.ts
 │   ├── ui-features-server.test.ts
+│   ├── ui-live-diagnostics-server.test.ts
 │   └── ui-server-source.test.ts
 ├── tools
 │   ├── automation
+│   │   ├── alpha-loopback-adapter
+│   │   │   ├── index.js
+│   │   │   └── package.json
+│   │   ├── fixture-plugin
+│   │   │   ├── index.js
+│   │   │   └── package.json
+│   │   ├── loopback-listen.mjs
 │   │   ├── README.md
+│   │   ├── run-host-integration.mjs
 │   │   ├── verify-dirty-clone.mjs
 │   │   └── verify-upstream.mjs
 │   ├── docs
@@ -183,7 +213,9 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── run-dev-ui.mjs
 │   │   └── verify-pi-runtime.mjs
 │   └── release
-│       └── channel.mjs
+│       ├── channel.mjs
+│       ├── host-matrix-smoke.mjs
+│       └── verify-host-matrix.mjs
 ├── tsconfig.json
 └── vitest.config.ts
 ```

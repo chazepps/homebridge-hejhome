@@ -20,3 +20,21 @@ describe('vendor web-app HVAC command contract', () => {
     }
   });
 });
+
+test('decodes reported settings without claiming measured temperature or compressor operation', async () => {
+  const { decodeHvacSettings } = await import('../src/devices/hvac.js');
+  expect(decodeHvacSettings({ power: '꺼짐', temperature: '23', mode: '0', fanSpeed: 3 })).toEqual({
+    power: false, targetTemperature: 23, mode: 'cool', fanSpeed: 'high',
+  });
+  expect(decodeHvacSettings({ power: '켜짐', temperature: 30, mode: 4, fanSpeed: '0' })).toEqual({
+    power: true, targetTemperature: 30, mode: 'dry', fanSpeed: 'auto',
+  });
+  expect(decodeHvacSettings({ power: 'unknown', temperature: null, mode: 99, fanSpeed: true })).toEqual({
+    power: null, targetTemperature: null, mode: null, fanSpeed: null,
+  });
+});
+
+test('requires actual mode strings instead of accepting JavaScript coercion', () => {
+  expect(() => encodeHvacControl({ mode: ['cool'] } as never)).toThrow();
+  expect(() => encodeHvacControl({ fanSpeed: ['low'] } as never)).toThrow();
+});

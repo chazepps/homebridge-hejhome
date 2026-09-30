@@ -1,6 +1,9 @@
 import type { MatterAPI, MatterAccessory } from 'homebridge';
 import { getDeviceCapability } from '../devices/capabilities.js';
 import { isMomentaryPowerDevice, readVendorPower } from '../devices/power.js';
+import { decodeAirPurifierPower } from '../devices/purifier.js';
+import { calibratePm25 } from '../devices/airQuality.js';
+import { whiteMiredToTemperaturePercent, whiteTemperaturePercentToMired } from '../lighting/temperature.js';
 import type { MeterProfile } from '../features.js';
 import type { HejDevice } from '../types.js';
 import { meterClusters } from './metering.js';
@@ -163,6 +166,7 @@ function vendorLevel(level: number): number {
 export function createMatterAccessory(
   api: MatterAPI, current: () => HejDevice, send: Send, meters: MeterProfile[],
   dimmer = new MatterDimmingController(),
+  pm25Multiplier?: number,
 ): MatterAccessory | null {
   const device = current();
   const kind = getDeviceCapability(device.deviceType)?.serviceKind;
@@ -192,7 +196,9 @@ export function createMatterAccessory(
   const power = (key: string): NonNullable<Handlers['onOff']> => ({
     on: () => actuate({ [key]: true }), off: () => actuate({ [key]: false }),
     toggle: async () => {
-      const value = kind === 'ir-switch' ? readVendorPower(current()) : current().deviceState?.[key];
+      const value = kind === 'ir-switch' ? readVendorPower(current())
+        : current().deviceType === 'Airpurifier' ? decodeAirPurifierPower(current().deviceState?.power)
+          : current().deviceState?.[key];
       if (typeof value !== 'boolean') {
         throw new api.status.Failure('Current power state is unknown.');
       }
@@ -207,9 +213,10 @@ export function createMatterAccessory(
     case 'relay-switch':
     case 'ir-switch':
     case 'outlet': {
-      const key = state.power !== undefined || kind !== 'relay-switch' ? 'power' : 'power1';
-      accessory.deviceType = kind === 'outlet' ? types.OnOffOutlet : types.OnOffLight;
-      const powerState = kind === 'ir-switch' ? readVendorPower(device) : state[key];
+      const key = device.deviceType === 'Airpurifier' || state.power !== undefined || kind !== 'relay-switch' ? 'power' : 'power1';
+      accessory.deviceType = kind === 'outlet' || device.deviceType === 'Airpurifier' ? types.OnOffOutlet : types.OnOffLight;
+      const powerState = kind === 'ir-switch' ? readVendorPower(device)
+        : device.deviceType === 'Airpurifier' ? decodeAirPurifierPower(state.power) : state[key];
       clusters.onOff = typeof powerState === 'boolean' ? { onOff: powerState } : {};
       if (typeof powerState !== 'boolean') {
         clusters.bridgedDeviceBasicInformation = { reachable: false };
@@ -292,20 +299,22 @@ export function createMatterAccessory(
         stop: () => dimmer.stop(),
       };
       if (kind === 'white-light') {
-        const temperature = number(state.temperature);
+        const temperatureMired = whiteTemperaturePercentToMired(state.temperature);
         clusters.colorControl = {
-          ...(temperature !== null && temperature >= 0 && temperature <= 100 ? { colorTemperatureMireds: toMired(temperature) } : {}),
+          ...(temperatureMired !== null ? { colorTemperatureMireds: temperatureMired } : {}),
           colorMode: 2,
           colorTempPhysicalMinMireds: 154, colorTempPhysicalMaxMireds: 333, coupleColorTempToLevelMinMireds: 154,
         };
-        if (temperature === null || temperature < 0 || temperature > 100) {
+        if (temperatureMired === null) {
           clusters.bridgedDeviceBasicInformation = { reachable: false };
         }
         handlers.colorControl = { moveToColorTemperatureLogic: async ({ colorTemperatureMireds }) => {
+          const temperature = whiteMiredToTemperaturePercent(colorTemperatureMireds);
+          if (temperature === null) {
+            throw new api.status.Failure('Invalid white-light colour temperature.');
+          }
           await dimmer.stop();
-          await actuate({
-            temperature: Math.round(Math.max(0, Math.min(100, (1_000_000 / bounded(colorTemperatureMireds, 154, 333) - 3000) / 35))),
-          });
+          await actuate({ temperature });
         } };
       } else {
         clusters.colorControl = { ...(hsv ? { currentHue: Math.round(hsv.hue * 254 / 360),
@@ -315,18 +324,22 @@ export function createMatterAccessory(
         }
         const setColor = async (partial: Partial<{ hue: number; saturation: number; brightness: number }>) => {
           await dimmer.stop();
+          const nextColor = (snapshot: HejDevice) => {
+            const next = { hue: partial.hue ?? number(snapshot.deviceState?.hsvColor?.hue),
+              saturation: partial.saturation ?? number(snapshot.deviceState?.hsvColor?.saturation),
+              brightness: partial.brightness ?? brightness(snapshot) };
+            if (next.hue === null || next.saturation === null || next.brightness === null
+              || next.hue < 0 || next.hue > 360 || next.saturation < 0 || next.saturation > 100) {
+              throw new Error('Current colour is unknown.');
+            }
+            return next;
+          };
           const currentState = current();
-          const next = { hue: partial.hue ?? number(currentState.deviceState?.hsvColor?.hue),
-            saturation: partial.saturation ?? number(currentState.deviceState?.hsvColor?.saturation),
-            brightness: partial.brightness ?? brightness(currentState) };
-          if (next.hue === null || next.saturation === null || next.brightness === null
-            || next.hue < 0 || next.hue > 360 || next.saturation < 0 || next.saturation > 100) {
-            throw new Error('Current colour is unknown.');
-          }
+          nextColor(currentState);
           if (!isColorMode(currentState.deviceState?.lightMode)) {
             await actuate({ lightMode: 'colour' });
           }
-          await actuate({ hsvColor: next });
+          await actuate({ hsvColor: nextColor(current()) });
         };
         handlers.colorControl = {
           moveToHueAndSaturationLogic: ({ hue, saturation }) => setColor({
@@ -377,7 +390,8 @@ export function createMatterAccessory(
       accessory.deviceType = types.ContactSensor;
       {
         const opened = typeof state.doorOpened === 'boolean' ? state.doorOpened
-          : state.state === 'OPEN' ? true : state.state === 'CLOSED' ? false : null;
+          : device.deviceType === 'ZigbeeDoorlock' ? null
+            : state.state === 'OPEN' ? true : state.state === 'CLOSED' ? false : null;
         clusters.booleanState = opened === null ? {} : { stateValue: !opened };
         if (opened === null) {
           clusters.bridgedDeviceBasicInformation = { reachable: false };
@@ -402,6 +416,15 @@ export function createMatterAccessory(
     default:
       // IR HVAC, buttons, cameras and locks need additional command/event evidence.
       return null;
+  }
+  if (device.deviceType === 'Airpurifier' && typeof pm25Multiplier === 'number'
+    && Number.isFinite(pm25Multiplier) && pm25Multiplier > 0) {
+    const airQualityType = types.AirQualitySensor.with(
+      types.AirQualitySensor.requirements.server.optional.Pm25ConcentrationMeasurement.with('NumericMeasurement'));
+    accessory.parts = [{ id: 'air-quality', displayName: `${label} PM2.5`, deviceType: airQualityType,
+      clusters: { airQuality: { airQuality: 0 }, pm25ConcentrationMeasurement: {
+        measuredValue: calibratePm25(state.pm25, pm25Multiplier), measurementMedium: 0, measurementUnit: 4,
+      } } }];
   }
   if (state.battery !== undefined) {
     const battery = number(state.battery);
@@ -435,9 +458,6 @@ function measurement(value: unknown, min: number, max: number): number | null {
 function closedPercent(value: unknown): number | null {
   const parsed = number(value);
   return parsed === null ? null : Math.round((100 - Math.max(0, Math.min(100, parsed))) * 100);
-}
-function toMired(percent: number): number {
-  return Math.round(1_000_000 / (3000 + Math.max(0, Math.min(100, percent)) * 35));
 }
 function isColorMode(mode: unknown): boolean {
   return mode === 'COLOR' || mode === 'COLOUR';

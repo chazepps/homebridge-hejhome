@@ -57,3 +57,31 @@ test('describes both actual fan shapes without promising speed or rotation state
   expect(model?.note).toContain('전원 상태가 있으면 선풍기');
   expect(model?.note).toContain('없으면 전원 버튼');
 });
+
+test('publishes only evidenced purifier power and door contact behavior', () => {
+  expect(getDeviceCapability('Airpurifier')).toMatchObject({
+    serviceKind: 'relay-switch', supportStatus: 'partial', homeKitServices: ['Switch'],
+  });
+  expect(getDeviceCapability('IrAirpurifier')).toMatchObject({
+    serviceKind: 'unsupported', supportStatus: 'partial', homeKitServices: [],
+  });
+  expect(getDeviceCapability('ZigbeeDoorlock')).toMatchObject({
+    serviceKind: 'contact-sensor', supportStatus: 'partial', homeKitServices: ['ContactSensor'],
+  });
+  expect(getDeviceCapability('SmartDoorLock')).toMatchObject({
+    serviceKind: 'unsupported', supportStatus: 'partial', homeKitServices: [],
+  });
+  expect(getDeviceCapability('SmartButton')?.note).not.toContain('표시합니다');
+  expect(getDeviceCapability('HomeCamera')?.note).not.toContain('분석 완료');
+});
+
+test('preserves appearance roles for physical switches, relays, plugs, and power strips', async () => {
+  const { supportsDeviceRole } = await import('../src/devices/capabilities.js');
+  for (const type of ['Switch1', 'ZigbeeSwitch2', 'RelayController', 'Plug', 'SmartPlug', 'BruntPlug',
+    'PowerStrip', 'PowerStrip2']) {
+    expect(supportsDeviceRole(type)).toBe(true);
+  }
+  for (const type of ['Airpurifier', 'SensorDo', 'IrTv', 'Unknown']) {
+    expect(supportsDeviceRole(type)).toBe(false);
+  }
+});

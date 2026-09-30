@@ -1,8 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { decodeHvacSettings } from '../devices/hvac.js';
+import type { decodePurifierSettings } from '../devices/purifier.js';
 
 export interface RuntimeStatus {
   version: 1;
+  /** Internal only: strip before responding to UI or exporting diagnostics. */
+  ownerFingerprint?: string;
   controlsAvailable?: boolean;
   updatedAt: string;
   connection: {
@@ -14,6 +18,8 @@ export interface RuntimeStatus {
     lastSeenAt: string | null; lastControlAt: string | null;
     lastControl: 'success' | 'failed' | 'unknown'; homekit: boolean; matter: boolean;
     temperatureCelsius?: number | null;
+    hvacSettings?: ReturnType<typeof decodeHvacSettings>;
+    purifierSettings?: ReturnType<typeof decodePurifierSettings>;
   }>;
 }
 

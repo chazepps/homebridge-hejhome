@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 export interface RuntimeCommandRequest {
   deviceId: string;
-  kind: 'remote' | 'air-conditioner';
+  kind: 'remote' | 'air-conditioner' | 'purifier';
   command: unknown;
 }
 const MAX_FRAME = 16 * 1024;
@@ -25,7 +25,8 @@ function validRequest(value: unknown): value is RuntimeCommandRequest {
   }
   const record = value as Record<string, unknown>;
   return Object.keys(record).length === 3 && typeof record.deviceId === 'string' && record.deviceId.length > 0
-    && record.deviceId.length <= 256 && (record.kind === 'remote' || record.kind === 'air-conditioner') && Object.hasOwn(record, 'command');
+    && record.deviceId.length <= 256 && (record.kind === 'remote' || record.kind === 'air-conditioner' || record.kind === 'purifier')
+    && Object.hasOwn(record, 'command');
 }
 
 export async function sendRuntimeCommand(storagePath: string, request: RuntimeCommandRequest): Promise<void> {

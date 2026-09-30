@@ -1,5 +1,5 @@
 import type { MatterAPI, MatterAccessory } from 'homebridge';
-import type { MeterProfile } from '../features.js';
+import type { DevicePreference, MeterProfile } from '../features.js';
 import type { HejDevice } from '../types.js';
 import { PLUGIN_NAME, PLATFORM_NAME } from '../settings.js';
 import { createMatterAccessory, MatterDimmingController } from './accessory.js';
@@ -19,6 +19,7 @@ export class MatterAdapter {
     private readonly send: (deviceId: string, requirements: Record<string, unknown>) => Promise<void>,
     private readonly meters: MeterProfile[],
     private readonly onError: (error: unknown) => void,
+    private readonly devicePreferences: Record<string, DevicePreference> = {},
   ) {}
 
   restore(accessory: MatterAccessory): void {
@@ -84,6 +85,19 @@ export class MatterAdapter {
         continue;
       }
       retained.add(accessory.UUID);
+      const restored = this.accessories.get(accessory.UUID);
+      if (restored && !this.active.has(accessory.UUID)
+        && accessory.parts?.some((part) => part.id === 'air-quality')
+        && restored.parts?.some((part) => part.id === 'air-quality')) {
+        // Homebridge's cached part type contains only name/code. Its restore compares
+        // parent behavior keys and part IDs, so an optional PM2.5 behavior is lost
+        // unless a fresh discovery replaces that cached endpoint via public APIs.
+        const pmState = await this.api.getAccessoryState?.(accessory.UUID, 'pm25ConcentrationMeasurement', 'air-quality');
+        if (pmState === undefined) {
+          await this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [restored]);
+          this.accessories.delete(accessory.UUID);
+        }
+      }
       if (this.active.has(accessory.UUID)) {
         await this.api.updatePlatformAccessories([accessory]);
       } else {
@@ -176,7 +190,7 @@ export class MatterAdapter {
         throw new Error('Hejhome bridge is shutting down.');
       }
       await this.send(id, requirements);
-    }, this.meters, dimmer);
+    }, this.meters, dimmer, this.devicePreferences[id]?.pm25Multiplier);
   }
 
   private async report(uuid: string, clusters: Record<string, Record<string, unknown>>, partId?: string): Promise<void> {

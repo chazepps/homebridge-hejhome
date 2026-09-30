@@ -122,6 +122,18 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 128
+                },
+                "freshnessMinutes": {
+                  "type": "integer",
+                  "minimum": 5,
+                  "maximum": 1440
+                },
+                "remoteButtons": {
+                  "type": "boolean"
+                },
+                "pm25Multiplier": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
                 }
               }
             }

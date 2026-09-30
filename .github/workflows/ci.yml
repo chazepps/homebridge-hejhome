@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         node-version:
-          - 22.12.0
+          - 22.13.0
           - 24.x
           - 26.x
         homebridge-channel: [latest, beta]

@@ -35,9 +35,10 @@ This directory records the Hejhome Web API behavior used by the plugin. It inten
 | Plug | `power` plus power meter fields | `Outlet` service. Meter fields are read-only diagnostics for now. |
 | Power strip | `power1` through socket fields, optional all-off field | One outlet-like service per controllable socket. |
 | Curtain/Blind | `control`, `percentControl` | `WindowCovering` target position and current position. |
-| IR air conditioner | `power`, `temperature`, `mode`, `fanSpeed` | Partial `Thermostat` support. Complex remote keys are deferred. |
-| IR fan | `power`, `fanSpeed`, `swing` | Partial fan support. |
-| IR TV/projector/etc. | `power` and remote key fields | Only clear power-like commands are considered safe for v1. |
+| IR air conditioner | `power`, `temperature`, `mode`, `fanSpeed` | Home exposes verified power control; temperature, mode and fan settings use the plugin settings UI. Current operating state is not inferred. |
+| IR fan | `power`; button pulses `fanSpeed: true`, `swing: true` | Power state determines Fan versus momentary power button. Settings UI sends the two pulses; optional Home buttons expose them without claiming speed or swing state. |
+| IR TV/set-top box | `power`; `volume`, `channel`, `setChannel`, `mute` | Settings UI sends verified remote fields. Optional momentary Home switches expose volume/channel up/down and mute/unmute on the existing accessory. No Television or playback state. |
+| Zigbee door lock | No verified lock command | `doorOpened` is a read-only door contact, never lock-bolt state. |
 
 ## Realtime Status Mapping
 
@@ -62,21 +63,22 @@ Realtime updates arrive as status entries with a device id and code/value pairs.
 | `battery` | `battery` |
 | `cur_power`, `cur_current`, `cur_voltage` | plug meter diagnostics |
 | `alarm_switch`, `alarm_state` | alarm-like sensor state |
+| `door_opened` | read-only `doorOpened` contact state where the model supports it |
 
 ## Camera Notes
 
-Camera devices use a separate discovery endpoint and WebRTC signaling flow. The signaling flow is MQTT over WebSocket and exchanges offer, answer, candidate, and disconnect messages for an IPC topic.
+Camera discovery and WebRTC access use separate REST endpoints. The public web client then exchanges MQTT-over-WebSocket offer, answer, ICE candidate and disconnect messages for a session-specific IPC topic. The plugin has a typed signalling session that validates responses and messages and handles cancellation and cleanup in synthetic tests.
 
-HomeKit camera streaming is not implemented in this phase. The plugin records the endpoint and signaling contract so the next phase can design a proper Homebridge `CameraController` bridge, media relay, and FFmpeg or WebRTC-to-RTP pipeline without mixing camera risk into the general device rollout.
+That session is not connected to a broker or media peer at runtime. The broker login source is unverified and distinct from access-config payload credentials. No broker credential constants or new WebRTC/FFmpeg package were added. No camera is exposed to users: HomeKit still needs a real JPEG snapshot and RTP media pipeline, and HKSV needs a separate recording delegate and real event playback verification. See [media and security contracts](../design-docs/media-security-contracts.md) and the [Homebridge camera delegate](https://developers.homebridge.io/HAP-NodeJS/interfaces/CameraStreamingDelegate.html).
 
 ## Current Support Backlog
 
 | Area | Current Status | Next Evidence Needed |
 | --- | --- | --- |
-| Camera | Deferred | Streaming lifecycle, snapshot command, HomeKit media relay design, reconnect behavior. |
-| IR remote devices | Partial | Device-specific command field names and safe HomeKit meaning for non-power keys. |
+| Camera | Deferred | Authenticated broker/peer adapters, actual codec and snapshot evidence, HomeKit media transport; HKSV remains separate. |
+| IR remote devices | Partial | Physical response, repeated-key behavior, feedback limits, input and playback contracts. |
 | Air purifier | Partial | Fan speed, mode, filter, air-quality state semantics. |
-| Door lock and alarm-like devices | Partial | Secure lock-state semantics, alarm trigger semantics, and user notification behavior. |
+| Door lock and alarm-like devices | Partial | ZigbeeDoorlock door contact only; secure bolt state, lock control and alarm mode contracts still need evidence. |
 | Raw realtime datapoints | Normalized before HomeKit update | Regression tests prevent raw keys such as `colour_data`, `work_mode`, and `pir` from leaking into accessory state. |
 
 ## Home And Room Selection

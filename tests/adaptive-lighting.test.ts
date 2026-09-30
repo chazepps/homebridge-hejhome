@@ -26,3 +26,27 @@ describe('Adaptive Lighting lifecycle', () => {
     }
   });
 });
+
+test('external color or scene selection ends Adaptive Lighting but brightness and white echo do not', () => {
+  for (const patch of [{ lightMode: 'COLOUR' }, { lightMode: 'SCENE' }]) {
+    const controller = { isAdaptiveLightingActive: () => true, disableAdaptiveLighting: vi.fn() };
+    const session = new AdaptiveLightingSession(controller);
+    session.observe(patch as never);
+    expect(controller.disableAdaptiveLighting).toHaveBeenCalledOnce();
+  }
+  const controller = { isAdaptiveLightingActive: () => true, disableAdaptiveLighting: vi.fn() };
+  const session = new AdaptiveLightingSession(controller);
+  session.commanded(40);
+  session.observe({ brightness: 30, lightMode: 'WHITE', temperature: 40 });
+  expect(controller.disableAdaptiveLighting).not.toHaveBeenCalled();
+});
+
+test('stored inactive color and scene reports do not cancel a white lighting schedule', () => {
+  const controller = { isAdaptiveLightingActive: () => true, disableAdaptiveLighting: vi.fn() };
+  const session = new AdaptiveLightingSession(controller);
+  session.observe({ lightMode: 'WHITE', sceneValues: 'stored-recipe', hsvColor: { hue: 120, saturation: 80, brightness: 20 } });
+  session.observe({ sceneValues: 'stored-recipe' });
+  session.observe({ hsvColor: { hue: 120, saturation: 80, brightness: 20 } });
+  session.observe({ temperature: null } as never);
+  expect(controller.disableAdaptiveLighting).not.toHaveBeenCalled();
+});

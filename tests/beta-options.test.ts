@@ -19,11 +19,24 @@ describe('beta opt-ins and calibrated meters', () => {
     expect(normalizeFeatures({ devices: { 'hvac-1': { temperatureSensorId: 'sensor-1' } } }).devices?.['hvac-1'])
       .toEqual({ temperatureSensorId: 'sensor-1' });
     expect(() => normalizeFeatures({ devices: { 'hvac-1': { temperatureSensorId: ' ' } } })).toThrow();
+    expect(normalizeFeatures({ devices: { 'sensor-1': { freshnessMinutes: 30 }, 'tv-1': { remoteButtons: true } } }).devices)
+      .toMatchObject({ 'sensor-1': { freshnessMinutes: 30 }, 'tv-1': { remoteButtons: true } });
+    expect(() => normalizeFeatures({ devices: { 'sensor-1': { freshnessMinutes: 4 } } })).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'sensor-1': { freshnessMinutes: 1441 } } })).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'sensor-1': { freshnessMinutes: 12.5 } } })).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'tv-1': { remoteButtons: 'true' } } })).toThrow();
+    expect(normalizeFeatures({ devices: { 'purifier-1': { pm25Multiplier: 0.5 } } }).devices?.['purifier-1'])
+      .toEqual({ pm25Multiplier: 0.5 });
+    expect(() => normalizeFeatures({ devices: { 'purifier-1': { pm25Multiplier: 0 } } })).toThrow();
+    expect(() => normalizeFeatures({ devices: { 'purifier-1': { pm25Multiplier: Number.POSITIVE_INFINITY } } })).toThrow();
   });
   test('refuses ambiguous boolean flags and uncalibrated meter sources', () => {
     expect(() => normalizeFeatures({ matter: 'true' })).toThrow();
     expect(() => normalizeFeatures({ meters: [{ model: 'Plug', power: { field: 'curPower' } }] })).toThrow();
     expect(() => normalizeFeatures({ meters: [{ model: 'Plug', power: { field: 'x', multiplier: -1 } }] })).toThrow();
+    for (const field of ['power', 'power2', 'battery', 'temperature', 'pm25', 'mode']) {
+      expect(() => normalizeFeatures({ meters: [{ model: 'Plug', power: { field, multiplier: 1 } }] })).toThrow();
+    }
   });
   test('converts explicit SI units to milli-units without estimating energy', () => {
     const options = normalizeFeatures({ meters: [{ model: 'P1', power: { field: 'curPower', multiplier: 0.1 },

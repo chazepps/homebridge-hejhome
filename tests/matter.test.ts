@@ -34,6 +34,32 @@ describe('Matter device contract', () => {
     const white = make(device('LightWw1', { temperature: 0 }))!;
     expect(white.clusters?.colorControl?.colorTemperatureMireds).toBe(333);
   });
+  test('white light colour temperature shares the validated 0..100 vendor conversion', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const white = make(device('LightWw1', { power: true, brightness: 50, temperature: 0 }), send)!;
+    expect(white.clusters?.colorControl?.colorTemperatureMireds).toBe(333);
+    await white.handlers!.colorControl!.moveToColorTemperatureLogic!({ colorTemperatureMireds: 333, transitionTime: 0 });
+    expect(send).toHaveBeenCalledWith({ temperature: 0 });
+    await expect(white.handlers!.colorControl!.moveToColorTemperatureLogic!({ colorTemperatureMireds: 153, transitionTime: 0 }))
+      .rejects.toThrow();
+    expect(send).toHaveBeenCalledTimes(1);
+    const unknown = make(device('LightWw1', { power: true, brightness: 50, temperature: null }))!;
+    expect(unknown.clusters?.colorControl?.colorTemperatureMireds).toBeUndefined();
+    expect(unknown.clusters?.bridgedDeviceBasicInformation?.reachable).toBe(false);
+  });
+  test('colour mode handoff uses brightness reported while the mode request was pending', async () => {
+    let current = device('LightRgbw5', { power: true, lightMode: 'WHITE', brightness: 50 });
+    const send = vi.fn(async (requirements: Record<string, unknown>) => {
+      if (requirements.lightMode === 'colour') {
+        current = device('LightRgbw5', { power: true, lightMode: 'COLOUR', brightness: 70,
+          hsvColor: { hue: 30, saturation: 40, brightness: 70 } });
+      }
+    });
+    const accessory = createMatterAccessory(api, () => current, send, [])!;
+    await accessory.handlers!.colorControl!.moveToHueAndSaturationLogic!({ hue: 127, saturation: 254, transitionTime: 0 });
+    expect(send).toHaveBeenNthCalledWith(1, { lightMode: 'colour' });
+    expect(send).toHaveBeenNthCalledWith(2, { hsvColor: { hue: 180, saturation: 100, brightness: 70 } });
+  });
   test('coverings invert HomeKit open percentage into Matter closed percentage', async () => {
     const send = vi.fn().mockResolvedValue(undefined);
     const a = make(device('Curtain', { percentState: 80, percentControl: 20 }), send)!;
@@ -74,6 +100,46 @@ describe('Matter device contract', () => {
     const accessory = make(device('RelayController'), send)!;
     await expect(accessory.handlers!.onOff!.toggle!({})).rejects.toThrow();
     expect(send).not.toHaveBeenCalled();
+  });
+  test('Airpurifier uses only its verified power datapoint', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const known = make(device('Airpurifier', { power: true, power1: false }), send)!;
+    expect(known.clusters?.onOff).toEqual({ onOff: true });
+    await known.handlers!.onOff!.off!({});
+    expect(send).toHaveBeenCalledWith({ power: false });
+    const unknown = make(device('Airpurifier', { power1: true }), send)!;
+    expect(unknown.clusters?.onOff?.onOff).toBeUndefined();
+    expect(unknown.clusters?.bridgedDeviceBasicInformation?.reachable).toBe(false);
+    await expect(unknown.handlers!.onOff!.toggle!({})).rejects.toThrow();
+    expect(send).toHaveBeenCalledTimes(1);
+    const stringState = make(device('Airpurifier', { power: 'false', power1: true }), send)!;
+    expect(stringState.clusters?.onOff).toEqual({ onOff: false });
+    await stringState.handlers!.onOff!.toggle!({});
+    expect(send).toHaveBeenLastCalledWith({ power: true });
+  });
+  test('ZigbeeDoorlock contact requires a boolean doorOpened report', () => {
+    const open = make(device('ZigbeeDoorlock', { doorOpened: true }))!;
+    expect(open.clusters?.booleanState?.stateValue).toBe(false);
+    const closed = make(device('ZigbeeDoorlock', { doorOpened: false }))!;
+    expect(closed.clusters?.booleanState?.stateValue).toBe(true);
+    const stale = make(device('ZigbeeDoorlock', { state: 'OPEN' }))!;
+    expect(stale.clusters?.booleanState?.stateValue).toBeUndefined();
+    expect(stale.clusters?.bridgedDeviceBasicInformation?.reachable).toBe(false);
+    const malformed = make(device('ZigbeeDoorlock', { doorOpened: 'true' }))!;
+    expect(malformed.clusters?.booleanState?.stateValue).toBeUndefined();
+  });
+  test('Airpurifier PM2.5 is a separate opt-in calibrated measurement with unknown quality grade', () => {
+    const current = device('Airpurifier', { power: true, pm25: '25' });
+    expect(make(current)?.parts).toBeUndefined();
+    const calibrated = createMatterAccessory(api, () => current, vi.fn(), [], undefined, 0.5)!;
+    expect(calibrated.parts?.map((part) => part.id)).toEqual(['air-quality']);
+    expect(calibrated.parts?.[0]?.clusters.airQuality).toEqual({ airQuality: 0 });
+    expect(calibrated.parts?.[0]?.clusters.pm25ConcentrationMeasurement).toEqual({
+      measuredValue: 12.5, measurementMedium: 0, measurementUnit: 4,
+    });
+    const outOfRange = createMatterAccessory(api, () => device('Airpurifier', { power: true, pm25: 1001 }),
+      vi.fn(), [], undefined, 1)!;
+    expect(outOfRange.parts?.[0]?.clusters.pm25ConcentrationMeasurement?.measuredValue).toBeNull();
   });
   test('missing colour measurements do not advertise fabricated current values', () => {
     const white = make(device('LightWw1', { power: true, brightness: 50 }))!;
@@ -213,6 +279,25 @@ describe('Matter lifecycle', () => {
     await adapter.pruneHidden(() => true);
     expect(onError).toHaveBeenCalledOnce();
     expect(host.unregisterPlatformAccessories).not.toHaveBeenCalled();
+    adapter.dispose();
+  });
+
+  test('Airpurifier PM2.5 part keeps its ID and reports stale null before a fresh value', async () => {
+    const host = { ...api, registerPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn(),
+      unregisterPlatformAccessories: vi.fn(), updateAccessoryState: vi.fn() } as unknown as MatterAPI;
+    const adapter = new MatterAdapter(host, vi.fn(), [], vi.fn(), { d1: { pm25Multiplier: 0.5 } });
+    const sample = (pm25: unknown) => device('Airpurifier', { power: true, pm25 });
+    await adapter.reconcile([sample(25)]);
+    const registered = vi.mocked(host.registerPlatformAccessories).mock.calls[0]![2][0];
+    expect(registered.parts?.map((part) => part.id)).toEqual(['air-quality']);
+    vi.mocked(host.updateAccessoryState).mockClear();
+    await adapter.update(sample(null));
+    expect(host.updateAccessoryState).toHaveBeenCalledWith(registered.UUID, 'pm25ConcentrationMeasurement',
+      { measuredValue: null, measurementMedium: 0, measurementUnit: 4 }, 'air-quality');
+    vi.mocked(host.updateAccessoryState).mockClear();
+    await adapter.update(sample(30));
+    expect(host.updateAccessoryState).toHaveBeenCalledWith(registered.UUID, 'pm25ConcentrationMeasurement',
+      { measuredValue: 15, measurementMedium: 0, measurementUnit: 4 }, 'air-quality');
     adapter.dispose();
   });
 });

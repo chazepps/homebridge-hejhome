@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { HejDevice, HejFamily } from '../types.js';
 
 export interface HejDeviceSnapshot {
+  ownerFingerprint?: string;
   generatedAt: string;
   familyCount: number;
   deviceCount: number;
@@ -24,8 +25,9 @@ export class DeviceSnapshotStore {
     return this.snapshotPath;
   }
 
-  async save(families: Array<{ family: HejFamily; devices: HejDevice[] }>): Promise<HejDeviceSnapshot> {
+  async save(families: Array<{ family: HejFamily; devices: HejDevice[] }>, ownerFingerprint?: string): Promise<HejDeviceSnapshot> {
     const snapshot: HejDeviceSnapshot = {
+      ...(ownerFingerprint ? { ownerFingerprint } : {}),
       generatedAt: new Date().toISOString(),
       familyCount: families.length,
       deviceCount: families.reduce((total, entry) => total + entry.devices.length, 0),

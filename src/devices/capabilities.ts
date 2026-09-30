@@ -67,8 +67,14 @@ const IR_SWITCH_TYPES = ['IrTv', 'IrSettopbox', 'IrProjector', 'IrLamp', 'IrSpea
 const IR_THERMOSTAT_TYPES = ['IrAirconditioner'];
 const IR_FAN_TYPES = ['IrFan'];
 const CAMERA_TYPES = ['HomeCamera', 'HomeCameraPro', 'HomeCameraProPlus'];
-const PARTIAL_SENSOR_TYPES = ['AudibleAlarm', 'SensorGas2', 'SensorWater', 'SensorSmoke', 'SensorSos', 'Siren', 'SmartDoorLock', 'ZigbeeDoorlock'];
-const PARTIAL_AIR_TYPES = ['Airpurifier', 'IrAirpurifier'];
+const PARTIAL_SENSOR_TYPES = ['AudibleAlarm', 'SensorGas2', 'SensorWater', 'SensorSmoke', 'SensorSos', 'Siren', 'SmartDoorLock'];
+const PARTIAL_AIR_TYPES = ['IrAirpurifier'];
+
+/** Preserve appearance overrides for native switches, relays, plugs and power strips. */
+export function supportsDeviceRole(deviceType: string): boolean {
+  return SWITCH_TYPES.includes(deviceType) || RELAY_TYPES.includes(deviceType)
+    || PLUG_TYPES.includes(deviceType) || POWER_STRIP_TYPES.includes(deviceType);
+}
 
 export const EXAMPLE_DEVICE_TYPES = [
   ...COLOR_LIGHT_TYPES,
@@ -179,7 +185,14 @@ register(BUTTON_TYPES, {
   serviceKind: 'stateless-button',
   supportStatus: 'deferred',
   homeKitServices: ['BatteryService'],
-  note: '배터리만 표시합니다. 버튼 입력 값이 확인될 때까지 자동화 이벤트는 제공하지 않습니다.',
+  note: '진단에서 배터리 정보만 확인합니다. 버튼 입력 값이 확인될 때까지 Home 앱 자동화 이벤트는 제공하지 않습니다.',
+});
+register(['ZigbeeDoorlock'], {
+  label: '도어락 문 열림',
+  serviceKind: 'contact-sensor',
+  supportStatus: 'partial',
+  homeKitServices: ['ContactSensor'],
+  note: '문 열림만 읽기 전용으로 표시합니다. 잠금 상태와 잠금·해제 제어는 제공하지 않습니다.',
 });
 register(IR_SWITCH_TYPES, {
   label: 'IR 리모컨 장비',
@@ -207,7 +220,14 @@ register(CAMERA_TYPES, {
   serviceKind: 'camera',
   supportStatus: 'deferred',
   homeKitServices: ['Camera'],
-  note: '카메라는 API 분석 완료, Home 앱 영상 연동은 다음 단계입니다.',
+  note: 'Home 앱 영상 연결에 필요한 장치별 응답과 미디어 정보를 추가 확인 중입니다.',
+});
+register(['Airpurifier'], {
+  label: '공기청정기 전원',
+  serviceKind: 'relay-switch',
+  supportStatus: 'partial',
+  homeKitServices: ['Switch'],
+  note: '전원만 Home 앱에 표시합니다. 자동·수동·취침 모드는 설정 화면에서 조작하며 풍량·필터·PM2.5는 제공하지 않습니다.',
 });
 register(PARTIAL_SENSOR_TYPES, {
   label: '센서/알림 장비',
