@@ -28,7 +28,9 @@ All thrown errors at cloud and UI boundaries must be caught, logged or returned 
 - Malformed realtime frames are ignored atomically without logging raw input. Current local bounds are 256 KiB, 256 entries, 512-character IDs and 128-character codes.
 - Continuous Matter dimming is limited per device across restarts of a move; late expected reports are bounded observations, not guaranteed attribution.
 - Runtime status writes keep one active write and the latest pending snapshot. Shutdown cancels timers and flushes status.
-- Physical device/controller acceptance remains separate from the code tests in the implementation record.
+- Physical device/controller acceptance remains separate from the code tests and feature checklist.
+
+Device history is not implemented. If added later, first define retention, capacity, deletion, account separation, protocol compatibility, and library maintenance as a separate design.
 
 ## Matter PM2.5 cache restoration
 

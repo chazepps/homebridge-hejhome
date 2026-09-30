@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { watchFile, unwatchFile } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { randomUUID } from 'node:crypto';
 
 import { normalizeFeatures } from '../dist/features.js';
 
@@ -32,6 +33,9 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     this.snapshotStore = new DeviceSnapshotStore(this.homebridgeStoragePath);
     this.verifiedIdentifiers = new Set();
     this.configWrites = Promise.resolve();
+    this.scopeEdits = new Map();
+    this.uiAccountIdentifier = null;
+    this.uiSessionRevision = randomUUID();
     this.statusFile = path.join(this.homebridgeStoragePath, 'hejhome', 'runtime-status.json');
     this.sessionFile = path.join(this.homebridgeStoragePath, 'hejhome', 'session.json');
     this.onStatusChanged = (current, previous) => {
@@ -117,8 +121,9 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       });
       this.log('login.session-created', createSessionLogContext(session));
       const saveStartedAt = performance.now();
-      await this.clearPreviousDeviceState();
       await this.sessionStore.save(session);
+      this.scopeEdits.clear();
+      this.revisionForAccount(session.identifier);
       this.pushEvent('hejhome-status-changed', { updated: true });
       this.log('login.session-saved', {
         durationMs: elapsed(saveStartedAt),
@@ -136,7 +141,9 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
   async handleLogout() {
     return await this.timedRequest('logout', {}, async () => {
       await this.sessionStore.clear();
-      await this.clearPreviousDeviceState();
+      this.scopeEdits.clear();
+      this.uiAccountIdentifier = null;
+      this.uiSessionRevision = randomUUID();
       this.pushEvent('hejhome-status-changed', { updated: true });
       this.verifiedIdentifiers.clear();
       this.log('logout.session-cleared', {
@@ -155,6 +162,8 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       const baseStatus = {
         features: normalizeFeatures(platformConfig.features),
         scope,
+        scopeEditToken: null,
+        uiSessionRevision: null,
         deviceSummary,
         issueTemplate: createUnsupportedDeviceIssueTemplate(deviceSummary),
         supportedModels: SUPPORTED_DEVICE_MODELS,
@@ -200,8 +209,14 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
           restClient?.dispose?.();
         }
       }
-      if (owner && !await this.isCurrentOwner(owner)) {
+      if (!await this.isSameOwner(owner)) {
         throw new Error('로그인 정보가 변경되었습니다. 다시 확인해 주세요.');
+      }
+      result.uiSessionRevision = this.revisionForAccount(session?.identifier);
+      if (owner && result.scopeOptions?.complete === true) {
+        result.scopeEditToken = this.issueScopeEdit(owner, scope, result.scopeOptions);
+      } else if (owner) {
+        this.invalidateScopeEdits(owner);
       }
       this.log('session-status.result', {
         configured: result.configured,
@@ -290,7 +305,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleDiagnostics() {
     return await this.timedRequest('diagnostics', {}, async () => {
-      const [{ snapshot, runtime }, platform] = await Promise.all([this.loadOwnedState(), this.loadPlatformConfig()]);
+      const [{ session, owner, snapshot, runtime }, platform] = await Promise.all([this.loadOwnedState(), this.loadPlatformConfig()]);
       const features = normalizeFeatures(platform.features);
       const runtimeDevices = new Map((runtime?.devices ?? []).map((device) => [device.id, device]));
       const scope = platform.scope ?? { mode: 'first-family' };
@@ -321,9 +336,13 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
           roleChangeSupported: supportsDeviceRole(device.deviceType),
         };
       }));
+      if (!await this.isSameOwner(owner)) {
+        throw new Error('로그인 정보가 변경되었습니다. 다시 확인해 주세요.');
+      }
       return {
         generatedAt: snapshot?.generatedAt ?? null,
         updatedAt: runtime?.updatedAt ?? null,
+        uiSessionRevision: this.revisionForAccount(session?.identifier),
         controlsAvailable: runtime?.controlsAvailable === true,
         connection: runtime?.connection ?? { session: 'unknown', realtime: 'unknown' },
         devices,
@@ -387,9 +406,45 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
   }
 
   async handleSaveScope(payload) {
-    return await this.timedRequest('scope.save', payload, async () => {
-      const scope = normalizeScope(payload?.scope);
-      await this.savePlatformScope(scope);
+    return await this.timedRequest('scope.save', {}, async () => {
+      const token = payload?.scopeEditToken;
+      if (typeof token !== 'string' || !token) {
+        throw new ScopeEditError('scope-edit-unavailable');
+      }
+      const ticket = this.scopeEdits.get(token);
+      if (!ticket || ticket.pending || ticket.expiresAt <= Date.now()) {
+        throw new ScopeEditError('scope-edit-stale');
+      }
+      const { owner } = await this.loadOwnedState();
+      if (!owner || owner !== ticket.owner) {
+        throw new ScopeEditError('scope-edit-stale');
+      }
+      const scope = validateScopeSelection(payload?.scope, ticket);
+      const validateCommit = async () => {
+        if (!await this.isCurrentOwner(ticket.owner) || this.scopeEdits.get(token) !== ticket
+          || ticket.expiresAt <= Date.now()) {
+          throw new ScopeEditError('scope-edit-stale');
+        }
+        const current = await this.loadPlatformConfig();
+        if (scopeRevision(current.scope) !== ticket.revision) {
+          throw new ScopeEditError('scope-edit-stale');
+        }
+      };
+      ticket.pending = true;
+      try {
+        await this.savePlatformPatch(async (platform) => {
+          if (!await this.isCurrentOwner(ticket.owner) || this.scopeEdits.get(token) !== ticket
+            || scopeRevision(platform.scope) !== ticket.revision) {
+            throw new ScopeEditError('scope-edit-stale');
+          }
+          return { scope };
+        }, validateCommit);
+      } catch (error) {
+        ticket.pending = false;
+        throw error;
+      }
+      this.scopeEdits.delete(token);
+      const scopeEditToken = this.issueScopeEdit(ticket.owner, scope, ticket.options);
       const { snapshot } = await this.loadOwnedState();
       const deviceSummary = createDeviceSupportSummary(snapshot, scope);
       this.log('scope.save.persisted', {
@@ -399,6 +454,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       return {
         ok: true,
         scope,
+        scopeEditToken,
         deviceSummary,
         issueTemplate: createUnsupportedDeviceIssueTemplate(deviceSummary),
       };
@@ -408,6 +464,42 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
   async isCurrentOwner(owner) {
     const current = await this.sessionStore.load();
     return Boolean(current && sessionFingerprint(current) === owner);
+  }
+
+  async isSameOwner(owner) {
+    const current = await this.sessionStore.load();
+    return (current ? sessionFingerprint(current) : null) === owner;
+  }
+
+  issueScopeEdit(owner, scope, options) {
+    const now = Date.now();
+    for (const [token, ticket] of this.scopeEdits) {
+      if (ticket.expiresAt <= now) {
+        this.scopeEdits.delete(token);
+      }
+    }
+    while (this.scopeEdits.size >= 64) {
+      this.scopeEdits.delete(this.scopeEdits.keys().next().value);
+    }
+    const token = randomUUID();
+    this.scopeEdits.set(token, { owner, revision: scopeRevision(scope), options, expiresAt: now + 30 * 60_000, pending: false });
+    return token;
+  }
+
+  invalidateScopeEdits(owner) {
+    for (const [token, ticket] of this.scopeEdits) {
+      if (ticket.owner === owner) {
+        this.scopeEdits.delete(token);
+      }
+    }
+  }
+
+  revisionForAccount(identifier) {
+    if (typeof identifier === 'string' && identifier && identifier !== this.uiAccountIdentifier) {
+      this.uiAccountIdentifier = identifier;
+      this.uiSessionRevision = randomUUID();
+    }
+    return this.uiSessionRevision;
   }
 
   async loadOwnedState() {
@@ -437,28 +529,18 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     return device;
   }
 
-  async clearPreviousDeviceState() {
-    await Promise.all([
-      fs.rm(this.snapshotStore.path, { force: true }), fs.rm(this.statusFile, { force: true }),
-    ]);
-  }
-
   async loadPlatformConfig() {
     const config = await this.loadHomebridgeConfig();
     return findHejhomePlatformConfig(config) ?? { name: 'Hejhome', platform: 'Hejhome' };
   }
 
-  async savePlatformScope(scope) {
-    return this.savePlatformPatch({ scope });
-  }
-
-  savePlatformPatch(patch) {
-    const pending = this.configWrites.catch(() => undefined).then(() => this.writePlatformPatch(patch));
+  savePlatformPatch(patch, validateBeforeRename) {
+    const pending = this.configWrites.catch(() => undefined).then(() => this.writePlatformPatch(patch, validateBeforeRename));
     this.configWrites = pending;
     return pending;
   }
 
-  async writePlatformPatch(patch) {
+  async writePlatformPatch(patch, validateBeforeRename) {
     const config = await this.loadHomebridgeConfig();
     const platforms = Array.isArray(config.platforms) ? config.platforms : [];
     const platformIndex = platforms.findIndex((entry) => entry?.platform === 'Hejhome');
@@ -471,7 +553,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       ...config,
       platforms: nextPlatforms,
     };
-    await this.saveHomebridgeConfig(nextConfig);
+    await this.saveHomebridgeConfig(nextConfig, validateBeforeRename);
     return nextPlatform;
   }
 
@@ -482,22 +564,30 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     return JSON.parse(await fs.readFile(this.homebridgeConfigPath, 'utf8'));
   }
 
-  async saveHomebridgeConfig(config) {
+  async saveHomebridgeConfig(config, validateBeforeRename) {
     if (!this.homebridgeConfigPath) {
       throw new Error('Homebridge config path is not available.');
     }
     const temporaryPath = `${this.homebridgeConfigPath}.hejhome.tmp`;
-    await fs.writeFile(temporaryPath, `${JSON.stringify(config, null, 4)}\n`, { mode: 0o600 });
-    await fs.rename(temporaryPath, this.homebridgeConfigPath);
+    try {
+      await fs.writeFile(temporaryPath, `${JSON.stringify(config, null, 4)}\n`, { mode: 0o600 });
+      await validateBeforeRename?.();
+      await fs.rename(temporaryPath, this.homebridgeConfigPath);
+    } catch (error) {
+      await fs.rm(temporaryPath, { force: true });
+      throw error;
+    }
   }
 
   async buildScopeOptions(restClient, families) {
     const familyOptions = [];
+    let complete = families.length > 0;
     for (const [index, family] of families.entries()) {
       let rooms = [];
       try {
         rooms = await restClient.getRooms(family.familyId);
       } catch (error) {
+        complete = false;
         this.log('scope-options.rooms.error', {
           familyId: family.familyId,
           message: sanitizeForLog(error instanceof Error ? error.message : String(error)),
@@ -517,6 +607,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     return {
       defaultMode: 'first-family',
       families: familyOptions,
+      complete,
     };
   }
 
@@ -550,7 +641,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
   }
 
   log(event, data = {}, level = 'info') {
-    const safeData = sanitizeForLog(data);
+    const safeData = sanitizeForLog(withoutUiRevisions(data));
     void this.logStore.append(level, `ui.${event}`, safeData).catch((error) => {
       console.error(`[Hejhome UI] log-file.error ${sanitizeForLog(error instanceof Error ? error.message : String(error))}`);
     });
@@ -570,6 +661,50 @@ function normalizeIdentifier(value) {
 function findHejhomePlatformConfig(config) {
   return (Array.isArray(config?.platforms) ? config.platforms : [])
     .find((entry) => entry?.platform === 'Hejhome');
+}
+
+class ScopeEditError extends Error {
+  constructor(code) {
+    super(code === 'scope-edit-unavailable' ? '집/방 목록을 모두 불러온 뒤 다시 저장해 주세요.'
+      : '집/방 목록이나 로그인 정보가 바뀌었습니다. 목록을 다시 확인해 주세요.');
+    this.code = code;
+  }
+}
+
+function scopeRevision(scope) {
+  return JSON.stringify(normalizeScope(scope ?? { mode: 'first-family' }));
+}
+
+function validateScopeSelection(value, ticket) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ScopeEditError('scope-edit-stale');
+  }
+  if (value.mode === 'all' || value.mode === 'first-family') {
+    return { mode: value.mode };
+  }
+  if (value.mode !== 'custom' || !Array.isArray(value.includedFamilyIds)
+    || !value.includedRoomsByFamilyId || typeof value.includedRoomsByFamilyId !== 'object'
+    || Array.isArray(value.includedRoomsByFamilyId)) {
+    throw new ScopeEditError('scope-edit-stale');
+  }
+  const available = new Map(ticket.options.families.map((family) => [Number(family.familyId),
+    new Set(family.rooms.map((room) => Number(room.roomId)))]));
+  const familyIds = value.includedFamilyIds;
+  if (new Set(familyIds).size !== familyIds.length
+    || familyIds.some((id) => !Number.isSafeInteger(id) || !available.has(id))) {
+    throw new ScopeEditError('scope-edit-stale');
+  }
+  const selectedRooms = {};
+  for (const [key, rooms] of Object.entries(value.includedRoomsByFamilyId)) {
+    const familyId = Number(key);
+    if (!Number.isSafeInteger(familyId) || String(familyId) !== key || !familyIds.includes(familyId)
+      || !Array.isArray(rooms) || new Set(rooms).size !== rooms.length
+      || rooms.some((id) => !Number.isSafeInteger(id) || !available.get(familyId)?.has(id))) {
+      throw new ScopeEditError('scope-edit-stale');
+    }
+    selectedRooms[key] = rooms;
+  }
+  return { mode: 'custom', includedFamilyIds: familyIds, includedRoomsByFamilyId: selectedRooms };
 }
 
 function normalizeScope(value) {
@@ -644,10 +779,22 @@ function summarizePayload(payload) {
 
 function normalizeUiEventName(value) {
   const event = String(value ?? '').trim();
-  if (/^[a-z0-9][a-z0-9.-]{0,80}$/i.test(event)) {
+  if (/^[a-z0-9][a-z0-9.-]{0,80}$/i.test(event) && !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(event)) {
     return event;
   }
   return 'event';
+}
+
+function withoutUiRevisions(value) {
+  if (Array.isArray(value)) {
+    return value.map(withoutUiRevisions);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([key]) => key !== 'scopeEditToken' && key !== 'uiSessionRevision')
+      .map(([key, nested]) => [key, withoutUiRevisions(nested)]));
+  }
+  return value;
 }
 
 function elapsed(startedAt) {
@@ -660,9 +807,8 @@ function isLikelyExpiredSession(error) {
 }
 
 function toRequestError(message, error) {
-  return new RequestError(message, {
-    detail: sanitizeForLog(error instanceof Error ? error.message : String(error)),
-  });
+  return new RequestError(message, { detail: sanitizeForLog(error instanceof Error ? error.message : String(error)),
+    ...(error instanceof ScopeEditError ? { code: error.code } : {}) });
 }
 
 function normalizeHvacSettings(value) {

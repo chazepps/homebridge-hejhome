@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { openDevice } from './host-fixture.js';
 
 const source = fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8');
 
@@ -46,12 +47,11 @@ test('live HVAC and purifier settings update without changing an in-progress tar
   });
   await page.setContent(source);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
-  const ac = page.locator('[data-device-id="ac-1"]');
-  await expect(ac.locator('.hej-command-row')).toHaveCount(4);
-  await expect(ac.locator('.hej-command-row').nth(1)).toContainText('바꿀 설정 온도');
-  await expect(ac.locator('.hej-command-row').nth(1)).not.toContainText('운전 방식');
-  await expect(ac.locator('.hej-command-row').nth(2)).toContainText('바꿀 운전 방식');
-  await expect(ac.locator('.hej-command-row').nth(3)).toContainText('바꿀 바람 세기');
+  await openDevice(page, 'ac-1');
+  const ac = page.locator('[data-testid="device-detail"][data-device-id="ac-1"]');
+  await expect(ac.getByLabel('설정 온도', { exact: true })).toBeVisible();
+  await expect(ac.getByLabel('운전 방식', { exact: true })).toBeVisible();
+  await expect(ac.getByLabel('바람 세기', { exact: true })).toBeVisible();
   await expect(ac).toContainText('설정 온도 23°C');
   await expect(ac).toContainText('현재 온도: 22°C');
   const target = ac.getByLabel('설정 온도');
@@ -63,13 +63,15 @@ test('live HVAC and purifier settings update without changing an in-progress tar
   });
   await expect(ac).toContainText('설정 온도 24°C');
   await expect(target).toHaveValue('25');
-  const purifier = page.locator('[data-device-id="purifier-1"]');
-  await expect(purifier.locator('.hej-command-row')).toHaveCount(2);
-  await expect(purifier.locator('.hej-command-row').nth(1)).toContainText('바꿀 운전 방식');
-  const purifierPower = purifier.locator('.hej-command-row.is-power button');
-  expect((await purifierPower.nth(0).boundingBox())?.y).toBe((await purifierPower.nth(1).boundingBox())?.y);
+  await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
+  await openDevice(page, 'purifier-1');
+  const purifier = page.locator('[data-testid="device-detail"][data-device-id="purifier-1"]');
+  await expect(purifier.getByRole('button', { name: '공기청정기 켜기', exact: true })).toBeVisible();
+  await expect(purifier.getByRole('button', { name: '공기청정기 끄기', exact: true })).toBeVisible();
   await expect(purifier).toContainText('운전 방식 취침');
   await purifier.getByLabel('공기청정기 운전 방식').selectOption('manual');
+  await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
+  await openDevice(page, 'ac-1');
   await ac.getByLabel('운전 방식').selectOption('heat');
   await target.focus();
   await page.evaluate(() => {
@@ -82,7 +84,6 @@ test('live HVAC and purifier settings update without changing an in-progress tar
   await expect(target).toHaveValue('25');
   await expect(target).toBeFocused();
   await expect(ac.getByLabel('운전 방식')).toHaveValue('heat');
-  await expect(purifier.getByLabel('공기청정기 운전 방식')).toHaveValue('manual');
   await expect(ac).toContainText('마지막으로 읽은 설정');
   await page.evaluate(() => {
     const fixture = (window as unknown as { __hejFixture: { diagnostics: { controlsAvailable: boolean,
@@ -91,11 +92,16 @@ test('live HVAC and purifier settings update without changing an in-progress tar
     fixture.diagnostics.connection.realtime = 'connected';
     window.homebridge.dispatchEvent(new Event('hejhome-status-changed'));
   });
+  await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
+  await openDevice(page, 'purifier-1');
+  await expect(purifier.getByLabel('공기청정기 운전 방식')).toHaveValue('manual');
   await expect(purifier.getByRole('button', { name: '운전 방식 설정' })).toBeEnabled();
   await purifier.getByRole('button', { name: '운전 방식 설정' }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __hejFixture: { commands: unknown[] } }).__hejFixture.commands))
     .toContainEqual({ route: '/purifier-command', payload: { deviceId: 'purifier-1', command: { mode: 'manual' } } });
-  await expect(page.locator('[data-device-id="ir-purifier-1"]')).not.toContainText('공기청정기 운전 방식');
+  await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
+  await openDevice(page, 'ir-purifier-1');
+  await expect(page.getByTestId('device-detail')).not.toContainText('공기청정기 운전 방식');
 });
 
 test('eligible devices save freshness, remote buttons and optional PM2.5 calibration', async ({ page }) => {
@@ -130,17 +136,22 @@ test('eligible devices save freshness, remote buttons and optional PM2.5 calibra
     Object.assign(window, { __savedDevices: saved });
   });
   await page.setContent(source);
-  const sensor = page.locator('[data-device-id="sensor-1"]');
+  await openDevice(page, 'sensor-1');
+  const sensor = page.locator('[data-testid="device-detail"][data-device-id="sensor-1"]');
   await sensor.getByLabel('측정값 유효 시간(분)').fill('45');
   await sensor.getByRole('button', { name: '이 장치 저장' }).click();
-  const tv = page.locator('[data-device-id="tv-1"]');
+  await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
+  await openDevice(page, 'tv-1');
+  const tv = page.locator('[data-testid="device-detail"][data-device-id="tv-1"]');
   const remote = tv.getByLabel('리모컨 버튼을 Apple Home에 표시');
   await tv.getByLabel('연결 방식').selectOption('matter');
   await expect(remote).toBeDisabled();
   await tv.getByLabel('연결 방식').selectOption('homekit');
   await remote.check();
   await tv.getByRole('button', { name: '이 장치 저장' }).click();
-  const purifier = page.locator('[data-device-id="purifier-1"]');
+  await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
+  await openDevice(page, 'purifier-1');
+  const purifier = page.locator('[data-testid="device-detail"][data-device-id="purifier-1"]');
   const pmValidity = purifier.getByLabel('측정값 유효 시간(분)');
   await expect(pmValidity).toBeDisabled();
   await purifier.getByText('고급: PM2.5 측정값 보정').click();

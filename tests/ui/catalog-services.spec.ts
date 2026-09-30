@@ -30,6 +30,7 @@ for (const language of ['ko', 'en']) {
       };
     }, language);
     await page.setContent(source);
+    await page.getByRole('tab', { name: language === 'en' ? 'Help' : '도움말', exact: true }).click();
     const list = page.locator('#supportedModels');
     await expect(list).toContainText(language === 'en' ? 'Fan or power button' : '선풍기 또는 전원 버튼');
     await expect(list).toContainText(language === 'en'

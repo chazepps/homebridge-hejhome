@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { openDevice } from './host-fixture.js';
 
 const source = fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8');
 
@@ -40,11 +41,11 @@ test('live status does not erase a device name draft and English light mode rema
     Object.assign(window, { __hejTest: { state, diagnostics } });
   });
   await page.setContent(source);
-  await expect(page.getByRole('heading', { name: 'Settings for each device' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'My devices', exact: true })).toBeVisible();
+  await openDevice(page, 'plug-1');
   await expect(page.locator('html')).toHaveAttribute('data-hej-theme', 'light');
-  expect(await page.locator('#settingsView').evaluate((node) => node.textContent?.match(/[가-힣][^\n]*/g) ?? [])).toEqual([]);
-  await expect(page.getByRole('button', { name: 'Volume up' })).toBeDisabled();
-  const name = page.locator('[data-device-id="plug-1"]').getByLabel('Display name');
+  expect(await page.getByTestId('device-detail').evaluate((node) => node.textContent?.match(/[가-힣][^\n]*/g) ?? [])).toEqual([]);
+  const name = page.getByTestId('device-detail').getByLabel('Display name');
   await name.fill('Reading lamp');
   await name.focus();
   await page.evaluate(() => window.homebridge.dispatchEvent(new Event('hejhome-status-changed')));
@@ -55,13 +56,11 @@ test('live status does not erase a device name draft and English light mode rema
     helper.diagnostics.controlsAvailable = true;
     window.homebridge.dispatchEvent(new Event('hejhome-status-changed'));
   });
-  await expect(page.getByRole('button', { name: 'Volume up' })).toBeEnabled();
   await page.evaluate(() => {
     const helper = (window as unknown as { __hejTest: { diagnostics: { updatedAt: string } } }).__hejTest;
     helper.diagnostics.updatedAt = new Date(Date.now() - 3600000).toISOString();
     window.homebridge.dispatchEvent(new Event('hejhome-status-changed'));
   });
-  await expect(page.getByRole('button', { name: 'Volume up' })).toBeDisabled();
   await expect(name).toBeFocused();
   await page.evaluate(() => {
     const helper = (window as unknown as { __hejTest: { diagnostics: { updatedAt: string } } }).__hejTest;
@@ -70,9 +69,20 @@ test('live status does not erase a device name draft and English light mode rema
   });
   await expect(name).toHaveValue('Reading lamp');
   await expect(name).toBeFocused();
-  await page.locator('[data-device-id="plug-1"]').getByRole('button', { name: 'Save this device' }).click();
+  await page.getByTestId('device-detail').getByRole('button', { name: 'Save this device' }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __hejTest: { state: { saved: unknown } } }).__hejTest.state.saved))
     .toMatchObject({ deviceId: 'plug-1', preference: { name: 'Reading lamp' } });
+  await page.getByRole('button', { name: 'Back to devices', exact: true }).click();
+  await openDevice(page, 'tv-1');
+  const volume = page.getByTestId('device-detail').getByRole('button', { name: 'Volume up' });
+  await expect(volume).toBeEnabled();
+  await page.evaluate(() => {
+    const helper = (window as unknown as { __hejTest: { diagnostics: { updatedAt: string } } }).__hejTest;
+    helper.diagnostics.updatedAt = new Date(Date.now() - 3600000).toISOString();
+    window.homebridge.dispatchEvent(new Event('hejhome-status-changed'));
+  });
+  await expect(volume).toBeDisabled();
+
 });
 
 test('older diagnostic response cannot overwrite a newer status', async ({ page }) => {
@@ -149,9 +159,11 @@ test('saved device cache is not shown as a current pairing and event listeners a
     Object.assign(window, { __hejTest: { state } });
   });
   await page.setContent(source);
-  await expect(page.locator('#diagnosticsList')).toContainText('Apple Home: 이전에 저장된 장치');
-  await expect(page.locator('#diagnosticsList')).toContainText('Matter: 이전에 저장된 장치');
-  await expect(page.locator('#diagnosticsList')).not.toContainText('연결용으로 준비됨');
+  await openDevice(page, 'tv-1');
+  const detail = page.getByTestId('device-detail');
+  await expect(detail).toContainText('Apple Home: 이전에 저장된 장치');
+  await expect(detail).toContainText('Matter: 이전에 저장된 장치');
+  await expect(detail).not.toContainText('연결용으로 준비됨');
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
   const before = await page.evaluate(() => (window as unknown as { __hejTest: { state: { calls: number } } }).__hejTest.state.calls);
   await page.evaluate(() => window.homebridge.dispatchEvent(new Event('hejhome-status-changed')));
@@ -161,4 +173,23 @@ test('saved device cache is not shown as a current pairing and event listeners a
   await page.evaluate(() => window.dispatchEvent(new Event('pageshow')));
   await expect.poll(() => page.evaluate(() => (window as unknown as { __hejTest: { state: { calls: number } } }).__hejTest.state.calls))
     .toBeGreaterThan(before);
+});
+
+test('device appearance changes save the physical device ID without writing other settings', async ({ page }) => {
+  const { mountUi, requestCalls } = await import('./host-fixture.js');
+  await mountUi(page, { devices: [{ id: 'relay-1', name: '기존 릴레이', deviceType: 'RelayController', roleChangeSupported: true }] });
+  await openDevice(page, 'relay-1');
+  const detail = page.getByTestId('device-detail');
+  await detail.getByLabel('표시 이름').fill('간접 조명');
+  await detail.locator('[data-device-control="role"]').selectOption('light');
+  await detail.getByLabel('연결 방식').selectOption('homekit');
+  await detail.getByRole('button', { name: '이 장치 저장' }).click();
+  await expect.poll(async () => (await requestCalls(page, '/save-device-settings')).at(-1)?.payload).toEqual({
+    deviceId: 'relay-1', preference: { name: '간접 조명', role: 'light', visibility: 'homekit' },
+  });
+  await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
+  await openDevice(page, 'relay-1');
+  await expect(detail.locator('[data-device-control="role"]')).toHaveValue('light');
+  await expect(detail.getByLabel('연결 방식')).toHaveValue('homekit');
+  expect(await requestCalls(page, '/save-features')).toHaveLength(0);
 });

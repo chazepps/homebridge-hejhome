@@ -36,4 +36,4 @@ Any change to authentication must update `tests/hej-auth.test.ts`, `tests/ui/log
 
 ## 3.0 beta adapters
 
-`src/features.ts` validates opt-ins. `src/matter/` maps host API endpoints and calibrated telemetry. `src/lighting/adaptive.ts` distinguishes command echoes from manual overrides. Platform commands are serialized per device and share successful state across protocols. See `design-docs/2.1.0-beta.md` and `product-specs/3.0-beta-guide.md`.
+`src/features.ts` validates opt-ins. `src/matter/` maps host API endpoints and calibrated telemetry. `src/lighting/adaptive.ts` distinguishes command echoes from manual overrides. Platform commands are serialized per device and share successful state across protocols. Current customer-facing boundaries are in [the 3.0 beta guide](product-specs/3.0-beta-guide.md) and [the API notes](api/README.md).

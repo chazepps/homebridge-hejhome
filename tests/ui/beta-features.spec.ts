@@ -1,68 +1,60 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { mountUi, requestCalls } from './host-fixture.js';
 
 const source = fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8');
 
-test('beta features require explicit selection and survive reload', async ({ page }) => {
-  await page.evaluate(() => {
-    let features = { matter: false, adaptiveLighting: false, meters: [] };
-    window.homebridge = {
-      request: async (path, payload) => {
-        if (path === '/save-features') {
-          features = payload.features;
-          return { ok: true, features };
-        }
-        if (path === '/session-status') {
-          return { configured: true, sessionValid: true, features, scope: { mode: 'first-family' }, supportedModels: [] };
-        }
-        return {};
-      },
-      hideSpinner() {}, disableSaveButton() {}, fixScrollHeight() {},
-      toast: { success() {}, error() {} },
-    };
-  });
-  await page.setContent(source);
-  await expect(page.getByLabel('다른 스마트홈 앱에 연결(Matter)')).not.toBeChecked();
-  await expect(page.getByLabel('적응형 조명')).not.toBeChecked();
-  await page.getByLabel('다른 스마트홈 앱에 연결(Matter)').check();
-  await page.getByLabel('적응형 조명').check();
-  await page.getByRole('button', { name: '베타 기능 저장' }).click();
+test('connection and lighting options require separate explicit saves and survive reopening', async ({ page }) => {
+  await mountUi(page);
+  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  const matter = page.getByLabel('다른 스마트홈 앱에 연결(Matter)');
+  const adaptive = page.getByLabel('적응형 조명');
+  await expect(matter).not.toBeChecked();
+  await expect(adaptive).not.toBeChecked();
+  await matter.check();
+  await adaptive.check();
+  await page.locator('#saveFeatures').click();
   await expect(page.locator('#featuresStatus')).toContainText('저장');
+  await expect(adaptive).toBeChecked();
+  expect((await requestCalls(page, '/save-features')).map((call) => call.payload)).toEqual([{ features: { matter: true } }]);
+  await page.locator('#saveLighting').click();
+  await expect.poll(async () => (await requestCalls(page, '/save-features')).map((call) => call.payload)).toEqual([
+    { features: { matter: true } }, { features: { adaptiveLighting: true } },
+  ]);
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
   await page.setContent(source);
-  await expect(page.getByLabel('다른 스마트홈 앱에 연결(Matter)')).toBeChecked();
-  await expect(page.getByLabel('적응형 조명')).toBeChecked();
+  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await expect(matter).toBeChecked();
+  await expect(adaptive).toBeChecked();
 });
 
-test('editing expert meter settings is saved even when form rows exist', async ({ page }) => {
-  await page.evaluate(() => {
-    Object.assign(window, { __savedFeatures: null });
-    window.homebridge = {
-      request: async (route, payload) => {
-        if (route === '/session-status') {
-          return { configured: true, sessionValid: true,
-            features: { matter: false, adaptiveLighting: false,
-              meters: [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] },
-            scope: { mode: 'first-family' } };
-        }
-        if (route === '/save-features') {
-          Object.assign(window, { __savedFeatures: payload.features });
-          return { ok: true, features: payload.features };
-        }
-        return {};
-      },
-      hideSpinner() {}, disableSaveButton() {}, fixScrollHeight() {},
-      toast: { success() {}, error() {} },
-    };
-  });
-  await page.setContent(source);
-  await page.getByText('고급: 전력 측정 모델 설정').click();
-  await page.getByText('전문가용 원본 설정').click();
-  await page.locator('#meterProfiles').fill(JSON.stringify([{ model: 'P1', power: { field: 'curPower', multiplier: 2 } }]));
-  await page.getByRole('button', { name: '베타 기능 저장' }).click();
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __savedFeatures?: { meters?: unknown[] } }).__savedFeatures?.meters))
-    .toEqual([{ model: 'P1', power: { field: 'curPower', multiplier: 2 } }]);
-  await page.getByRole('button', { name: '이 모델 삭제' }).click();
-  await page.getByRole('button', { name: '베타 기능 저장' }).click();
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __savedFeatures?: { meters?: unknown[] } }).__savedFeatures?.meters))
-    .toEqual([]);
+test('expert and form meter edits share the saved value including deletion of the last model', async ({ page }) => {
+  await mountUi(page, { status: { features: { matter: true, adaptiveLighting: true,
+    meters: [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] } } });
+  await page.getByRole('tab', { name: '도움말', exact: true }).click();
+  await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
+  await page.getByText('전문가용 원본 설정', { exact: true }).click();
+  const profiles = [{ model: 'P1', power: { field: 'curPower', multiplier: 2 } }];
+  await page.locator('#meterProfiles').fill(JSON.stringify(profiles));
+  await page.locator('#saveMeters').click();
+  await expect.poll(async () => (await requestCalls(page, '/save-features')).map((call) => call.payload))
+    .toEqual([{ features: { meters: profiles } }]);
+  await expect(page.locator('[data-meter-multiplier="power"]')).toHaveValue('2');
+  await page.getByRole('button', { name: '이 모델 삭제', exact: true }).click();
+  await page.locator('#saveMeters').click();
+  await expect.poll(async () => (await requestCalls(page, '/save-features')).at(-1)?.payload).toEqual({ features: { meters: [] } });
+  expect(await page.evaluate(() => window.__hejHost.status.features)).toMatchObject({ matter: true, adaptiveLighting: true, meters: [] });
+  await expect(page.locator('#meterProfiles')).toHaveValue('[]');
+});
+
+test('invalid expert JSON is not saved and remains available for correction', async ({ page }) => {
+  await mountUi(page);
+  await page.getByRole('tab', { name: '도움말', exact: true }).click();
+  await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
+  await page.getByText('전문가용 원본 설정', { exact: true }).click();
+  await page.locator('#meterProfiles').fill('{not json');
+  await page.locator('#saveMeters').click();
+  await expect(page.locator('#meterStatus')).toContainText(/저장하지 못|확인|올바른/);
+  await expect(page.locator('#meterProfiles')).toHaveValue('{not json');
+  expect(await requestCalls(page, '/save-features')).toHaveLength(0);
 });

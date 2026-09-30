@@ -24,16 +24,11 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── api
 │   │   └── README.md
 │   ├── design-docs
-│   │   ├── 2.1.0-beta.md
-│   │   ├── device-contracts-3.0.md
-│   │   ├── device-history.md
-│   │   ├── media-security-contracts.md
+│   │   ├── beta-ui-redesign-brief.md
 │   │   └── README.md
 │   ├── DESIGN.md
 │   ├── exec-plans
 │   │   ├── 2026-05-28-production-hardening-and-device-expansion.md
-│   │   ├── 2026-09-30-2.1.0-beta.md
-│   │   ├── 2026-09-30-feature-implementation-status.md
 │   │   ├── 2026-09-30-homebridge-feature-action-checklist.md
 │   │   └── README.md
 │   ├── FRONTEND.md
@@ -59,7 +54,6 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── references
 │   │   ├── documentation-harness-authoring-guide.md
 │   │   ├── hej-web-packet-map.md
-│   │   ├── homebridge-feature-gaps-2026-09-30.md
 │   │   ├── homebridge-official-rules.md
 │   │   ├── project-map.md
 │   │   └── README.md
@@ -178,16 +172,20 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── session-diagnostics.test.ts
 │   ├── session-store.test.ts
 │   ├── ui
+│   │   ├── accessibility.spec.ts
 │   │   ├── appearance.spec.ts
 │   │   ├── beta-features.spec.ts
 │   │   ├── catalog-services.spec.ts
 │   │   ├── device-features.spec.ts
 │   │   ├── device-settings.spec.ts
 │   │   ├── diagnostics-transitions.spec.ts
-│   │   └── login-ui.spec.ts
+│   │   ├── host-fixture.ts
+│   │   ├── login-ui.spec.ts
+│   │   └── navigation-workflow.spec.ts
 │   ├── ui-diagnostics-server.test.ts
 │   ├── ui-features-server.test.ts
 │   ├── ui-live-diagnostics-server.test.ts
+│   ├── ui-scope-server.test.ts
 │   └── ui-server-source.test.ts
 ├── tools
 │   ├── automation

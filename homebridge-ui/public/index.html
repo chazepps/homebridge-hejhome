@@ -1,6 +1,7 @@
 <style>
   :root {
     color-scheme: dark;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", Arial, sans-serif;
     --hej-bg: #1f2023;
     --hej-panel: #292b2f;
     --hej-card: #202124;
@@ -39,6 +40,8 @@
     --hej-badge-bad-border: #9b2d2d;
   }
 
+  :root[data-hej-theme="light"] #loginView .hej-note { color: var(--hej-muted); }
+
   .hej-shell {
     background: var(--hej-bg);
     border-radius: 18px;
@@ -48,6 +51,8 @@
     min-height: 520px;
     overflow: hidden;
   }
+
+  .hej-shell, .hej-settings, button, input, select, textarea { font-family: inherit; }
 
   .hej-brand {
     align-items: center;
@@ -78,7 +83,7 @@
   }
 
   .hej-title {
-    font-size: 42px;
+    font-size: 32px;
     font-weight: 700;
     letter-spacing: 0;
     margin: 0;
@@ -102,6 +107,12 @@
     max-width: 360px;
     text-align: left;
   }
+
+  #loginView .hej-brand { gap: 6px; padding: 14px 20px; }
+  #loginView .hej-mark { height: 44px; margin: 0; width: 44px; }
+  #loginView .hej-smile { border-bottom-width: 5px; height: 18px; width: 28px; }
+  #loginView .hej-pill { margin-top: 0; }
+  #loginView .hej-copy { font-size: 14px; margin-top: 0; max-width: 360px; text-align: center; }
 
   .hej-form {
     display: flex;
@@ -355,7 +366,7 @@
     border-radius: 8px;
     color: #fff;
     font-weight: 800;
-    min-height: 42px;
+    min-height: 44px;
     padding: 0 16px;
   }
 
@@ -531,7 +542,58 @@
 
   .hej-device-note { width: 100%; }
 
+  [hidden] { display: none !important; }
+
+  .hej-app-header {
+    display: grid;
+    gap: 5px;
+    padding: 4px 2px;
+  }
+
+  .hej-app-identity { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+  .hej-app-identity h1 { font-size: 25px; letter-spacing: -.03em; margin: 0; }
+  .hej-app-dot { background: #05b57d; border-radius: 50%; height: 16px; width: 16px; }
+  .hej-beta { border: 1px solid var(--hej-border); border-radius: 999px; color: var(--hej-muted);
+    font-size: 12px; font-weight: 700; padding: 3px 8px; }
+  .hej-app-header p { margin: 0; }
+
+  .hej-tabs { border-bottom: 1px solid var(--hej-border); display: flex; gap: 4px; }
+  .hej-tabs button { background: transparent; border: 0; border-bottom: 3px solid transparent;
+    color: var(--hej-muted); cursor: pointer; font-size: 16px; font-weight: 700;
+    min-height: 48px; padding: 9px 17px; }
+  .hej-tabs button[aria-selected="true"] { border-bottom-color: #07845d; color: var(--hej-text); }
+  .hej-panel, #deviceDetailView { display: grid; gap: 16px; min-width: 0; }
+  #backToDevices { justify-self: start; }
+  .hej-detail-heading h2 { font-size: 24px; margin: 0; }
+  .hej-detail-heading p { margin: 5px 0 0; }
+  .hej-list-tools { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(145px, 0.5fr); margin: 18px 0; }
+  .hej-list-tools label { color: var(--hej-muted); display: grid; font-size: 14px; font-weight: 700; gap: 5px; }
+  .hej-list-tools input, .hej-list-tools select { background: var(--hej-card); border: 1px solid var(--hej-border);
+    border-radius: 8px; color: var(--hej-text); min-height: 44px; min-width: 0; padding: 8px; width: 100%; }
+  .hej-device-card { align-items: start; border: 1px solid var(--hej-border); border-radius: 10px;
+    display: grid; gap: 8px; grid-template-columns: minmax(0,1fr) auto; padding: 14px; }
+  .hej-device-card h3 { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+  .hej-device-card p { color: var(--hej-muted); grid-column: 1 / -1; margin: 0; overflow-wrap: anywhere; }
+  .hej-device-card .hej-action { grid-column: 2; grid-row: 1; }
+  .hej-device-card .hej-badge { justify-self: start; white-space: normal; }
+  .hej-empty { border: 1px dashed var(--hej-border); border-radius: 10px; color: var(--hej-muted); padding: 24px; }
+  .hej-unsaved { color: var(--hej-badge-warn-text); font-size: 13px; font-weight: 700; }
+  .hej-detail-form { display: grid; gap: 14px; width: 100%; }
+  .hej-detail-form h3 { font-size: 17px; margin: 0; }
+  .hej-detail-form > p { margin: 0; }
+  .hej-detail-additional { border-top: 1px solid var(--hej-border); display: grid; gap: 12px; padding-top: 16px; }
+  .hej-detail-state { border: 1px solid var(--hej-border); border-radius: 8px; padding: 16px; }
+  .hej-detail-state summary { cursor: pointer; font-size: 17px; font-weight: 700; min-height: 44px; padding: 9px 0; }
+  .hej-detail-state .hej-section { border: 0; padding: 10px 0 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+
   @media (max-width: 760px) {
+    .hej-settings { padding: 16px; }
+    .hej-tabs button { flex: 1; min-width: 0; padding: 9px 5px; }
+    .hej-list-tools { grid-template-columns: 1fr; }
     .hej-shell {
       grid-template-columns: 1fr;
     }
@@ -564,7 +626,6 @@
     <h1 class="hej-title">Hejhome</h1>
     <span class="hej-pill">for Homebridge</span>
     <p class="hej-copy">
-      앱스토어나 플레이스토어에서 헤이홈 어플을 다운 받아 구체적인 설정을 먼저 마친 뒤,
       헤이홈 앱에 등록한 이메일로 로그인해 주세요.
     </p>
   </section>
@@ -572,22 +633,22 @@
   <section class="hej-form" aria-label="Hejhome login">
     <div class="hej-row">
       <div class="hej-field has-inline-action">
-        <label class="hej-label" for="identifier">이메일</label>
-        <input class="hej-input" id="identifier" autocomplete="email" inputmode="email">
+        <label class="hej-label" for="identifier">1. 이메일</label>
+        <input class="hej-input" id="identifier" autocomplete="email" inputmode="email" placeholder="name@example.com">
         <button class="hej-inline-button" id="sendCode" type="button">인증번호 전송</button>
       </div>
     </div>
 
     <div class="hej-row">
       <div class="hej-field has-inline-action">
-        <label class="hej-label" for="authCode">6자리 인증번호 입력</label>
+        <label class="hej-label" for="authCode">2. 6자리 인증번호 입력</label>
         <input class="hej-input" id="authCode" autocomplete="one-time-code" inputmode="numeric" maxlength="6" disabled>
         <button class="hej-inline-button" id="verifyCode" type="button" disabled>확인</button>
       </div>
     </div>
 
     <div class="hej-field">
-      <label class="hej-label" for="password">비밀번호</label>
+      <label class="hej-label" for="password">3. 비밀번호</label>
       <input class="hej-input" id="password" autocomplete="current-password" type="password" disabled>
     </div>
 
@@ -599,6 +660,7 @@
     <button class="hej-login" id="login" type="button" disabled>로그인</button>
 
 	  <p class="hej-note">
+		      로그인하면 다시 비밀번호를 입력하지 않아도 됩니다.
 		      로그인 정보와 장치의 최근 상태, 문제 확인용 기록은 이 Homebridge에 저장해요.
 		      비밀번호는 저장하지 않고 개발자에게 자동 전송하지 않아요.
 	    </p>
@@ -606,8 +668,53 @@
   </section>
 </div>
 
-<div class="hej-settings is-hidden" id="settingsView" aria-live="polite">
-    <section class="hej-section hej-upgrade-warning" aria-label="Hejhome 3.0 update notice">
+<section id="startupView" class="hej-section" role="status">
+  <h2>Hejhome 연결 확인 중</h2>
+  <p id="startupMessage" class="hej-muted">저장된 로그인을 확인하고 있습니다.</p>
+  <button id="retryStartup" class="hej-action secondary is-hidden" type="button">다시 확인</button>
+</section>
+
+<div class="hej-settings is-hidden" id="settingsView">
+  <header class="hej-app-header">
+    <div class="hej-app-identity"><span class="hej-app-dot" aria-hidden="true"></span><h1>Hejhome</h1><span class="hej-beta">베타</span></div>
+    <p id="globalStatus" class="hej-muted" role="status">장치 상태를 확인하고 있습니다.</p>
+    <button id="closeStalledSettings" class="hej-action secondary is-hidden" type="button">설정 창 닫기</button>
+  </header>
+  <nav class="hej-tabs" role="tablist" aria-label="설정 화면">
+    <button id="tab-devices" role="tab" aria-controls="panel-devices" aria-selected="true" tabindex="0" type="button">내 장치</button>
+    <button id="tab-connections" role="tab" aria-controls="panel-connections" aria-selected="false" tabindex="-1" type="button">연결 설정</button>
+    <button id="tab-help" role="tab" aria-controls="panel-help" aria-selected="false" tabindex="-1" type="button">도움말</button>
+  </nav>
+  <section id="panel-devices" role="tabpanel" aria-labelledby="tab-devices" class="hej-panel">
+    <div id="deviceListView" class="hej-section">
+      <div class="hej-section-head"><h2>내 장치</h2><span class="hej-badge" id="deviceCount">목록 확인 중</span></div>
+      <div class="hej-list-tools">
+        <label for="deviceSearch">장치 검색<input id="deviceSearch" type="search" autocomplete="off"></label>
+        <label for="deviceFilter">장치 필터<select id="deviceFilter" aria-label="장치 필터">
+          <option value="all">전체</option><option value="attention">확인 필요</option><option value="hidden">표시하지 않는 장치</option>
+        </select></label>
+      </div>
+      <div id="deviceList" class="hej-list"></div>
+    </div>
+    <div id="deviceDetailView" class="is-hidden" data-testid="device-detail">
+      <button id="backToDevices" class="hej-action secondary" type="button">장치 목록으로</button>
+      <div class="hej-detail-heading"><h2 id="deviceDetailTitle"></h2><p id="deviceDetailKind" class="hej-muted"></p>
+        <p id="deviceDirtyNotice" class="hej-unsaved is-hidden" role="status">저장하지 않은 변경사항</p></div>
+      <section id="deviceActionSection" class="hej-section is-hidden"><h3>장치 조작</h3><p class="hej-muted">버튼을 누르면 명령을 한 번 보냅니다. 실제 동작 여부는 기기에서 확인해 주세요.</p><div id="deviceActionMount"></div></section>
+    </div>
+  </section>
+  <section id="panel-connections" role="tabpanel" aria-labelledby="tab-connections" class="hej-panel" hidden></section>
+  <section id="panel-help" role="tabpanel" aria-labelledby="tab-help" class="hej-panel" hidden>
+    <section class="hej-section"><h2>연결 문제 확인</h2><p class="hej-muted">로그인, 장치 찾기, 상태 수신, 앱 연결 준비를 차례대로 확인하세요.</p>
+      <p id="helpConnectionSummary" class="hej-muted"></p></section>
+    <section class="hej-section"><h2>문제 신고용 정보</h2><p class="hej-muted">개인 정보 없는 진단 내용을 확인하고 필요할 때만 직접 공유하세요.</p>
+      <div id="helpDiagnosticsMount"></div></section>
+    <section id="meterHelpSection" class="hej-section"><h2>전력 측정 고급 설정</h2><p class="hej-muted">측정 단위가 확인된 모델에만 설정하세요.</p>
+      <div id="meterHelpMount"></div><button id="saveMeters" class="hej-action secondary" type="button">전력 측정 설정 저장</button>
+      <p id="meterStatus" class="hej-status" role="status"></p></section>
+  </section>
+
+    <section id="upgradeSection" class="hej-section hej-upgrade-warning" aria-label="Hejhome 3.0 update notice">
       <p>
         <strong>3.0 안내:</strong>
         센서 측정값, 에어컨 설정, Apple Home 리모컨 버튼의 표시가 바뀔 수 있습니다.
@@ -615,19 +722,7 @@
       </p>
     </section>
 
-	  <section class="hej-section hej-overview" aria-label="Hejhome plugin overview">
-	    <div class="hej-mark" aria-hidden="true">
-	      <div class="hej-smile"></div>
-	    </div>
-	    <div>
-	      <h1>Hejhome 설정</h1>
-	      <p class="hej-muted">
-	        Hejhome Web 로그인 정보를 Homebridge 저장 공간에 보관하고, 발견한 장비를 Home 앱에 보여줍니다.
-	      </p>
-	    </div>
-	  </section>
-
-	  <section class="hej-section" aria-label="Hejhome login status">
+	  <section id="accountSection" class="hej-section" aria-label="Hejhome login status">
 	    <div class="hej-section-head">
 	      <h2>로그인 상태</h2>
 	      <span class="hej-badge" id="sessionBadge">확인 중</span>
@@ -639,7 +734,7 @@
 	    </div>
 	  </section>
 
-  <section class="hej-section" aria-label="Hejhome family and room selection">
+  <section id="scopeSection" class="hej-section" aria-label="Hejhome family and room selection">
     <div class="hej-section-head">
       <h2>집/방 선택</h2>
       <span class="hej-badge" id="scopeBadge">첫 번째 집</span>
@@ -652,7 +747,7 @@
     <p class="hej-status" id="scopeStatus" role="status"></p>
   </section>
 
-  <section class="hej-section" aria-label="Beta features">
+  <section id="featureSection" class="hej-section" aria-label="Beta features">
     <div class="hej-section-head"><h2>3.0 베타 기능</h2><span class="hej-badge">선택 사용</span></div>
     <p class="hej-muted">설정을 저장한 뒤 Homebridge를 다시 시작해 주세요.</p>
     <label><input type="checkbox" id="matterFeature"> 다른 스마트홈 앱에 연결(Matter)</label>
@@ -662,7 +757,7 @@
     <label><input type="checkbox" id="adaptiveFeature"> 적응형 조명</label>
     <p class="hej-muted">지원하는 조명에 Apple Home의 시간대별 자동 조명을 제공합니다.
       Home 앱에서도 적응형 조명을 켜야 합니다. 클라우드에 주기적으로 명령을 전송합니다.</p>
-    <details>
+    <details id="meterDetails">
       <summary>고급: 전력 측정 모델 설정</summary>
       <p class="hej-muted">확인된 모델명과 원본 필드의 단위 배율만 입력하세요.
         power는 W, current는 A, voltage는 V, energy는 누적 Wh 기준입니다.
@@ -678,28 +773,30 @@
     <p class="hej-status" id="featuresStatus" role="status"></p>
   </section>
 
-  <section class="hej-section" aria-label="Device settings">
-    <div class="hej-section-head"><h2>장치별 설정</h2><span class="hej-badge">선택 사용</span></div>
-    <p class="hej-muted">집/방 선택으로 불러온 장치만 표시됩니다. 장치의 연결 방식이나 표시 이름을 바꾸려면 저장한 뒤 Homebridge를 다시 시작해 주세요.</p>
+  <section id="deviceSettingsSection" class="hej-section" aria-label="Device settings">
+    <div class="hej-section-head"><h2>표시 설정</h2></div>
+    <p class="hej-muted">이름과 앱 연결을 저장한 뒤 Homebridge를 다시 시작해 주세요.</p>
     <div id="deviceSettingsList" class="hej-list"></div>
     <p class="hej-status" id="deviceSettingsStatus" role="status"></p>
   </section>
 
-  <section class="hej-section" aria-label="Device diagnostics">
+  <section id="diagnosticsSection" class="hej-section" aria-label="Device diagnostics">
     <div class="hej-section-head"><h2>연결 상태 살펴보기</h2><span class="hej-badge" id="diagnosticsBadge">확인 중</span></div>
     <p class="hej-muted">장치 찾기, Apple Home 연결, Matter 연결, 장치 상태 수신을 따로 확인할 수 있습니다. 이전에 저장된 장치가 있어도 지금 연결됐다는 뜻은 아닙니다.</p>
     <p class="hej-muted" id="connectionSummary" role="status"></p>
     <div class="hej-list" id="diagnosticsList"></div>
-    <div class="hej-actions"><button class="hej-action secondary" id="exportDiagnostics" type="button">개인 정보 없는 진단 내용 보기</button></div>
+    <div class="hej-actions"><button class="hej-action secondary" id="exportDiagnostics" type="button">개인 정보 없는 진단 내용 보기</button>
+      <button class="hej-action secondary is-hidden" id="copyDiagnostics" type="button">진단 내용 복사</button></div>
     <pre class="hej-code is-hidden" id="diagnosticsExport"></pre>
   </section>
 
-  <section class="hej-section" aria-label="Hejhome device support">
+  <section id="supportSection" class="hej-section" aria-label="Hejhome device support">
     <div class="hej-section-head">
       <h2>장비 및 지원 현황</h2>
 	      <span class="hej-badge" id="snapshotBadge">장비 목록 대기</span>
     </div>
-    <div class="hej-stats">
+    <p id="noDeviceSupport" class="hej-muted is-hidden">아직 찾은 장치가 없어요. 연결 설정에서 가져올 집과 방을 확인해 주세요.</p>
+    <div id="supportStats" class="hej-stats">
       <div class="hej-stat">
         <strong id="registeredCount">0</strong>
         <span class="hej-muted">등록된 장비</span>
@@ -720,9 +817,9 @@
 	    <h2 style="margin-top: 20px;">아직 지원하지 않는 제품</h2>
 	    <div class="hej-list" id="unsupportedProducts"></div>
 
-	    <h2 style="margin-top: 20px;">지원 요청용 GitHub 글</h2>
-	    <p class="hej-muted">아직 지원하지 않는 제품이 있으면 아래 내용을 GitHub 이슈에 붙여 주세요. 모델을 추가할 때 필요합니다.</p>
-    <pre class="hej-code" id="issueTemplate"></pre>
+	    <div id="issueSection"><h2 style="margin-top: 20px;">지원 요청용 GitHub 글</h2>
+	      <p class="hej-muted">아직 지원하지 않는 제품이 있으면 아래 내용을 GitHub 이슈에 붙여 주세요. 모델을 추가할 때 필요합니다.</p>
+      <pre class="hej-code" id="issueTemplate"></pre></div>
   </section>
 </div>
 
@@ -749,8 +846,13 @@
 	  };
 	  const ENGLISH = {
       '앱스토어나 플레이스토어에서 헤이홈 어플을 다운 받아 구체적인 설정을 먼저 마친 뒤, 헤이홈 앱에 등록한 이메일로 로그인해 주세요.': 'Set up your devices in the Hejhome app, then sign in with the email registered there.',
-      '이메일': 'Email', '인증번호 전송': 'Send code', '6자리 인증번호 입력': 'Enter 6-digit code',
-      '확인': 'Verify', '비밀번호': 'Password', '자동 로그인': 'Stay signed in', '로그인': 'Sign in',
+      '헤이홈 앱에 등록한 이메일로 로그인해 주세요.': 'Sign in with the email registered in the Hejhome app.',
+      '이메일': 'Email', '1. 이메일': '1. Email', '인증번호 전송': 'Send code',
+      '6자리 인증번호 입력': 'Enter 6-digit code', '2. 6자리 인증번호 입력': '2. Enter 6-digit code',
+      '확인': 'Verify', '비밀번호': 'Password', '3. 비밀번호': '3. Password',
+      '자동 로그인': 'Stay signed in', '로그인': 'Sign in',
+      '로그인하면 다시 비밀번호를 입력하지 않아도 됩니다. 로그인 정보와 장치의 최근 상태, 문제 확인용 기록은 이 Homebridge에 저장해요. 비밀번호는 저장하지 않고 개발자에게 자동 전송하지 않아요.':
+        'You stay signed in without entering your password again. Sign-in data, recent device status, and troubleshooting records stay on this Homebridge. Your password is not saved or automatically sent to the developer.',
       '로그인 정보와 장치의 최근 상태, 문제 확인용 기록은 이 Homebridge에 저장해요. 비밀번호는 저장하지 않고 개발자에게 자동 전송하지 않아요.': 'Your sign-in data, recent device status, and troubleshooting records are stored on this Homebridge. Your password is not saved, and nothing is automatically sent to the developer.',
       'Hejhome 설정': 'Hejhome settings', '로그인 상태': 'Sign-in status', '확인 중': 'Checking',
       '저장된 로그인 정보를 확인하고 있습니다.': 'Checking your saved sign-in.', '다시 로그인': 'Sign in again',
@@ -762,11 +864,21 @@
       '고급: 전력 측정 모델 설정': 'Advanced: power meter models', '측정 모델 추가': 'Add meter model',
       '전문가용 원본 설정': 'Expert settings', '원본 설정': 'Raw settings', '베타 기능 저장': 'Save beta features',
       '장치별 설정': 'Settings for each device', '장치 및 지원 현황': 'Devices and support',
+      '표시 설정': 'Display settings', '이름과 앱 연결을 저장한 뒤 Homebridge를 다시 시작해 주세요.':
+        'Save the name and app connection, then restart Homebridge.',
+      '장치 조작': 'Device controls', '버튼을 누르면 명령을 한 번 보냅니다. 실제 동작 여부는 기기에서 확인해 주세요.':
+        'Each button sends one command. Check the device to confirm what happened.',
+      '연결 상태 자세히': 'Detailed connection status',
       '장비 및 지원 현황': 'Devices and support',
       '장비 목록 대기': 'Waiting for devices', '등록된 장비': 'Found devices', '지원 가능': 'Supported',
       '아직 지원하지 않는 제품': 'Products not yet supported', '사용할 수 있는 모델': 'Supported models',
       '지원 요청용 GitHub 글': 'GitHub support request',
       '연결 상태 살펴보기': 'Connection status', '개인 정보 없는 진단 내용 보기': 'View anonymous diagnostics',
+      '진단 내용 복사': 'Copy diagnostics',
+      '설정 창 닫기': 'Close settings',
+      'Hejhome 연결 확인 중': 'Checking Hejhome connection',
+      '저장된 로그인을 확인하고 있습니다.': 'Checking saved sign-in.',
+      '다시 확인': 'Check again',
       '3.0 안내:': '3.0 update:',
       '센서 측정값, 에어컨 설정, Apple Home 리모컨 버튼의 표시가 바뀔 수 있습니다. 기존 장치를 변경하기 전에 3.0 베타 안내를 확인해 주세요.': 'Display of sensor readings, AC settings, and Apple Home remote buttons may change. Review the 3.0 beta guide before changing existing devices.',
       'Hejhome Web 로그인 정보를 Homebridge 저장 공간에 보관하고, 발견한 장비를 Home 앱에 보여줍니다.': 'Hejhome sign-in data is kept in Homebridge storage, and discovered devices appear in Apple Home.',
@@ -776,6 +888,22 @@
       '아직 지원하지 않는 제품이 있으면 아래 내용을 GitHub 이슈에 붙여 주세요. 모델을 추가할 때 필요합니다.': 'If a product is not yet supported, paste the text below into a GitHub issue to request support.',
       '집/방 선택으로 불러온 장치만 표시됩니다. 장치의 연결 방식이나 표시 이름을 바꾸려면 저장한 뒤 Homebridge를 다시 시작해 주세요.': 'Only devices selected through homes and rooms appear here. Restart Homebridge after changing how a device appears.',
       '장치 찾기, Apple Home 연결, Matter 연결, 장치 상태 수신을 따로 확인할 수 있습니다. 이전에 저장된 장치가 있어도 지금 연결됐다는 뜻은 아닙니다.': 'Check device discovery, Apple Home, Matter, and live updates separately. A previously saved device does not prove a current connection.',
+      '베타': 'Beta', '장치 상태를 확인하고 있습니다.': 'Checking device status.',
+      '내 장치': 'My devices', '연결 설정': 'Connection settings', '도움말': 'Help',
+      '목록 확인 중': 'Checking list', '장치 검색': 'Search devices', '장치 필터': 'Device filter',
+      '전체': 'All', '확인 필요': 'Needs attention', '표시하지 않는 장치': 'Hidden devices',
+      '장치 목록으로': 'Back to devices', '저장하지 않은 변경사항': 'Unsaved changes',
+      '연결 문제 확인': 'Check connection problems',
+      '로그인, 장치 찾기, 상태 수신, 앱 연결 준비를 차례대로 확인하세요.': 'Check sign-in, device discovery, updates, and app readiness in order.',
+      '문제 신고용 정보': 'Information for support',
+      '개인 정보 없는 진단 내용을 확인하고 필요할 때만 직접 공유하세요.': 'Review anonymous diagnostics and share them only when you choose.',
+      '전력 측정 고급 설정': 'Advanced power meter settings',
+      '측정 단위가 확인된 모델에만 설정하세요.': 'Configure only models with confirmed units.',
+      '전력 측정 설정 저장': 'Save power meter settings',
+      'Apple Home는 기본 연결입니다. Matter를 켠 뒤 해당 브리지의 QR로 다른 앱에 연결해 주세요.': 'Apple Home is the default connection. Turn on Matter, then use the bridge QR code to connect other apps.',
+      '단위가 확인된 모델의 측정값만 설정합니다. 자세한 안내는 아래에 있습니다.': 'Configure measurements only for models with confirmed units. More guidance is below.',
+      '연결할 앱': 'Connected apps', '조명 색 자동 조절': 'Automatic light color',
+      '조명 설정 저장': 'Save lighting settings', '연결할 앱 저장': 'Save app connection',
     };
     let language = 'ko';
     const tr = (ko, en) => language === 'en' ? (en ?? ENGLISH[ko] ?? ko) : ko;
@@ -795,6 +923,8 @@
       } catch { language = 'ko'; }
       document.documentElement.lang = language;
       translateStaticText();
+      document.querySelector('.hej-tabs').setAttribute('aria-label', tr('설정 화면', 'Settings screens'));
+      document.getElementById('deviceFilter').setAttribute('aria-label', tr('장치 필터', 'Device filter'));
       await updateTheme();
     }
     async function updateTheme() {
@@ -834,11 +964,34 @@
   let verified = false;
   let currentStatus = null;
   let currentDiagnostics = null;
+  let activeTab = 0;
+  let selectedDeviceId = null;
+  let listScrollTop = 0;
+  let detailReturnFocusId = null;
+  let listQuery = '';
+  let listFilter = 'all';
+  let scopeEditToken = null;
+  let uiSessionRevision = null;
+  let accountChangePending = false;
+  let featureDraftDirty = false;
+  let scopeDraftDirty = false;
+  const featureEdits = { matter: 0, adaptiveLighting: 0, meters: 0 };
+  const savedFeatureEdits = { matter: 0, adaptiveLighting: 0, meters: 0 };
+  let scopeEditRevision = 0;
+  let savedScopeRevision = 0;
+  function markFeatureDraft(kind) {
+    featureEdits[kind]++;
+    featureDraftDirty = Object.keys(featureEdits).some((key) => featureEdits[key] !== savedFeatureEdits[key]);
+  }
+  let diagnosticsOutstanding = 0;
+  let diagnosticsRetryAt = 0;
   let meterSourceMode = 'form';
   let diagnosticsGeneration = 0;
   let deviceListSignature = '';
   const deviceDrafts = new Map();
   const deviceControlDrafts = new Map();
+  const commandStatuses = new Map();
+  const pendingCommands = new Set();
   let themeTimer = null;
   let diagnosticsTimer = null;
   let diagnosticsSubscribed = false;
@@ -846,32 +999,377 @@
   const deviceSettingsList = document.getElementById('deviceSettingsList');
   const diagnosticsBadge = document.getElementById('diagnosticsBadge');
   const connectionSummary = document.getElementById('connectionSummary');
+  const tabButtons = ['tab-devices', 'tab-connections', 'tab-help'].map((id) => document.getElementById(id));
+  const tabPanels = ['panel-devices', 'panel-connections', 'panel-help'].map((id) => document.getElementById(id));
+  const deviceList = document.getElementById('deviceList');
+  const deviceListView = document.getElementById('deviceListView');
+  const deviceDetailView = document.getElementById('deviceDetailView');
+  const deviceSearch = document.getElementById('deviceSearch');
+  const deviceFilter = document.getElementById('deviceFilter');
   const sensorTypes = new Set(['SensorTh', 'SensorTh2', 'SensorRefTh', 'SensorRefTh2']);
+  const closeStalledSettings = document.getElementById('closeStalledSettings');
+  closeStalledSettings.addEventListener('click', () => window.homebridge?.closeSettings?.());
+
+  function applySessionRevision(revision) {
+    if (!revision) return true;
+    if (!uiSessionRevision) { uiSessionRevision = revision; return true; }
+    if (revision === uiSessionRevision) return !accountChangePending;
+    uiSessionRevision = revision;
+    diagnosticsGeneration++;
+    currentDiagnostics = null;
+    pendingDeviceIds.clear();
+    commandStatuses.clear();
+    pendingCommands.clear();
+    if (deviceDrafts.size || deviceControlDrafts.size || featureDraftDirty || scopeDraftDirty) {
+      accountChangePending = true;
+      selectedDeviceId = null;
+      deviceDetailView.classList.add('is-hidden');
+      deviceListView.classList.remove('is-hidden');
+      document.getElementById('panel-connections').hidden = true;
+      document.getElementById('panel-help').hidden = true;
+      document.getElementById('panel-devices').hidden = false;
+      for (const button of settingsView.querySelectorAll('button:not(#accountChangeAction)')) button.disabled = true;
+      document.getElementById('globalStatus').textContent = tr(
+        '계정이 바뀌었어요. 이전 계정의 저장하지 않은 변경사항을 확인해 주세요.',
+        'The account changed. Review unsaved changes from the previous account.');
+      if (!document.getElementById('accountChangeAction')) {
+        const button = document.createElement('button');
+        button.id = 'accountChangeAction'; button.type = 'button'; button.className = 'hej-action secondary';
+        button.textContent = tr('이전 변경사항 버리고 새 계정 보기', 'Discard old changes and view new account');
+        button.addEventListener('click', () => {
+          if (!window.confirm(tr('이전 계정의 저장하지 않은 변경사항을 버릴까요?',
+            'Discard unsaved changes from the previous account?'))) return;
+          deviceDrafts.clear(); deviceControlDrafts.clear(); commandStatuses.clear();
+          featureDraftDirty = false; scopeDraftDirty = false;
+          for (const key of Object.keys(featureEdits)) savedFeatureEdits[key] = featureEdits[key];
+          savedScopeRevision = scopeEditRevision;
+          accountChangePending = false;
+          button.remove();
+          for (const control of settingsView.querySelectorAll('button')) control.disabled = false;
+          selectTab(0);
+          void reloadCurrentAccount();
+          void refreshDiagnostics();
+        });
+        document.getElementById('globalStatus').after(button);
+      }
+      deviceList.replaceChildren();
+      deviceList.textContent = tr('이전 계정의 변경사항을 확인한 뒤 새 장치를 보여드릴게요.',
+        'Review the previous account changes before viewing new devices.');
+      return false;
+    }
+    selectedDeviceId = null;
+    deviceDetailView.classList.add('is-hidden'); deviceListView.classList.remove('is-hidden');
+    return true;
+  }
+
+  async function reloadCurrentAccount() {
+    try {
+      const status = await requestWithTimeout('/session-status', {}, 10000,
+        tr('계정 상태 확인', 'Check account status'));
+      if (accountChangePending || !applySessionRevision(status.uiSessionRevision)) return;
+      await showSettingsView(status);
+    } catch {
+      document.getElementById('globalStatus').textContent = tr(
+        '새 계정 상태를 확인하지 못했어요. 잠시 후 다시 열어 주세요.',
+        'Could not check the new account. Please reopen this page shortly.');
+    }
+  }
+
+  function organizeSections() {
+    const connections = document.getElementById('panel-connections');
+    const help = document.getElementById('panel-help');
+    connections.append(document.getElementById('accountSection'), document.getElementById('scopeSection'),
+      document.getElementById('featureSection'));
+    const featureSection = document.getElementById('featureSection');
+    featureSection.querySelector('h2').textContent = '연결할 앱';
+    const lighting = document.createElement('section');
+    lighting.className = 'hej-section'; lighting.id = 'lightingSection';
+    const lightingTitle = document.createElement('h2'); lightingTitle.textContent = '조명 색 자동 조절';
+    const lightingLabel = document.getElementById('adaptiveFeature').closest('label');
+    const lightingDescription = lightingLabel.nextElementSibling;
+    const lightingSave = document.createElement('button');
+    lightingSave.id = 'saveLighting'; lightingSave.type = 'button'; lightingSave.className = 'hej-action secondary';
+    lightingSave.textContent = '조명 설정 저장';
+    const lightingStatus = document.createElement('p');
+    lightingStatus.id = 'lightingStatus'; lightingStatus.className = 'hej-status'; lightingStatus.setAttribute('role', 'status');
+    lighting.append(lightingTitle, lightingLabel, lightingDescription, lightingSave, lightingStatus);
+    connections.append(lighting);
+    const featureLead = featureSection.querySelector('.hej-muted');
+    if (featureLead) featureLead.textContent = 'Apple Home는 기본 연결입니다. Matter를 켠 뒤 해당 브리지의 QR로 다른 앱에 연결해 주세요.';
+    const meterDescription = document.querySelector('#meterDetails > p');
+    if (meterDescription) meterDescription.textContent = '단위가 확인된 모델의 측정값만 설정합니다. 자세한 안내는 아래에 있습니다.';
+    document.getElementById('autoLogin').closest('label').classList.add('is-hidden');
+    document.getElementById('saveFeatures').textContent = '연결할 앱 저장';
+    document.getElementById('meterHelpMount').append(document.getElementById('meterDetails'));
+    document.getElementById('helpDiagnosticsMount').append(document.getElementById('exportDiagnostics').parentElement,
+      document.getElementById('diagnosticsExport'));
+    help.append(document.getElementById('upgradeSection'), document.getElementById('supportSection'));
+    const stateDetails = document.createElement('details');
+    stateDetails.id = 'deviceStateDetails'; stateDetails.className = 'hej-detail-state';
+    const stateSummary = document.createElement('summary'); stateSummary.textContent = '연결 상태 자세히';
+    stateDetails.append(stateSummary, document.getElementById('diagnosticsSection'));
+    deviceDetailView.append(document.getElementById('deviceSettingsSection'), stateDetails);
+  }
+
+  function selectTab(index, focus = false) {
+    if (accountChangePending) return;
+    activeTab = index;
+    tabButtons.forEach((button, position) => {
+      button.setAttribute('aria-selected', String(position === index));
+      button.tabIndex = position === index ? 0 : -1;
+      tabPanels[position].hidden = position !== index;
+    });
+    if (focus) tabButtons[index].focus();
+    window.homebridge?.fixScrollHeight?.();
+  }
+
+  tabButtons.forEach((button, index) => {
+    button.addEventListener('click', () => selectTab(index));
+    button.addEventListener('keydown', (event) => {
+      let next;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabButtons.length;
+      else if (event.key === 'ArrowLeft') next = (index + tabButtons.length - 1) % tabButtons.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabButtons.length - 1;
+      if (next !== undefined) {
+        event.preventDefault(); selectTab(next, true);
+      }
+    });
+  });
+  deviceSearch.addEventListener('input', () => {
+    listQuery = deviceSearch.value.trim().toLocaleLowerCase(language);
+    renderDeviceList();
+  });
+  deviceFilter.addEventListener('change', () => {
+    listFilter = deviceFilter.value;
+    renderDeviceList();
+  });
+  document.getElementById('backToDevices').addEventListener('click', () => closeDeviceDetail());
+  document.getElementById('matterFeature').addEventListener('input', () => markFeatureDraft('matter'));
+  document.getElementById('adaptiveFeature').addEventListener('input', () => markFeatureDraft('adaptiveLighting'));
+  for (const id of ['meterProfiles', 'meterRows']) {
+    document.getElementById(id).addEventListener('input', () => markFeatureDraft('meters'));
+  }
+  scopeList.addEventListener('input', () => { scopeEditRevision++; scopeDraftDirty = true; });
+  organizeSections();
   function controlsAreReady() {
     const updated = Date.parse(currentDiagnostics?.updatedAt ?? '');
     return currentDiagnostics?.controlsAvailable === true && Number.isFinite(updated)
       && Date.now() - updated <= 30000 && currentDiagnostics.connection?.session === 'valid';
   }
 
-  document.getElementById('saveFeatures').addEventListener('click', async () => {
-    const button = document.getElementById('saveFeatures');
-    const status = document.getElementById('featuresStatus');
+  function setCommandStatus(id, message) {
+    commandStatuses.set(id, message);
+    const status = selectedDeviceId === id
+      ? document.getElementById('deviceActionMount').querySelector('[data-command-status]') : null;
+    if (status) status.textContent = message;
+  }
+
+  async function sendDeviceAction(deviceId, key, button, action) {
+    const pendingKey = `${deviceId}:${key}`;
+    if (pendingCommands.has(pendingKey)) return;
+    const ownerRevision = uiSessionRevision;
+    pendingCommands.add(pendingKey);
     button.disabled = true;
     try {
-      const features = {
-        matter: document.getElementById('matterFeature').checked,
-        adaptiveLighting: document.getElementById('adaptiveFeature').checked,
-        meters: readMeterRows(),
-      };
-      const saved = await requestWithTimeout('/save-features', { features }, 15000, tr('베타 기능 저장', 'Save beta features'));
-      if (currentStatus) currentStatus.features = saved.features ?? features;
+      await action();
+      if (uiSessionRevision === ownerRevision) setCommandStatus(deviceId, tr('명령 전송 완료', 'Command sent'));
+    } catch (error) {
+      if (uiSessionRevision === ownerRevision) setCommandStatus(deviceId, commandFailureMessage(error));
+    } finally {
+      if (uiSessionRevision !== ownerRevision) return;
+      pendingCommands.delete(pendingKey);
+      const current = [...(selectedDeviceId === deviceId
+        ? document.getElementById('deviceActionMount').querySelectorAll('[data-command-key]') : [])]
+        .find((candidate) => candidate.dataset.commandKey === key);
+      if (current) current.disabled = !controlsAreReady();
+    }
+  }
+
+  const pendingDeviceIds = new Set();
+  let currentHapCache = new Set();
+  let currentMatterCache = new Set();
+
+  function deviceKind(device) {
+    const named = {
+      IrTv: tr('TV 리모컨', 'TV remote'), IrSettopbox: tr('셋톱박스 리모컨', 'Set-top box remote'),
+      IrFan: tr('선풍기 리모컨', 'Fan remote'), IrAirconditioner: tr('에어컨', 'Air conditioner'),
+      Airpurifier: tr('공기청정기', 'Air purifier'), ZigbeeDoorlock: tr('문 열림 센서', 'Door sensor'),
+    }[device.deviceType];
+    if (named) return named;
+    const model = (currentStatus?.supportedModels ?? []).find((item) => item.deviceType === device.deviceType);
+    return model ? (language === 'en' ? formatHomeKitServices(model.homeKitServices ?? [model.homeKitService]) : model.label)
+      : tr('장치', 'Device');
+  }
+
+  function statusIsFresh() {
+    const updated = Date.parse(currentDiagnostics?.updatedAt ?? '');
+    return Number.isFinite(updated) && Date.now() - updated <= 30000;
+  }
+
+  function deviceNeedsAttention(device) {
+    if (!statusIsFresh() || currentDiagnostics?.connection?.session !== 'valid') return true;
+    if (device.online === false || device.lastControl === 'failed') return true;
+    const visibility = device.preference?.visibility ?? 'both';
+    if (visibility === 'hidden') return false;
+    if (visibility !== 'matter' && !device.homekit) return true;
+    if (visibility !== 'homekit' && currentStatus?.features?.matter === true && !device.matter) return true;
+    return false;
+  }
+
+  function deviceStatusLine(device) {
+    if (!statusIsFresh()) return tr('최근 상태를 확인할 수 없어요', 'Recent status unavailable');
+    if (currentDiagnostics?.connection?.session === 'expired') return tr('다시 로그인해 주세요', 'Sign in again');
+    if (device.online === false) return tr('장치와 연결되지 않음', 'Device disconnected');
+    if (device.lastControl === 'failed') return tr('마지막 명령 전송 실패', 'Last command failed');
+    if (device.lastSeenAt) return tr('장치 상태를 받았어요', 'Device update received');
+    return tr('아직 상태를 받지 못했어요', 'No device update yet');
+  }
+
+  function deviceConnectionLine(device) {
+    const visibility = device.preference?.visibility ?? 'both';
+    if (pendingDeviceIds.has(device.id)) return tr('저장했어요. Homebridge를 다시 시작하면 적용돼요.',
+      'Saved. Restart Homebridge to apply this change.');
+    if (visibility === 'hidden') return tr('앱에 표시하지 않음', 'Hidden from apps');
+    if (visibility === 'matter' && currentStatus?.features?.matter !== true) {
+      return tr('Matter 연결을 먼저 켜 주세요', 'Turn on Matter connection first');
+    }
+    const apple = visibility !== 'matter' && device.homekit && statusIsFresh();
+    const matter = visibility !== 'homekit' && currentStatus?.features?.matter === true && device.matter && statusIsFresh();
+    if (apple && matter) return tr('Apple Home용·Matter용으로 준비됨', 'Prepared for Apple Home and Matter');
+    if (apple) return tr('Apple Home용으로 준비됨', 'Prepared for Apple Home');
+    if (matter) return tr('Matter 연결 준비됨', 'Prepared for Matter');
+    return tr('앱 연결 준비를 확인해 주세요', 'Check app connection readiness');
+  }
+
+  function renderDeviceList() {
+    const focusedId = document.activeElement?.closest?.('[data-testid="device-row"]')?.dataset.deviceId;
+    deviceList.replaceChildren();
+    const scoped = (currentDiagnostics?.devices ?? []).filter((device) => device.inScope);
+    const filtered = scoped.filter((device) => {
+      if (listQuery && !`${device.name} ${deviceKind(device)}`.toLocaleLowerCase(language).includes(listQuery)) return false;
+      const hidden = device.preference?.visibility === 'hidden';
+      return listFilter === 'hidden' ? hidden : listFilter === 'attention' ? !hidden && deviceNeedsAttention(device) : true;
+    });
+    document.getElementById('deviceCount').textContent = tr(`${filtered.length}개 장치`, `${filtered.length} devices`);
+    if (!filtered.length) {
+      const empty = document.createElement('p'); empty.className = 'hej-empty';
+      empty.textContent = scoped.length ? tr('이 검색 조건에 맞는 장치가 없어요.', 'No devices match this search.')
+        : currentStatus?.configured ? tr('선택한 집과 방에서 장치를 찾지 못했어요. 연결 설정에서 가져올 장치를 확인해 주세요.',
+          'No devices found in the selected homes and rooms. Check device selection in Connection settings.')
+          : tr('로그인 후 장치 목록을 확인할 수 있어요.', 'Sign in to see your devices.');
+      deviceList.append(empty);
+    }
+    for (const device of filtered) {
+      const row = document.createElement('article');
+      row.className = 'hej-device-card'; row.dataset.testid = 'device-row'; row.dataset.deviceId = device.id;
+      const name = document.createElement('h3'); name.textContent = device.name;
+      const kind = document.createElement('p'); kind.textContent = deviceKind(device);
+      const status = document.createElement('p'); status.textContent = deviceStatusLine(device);
+      const connection = document.createElement('p'); connection.textContent = deviceConnectionLine(device);
+      if (deviceDrafts.has(device.id)) {
+        const dirty = document.createElement('p'); dirty.className = 'hej-unsaved';
+        dirty.textContent = tr('저장하지 않은 변경사항', 'Unsaved changes'); row.append(dirty);
+      }
+      const details = document.createElement('button');
+      details.type = 'button'; details.className = 'hej-action secondary';
+      details.textContent = tr('상세 보기', 'Details');
+      details.addEventListener('click', () => openDeviceDetail(device.id));
+      row.append(name, kind, status, connection, details);
+      deviceList.append(row);
+    }
+    if (focusedId) {
+      const row = [...deviceList.querySelectorAll('[data-testid="device-row"]')]
+        .find((item) => item.dataset.deviceId === focusedId);
+      row?.querySelector('button')?.focus({ preventScroll: true });
+    }
+    window.homebridge?.fixScrollHeight?.();
+  }
+
+  function openDeviceDetail(id) {
+    const device = (currentDiagnostics?.devices ?? []).find((item) => item.id === id && item.inScope);
+    if (!device) return;
+    listScrollTop = window.scrollY;
+    detailReturnFocusId = id;
+    selectedDeviceId = id;
+    deviceListView.classList.add('is-hidden');
+    deviceDetailView.classList.remove('is-hidden');
+    deviceDetailView.dataset.deviceId = id;
+    document.getElementById('deviceDetailTitle').textContent = device.name;
+    document.getElementById('deviceDetailKind').textContent = deviceKind(device);
+    document.getElementById('deviceDirtyNotice').classList.toggle('is-hidden', !deviceDrafts.has(id));
+    renderDeviceSettings(currentDiagnostics.devices);
+    renderDiagnostics(currentDiagnostics, currentHapCache, currentMatterCache);
+    updateTemperatureDisplays(currentDiagnostics);
+    document.getElementById('backToDevices').focus();
+    deviceDetailView.scrollIntoView({ block: 'start', behavior: 'instant' });
+    window.homebridge?.fixScrollHeight?.();
+  }
+
+  function closeDeviceDetail() {
+    selectedDeviceId = null;
+    deviceDetailView.classList.add('is-hidden');
+    deviceListView.classList.remove('is-hidden');
+    renderDeviceList();
+    requestAnimationFrame(() => {
+      window.scrollTo(0, listScrollTop);
+      const row = [...deviceList.querySelectorAll('[data-testid="device-row"]')]
+        .find((item) => item.dataset.deviceId === detailReturnFocusId);
+      const trigger = row?.querySelector('button') ?? deviceSearch;
+      trigger.focus({ preventScroll: true });
+      window.homebridge?.fixScrollHeight?.();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => trigger.scrollIntoView({ block: 'center', behavior: 'instant' }));
+      });
+    });
+    window.homebridge?.fixScrollHeight?.();
+  }
+
+  async function saveFeaturePatch(features, button, status, label) {
+    button.disabled = true;
+    const ownerRevision = uiSessionRevision;
+    const meterDraftAtSave = Array.isArray(features.meters) ? document.getElementById('meterProfiles').value : null;
+    const submittedEdit = Object.fromEntries(Object.keys(features).map((key) => [key, featureEdits[key]]));
+    try {
+      const saved = await requestWithTimeout('/save-features', { features }, 15000, label);
+      if (uiSessionRevision !== ownerRevision) return;
+      if (currentStatus) currentStatus.features = { ...(currentStatus.features ?? {}), ...(saved.features ?? features) };
+      if (Array.isArray(features.meters) && document.getElementById('meterProfiles').value === meterDraftAtSave) {
+        renderMeterRows(saved.features?.meters ?? features.meters);
+        document.getElementById('meterProfiles').value = JSON.stringify(saved.features?.meters ?? features.meters, null, 2);
+      }
+      for (const [key, revision] of Object.entries(submittedEdit)) savedFeatureEdits[key] = revision;
+      featureDraftDirty = Object.keys(featureEdits).some((key) => featureEdits[key] !== savedFeatureEdits[key]);
       void refreshDiagnostics();
       status.textContent = tr('저장했습니다. Homebridge를 다시 시작하면 적용됩니다.', 'Saved. Restart Homebridge to apply the changes.');
-    } catch (error) {
-      status.textContent = tr(`저장하지 못했습니다: ${error.message}`, `Could not save: ${error.message}`);
-    } finally {
       status.classList.add('is-visible');
+    } catch (error) {
+      if (uiSessionRevision !== ownerRevision) return;
+      status.textContent = language === 'en' ? 'Could not save. Check the settings and try again.'
+        : `저장하지 못했습니다: ${error.message}`;
+      status.classList.add('is-visible');
+    } finally {
       button.disabled = false;
+    }
+  }
+
+  document.getElementById('saveFeatures').addEventListener('click', () => saveFeaturePatch(
+    { matter: document.getElementById('matterFeature').checked },
+    document.getElementById('saveFeatures'), document.getElementById('featuresStatus'),
+    tr('연결할 앱 저장', 'Save app connection')));
+  document.getElementById('saveLighting').addEventListener('click', () => saveFeaturePatch(
+    { adaptiveLighting: document.getElementById('adaptiveFeature').checked },
+    document.getElementById('saveLighting'), document.getElementById('lightingStatus'),
+    tr('조명 설정 저장', 'Save lighting settings')));
+  document.getElementById('saveMeters').addEventListener('click', () => {
+    const button = document.getElementById('saveMeters');
+    const status = document.getElementById('meterStatus');
+    try {
+      return saveFeaturePatch({ meters: readMeterRows() }, button, status,
+        tr('전력 측정 설정 저장', 'Save power meter settings'));
+    } catch {
+      status.textContent = tr('전력 측정 설정을 확인해 주세요.', 'Check the power meter settings.');
+      status.classList.add('is-visible');
     }
   });
 
@@ -911,12 +1409,19 @@
       remove.addEventListener('click', () => {
         row.remove();
         meterSourceMode = 'form';
+        markFeatureDraft('meters');
       });
       row.append(remove);
       container.append(row);
     }
     meterSourceMode = 'form';
   }
+
+  document.getElementById('meterProfiles').addEventListener('change', () => {
+    if (meterSourceMode !== 'raw') return;
+    // Keep the Save button in place while the textarea loses focus.
+    // The form is synchronized after the save response.
+  });
 
   function readMeterRows() {
     const rows = [...document.querySelectorAll('#meterRows .hej-meter-grid')];
@@ -945,6 +1450,7 @@
 
   document.getElementById('addMeter').addEventListener('click', () => {
     renderMeterRows([...readMeterRows(), { model: '' }]);
+    markFeatureDraft('meters');
   });
 
   function option(value, label) {
@@ -962,13 +1468,13 @@
 
   function renderDeviceSettings(devices) {
     const active = document.activeElement;
-    const activeRow = active?.closest?.('[data-device-id]');
+    const activeRow = active?.closest?.('[data-device-id]') ?? active?.closest?.('#deviceActionMount');
     const focusedId = activeRow?.dataset.deviceId;
     const focusedControl = active?.dataset?.deviceControl;
     const selection = active instanceof HTMLInputElement && focusedControl === 'name'
       ? [active.selectionStart, active.selectionEnd] : null;
     deviceSettingsList.replaceChildren();
-    const shown = devices.filter((device) => device.inScope);
+    const shown = devices.filter((device) => device.inScope && device.id === selectedDeviceId);
     if (!shown.length) {
       deviceSettingsList.textContent = tr('선택한 집/방에서 장치를 찾지 못했습니다.', 'No devices were found in the selected homes or rooms.');
       return;
@@ -977,12 +1483,15 @@
     for (const device of shown) {
       const draft = deviceDrafts.get(device.id);
       const item = document.createElement('div');
-      item.className = 'hej-list-item';
+      item.className = 'hej-detail-form';
       item.dataset.deviceId = device.id;
-      const title = document.createElement('strong');
-      title.textContent = device.name;
       const controls = document.createElement('div');
       controls.className = 'hej-device-controls';
+      const extra = document.createElement('div');
+      extra.className = 'hej-detail-additional';
+      const extraTitle = document.createElement('h3');
+      extraTitle.textContent = tr('기기 추가 설정', 'Additional device settings');
+      extra.append(extraTitle);
       const visibility = document.createElement('select');
       visibility.dataset.deviceControl = 'visibility';
       visibility.append(option('both', tr('Apple Home와 Matter', 'Apple Home and Matter')),
@@ -1014,7 +1523,7 @@
         temperatureSensor.append(option('', tr('선택하지 않음', 'None')));
         for (const sensor of sensors) temperatureSensor.append(option(sensor.id, sensor.name));
         temperatureSensor.value = draft?.temperatureSensorId ?? device.preference?.temperatureSensorId ?? '';
-        controls.append(settingLabel(tr('현재 온도를 확인할 온도계', 'Thermometer for current temperature'), temperatureSensor));
+        extra.append(settingLabel(tr('현재 온도를 확인할 온도계', 'Thermometer for current temperature'), temperatureSensor));
       }
       let freshness;
       if (sensorTypes.has(device.deviceType) || device.meterProfileApplied || device.deviceType === 'Airpurifier') {
@@ -1026,7 +1535,7 @@
         if (device.deviceType === 'Airpurifier') {
           freshness.disabled = !(Number(draft?.pm25Multiplier ?? device.preference?.pm25Multiplier) > 0);
         }
-        controls.append(settingLabel(tr('측정값 유효 시간(분)', 'Measurement validity (minutes)'), freshness));
+        extra.append(settingLabel(tr('측정값 유효 시간(분)', 'Measurement validity (minutes)'), freshness));
       }
       let remoteButtons;
       if (['IrTv', 'IrSettopbox', 'IrFan'].includes(device.deviceType)) {
@@ -1034,7 +1543,7 @@
         remoteButtons.type = 'checkbox'; remoteButtons.dataset.deviceControl = 'remoteButtons';
         remoteButtons.checked = draft?.remoteButtons ?? device.preference?.remoteButtons ?? false;
         remoteButtons.disabled = ['hidden', 'matter'].includes(visibility.value);
-        controls.append(settingLabel(tr('리모컨 버튼을 Apple Home에 표시', 'Show remote buttons in Apple Home'), remoteButtons));
+        extra.append(settingLabel(tr('리모컨 버튼을 Apple Home에 표시', 'Show remote buttons in Apple Home'), remoteButtons));
       }
       let pm25;
       let pm25Details;
@@ -1065,8 +1574,8 @@
           : tr('표시 이름은 같은 장치에 적용됩니다. 저장한 뒤 Homebridge를 다시 시작해 주세요.',
             'A display name change keeps the same device identity. Restart Homebridge after saving.');
         if ((visibility.value === 'both' || visibility.value === 'matter') && currentStatus?.features?.matter !== true) {
-          note.textContent += ` ${tr('Matter 연결은 위의 베타 기능을 켜야 사용할 수 있습니다.',
-            'Turn on the Matter beta feature above to use the Matter connection.')}`;
+          note.textContent += ` ${tr('Matter 연결은 연결 설정에서 켜야 사용할 수 있습니다.',
+            'Turn on Matter in Connection settings to use this option.')}`;
         }
         if (temperatureSensor) note.textContent += ` ${tr('현재 온도는 선택한 온도계의 최근 측정값만 표시합니다. 설정 온도와는 별개입니다.',
           'Current temperature comes from the selected thermometer only. It is separate from the target temperature.')}`;
@@ -1090,6 +1599,7 @@
           role: role?.value ?? 'original', temperatureSensorId: temperatureSensor?.value ?? '',
           freshnessMinutes: freshness?.value ?? '', remoteButtons: remoteButtons?.checked ?? false,
           pm25Multiplier: pm25?.value ?? '' });
+        if (selectedDeviceId === device.id) document.getElementById('deviceDirtyNotice').classList.remove('is-hidden');
         impact();
       });
       impact();
@@ -1098,6 +1608,8 @@
       save.textContent = tr('이 장치 저장', 'Save this device');
       save.addEventListener('click', async () => {
         save.disabled = true;
+        const ownerRevision = uiSessionRevision;
+        const revisionAtSave = JSON.stringify(deviceDrafts.get(device.id) ?? null);
         const preference = {};
         if (visibility.value !== 'both') preference.visibility = visibility.value;
         if (name.value.trim()) preference.name = name.value.trim();
@@ -1125,8 +1637,13 @@
         try {
           await requestWithTimeout('/save-device-settings', { deviceId: device.id, preference }, 15000,
             tr('장치 설정 저장', 'Save device settings'));
+          if (uiSessionRevision !== ownerRevision) return;
           device.preference = preference;
-          deviceDrafts.delete(device.id);
+          if (JSON.stringify(deviceDrafts.get(device.id) ?? null) === revisionAtSave) {
+            deviceDrafts.delete(device.id);
+            document.getElementById('deviceDirtyNotice').classList.add('is-hidden');
+          }
+          pendingDeviceIds.add(device.id);
           diagnosticsGeneration += 1;
           impact();
           void refreshDiagnostics();
@@ -1134,18 +1651,36 @@
           status.textContent = tr('저장했습니다. Homebridge를 다시 시작해 주세요.', 'Saved. Please restart Homebridge.');
           status.classList.add('is-visible');
         } catch (error) {
+          if (uiSessionRevision !== ownerRevision) return;
           window.homebridge.toast.error(error.message);
         } finally { save.disabled = false; }
       });
-      item.append(title, controls);
-      if (pm25Details) item.append(pm25Details);
+      item.append(controls);
+      if (pm25Details) extra.append(pm25Details);
+      if (extra.childElementCount > 1) item.append(extra);
       item.append(note, save);
       renderDeviceCommands(item, device);
+      const actionElements = [...item.querySelectorAll('.hej-command-panel, .hej-actions')]
+        .filter((element) => element.querySelector('[data-command-key]'));
+      const actionMount = document.getElementById('deviceActionMount');
+      actionMount.replaceChildren();
+      for (const element of actionElements) {
+        const readings = [];
+        let previous = element.previousElementSibling;
+        while (previous?.matches?.('[data-temperature-device-id], [data-hvac-device-id], [data-purifier-device-id]')) {
+          readings.unshift(previous);
+          previous = previous.previousElementSibling;
+        }
+        const statusLine = element.nextElementSibling?.getAttribute('data-command-status') ? element.nextElementSibling : null;
+        actionMount.append(...readings, element);
+        if (statusLine) actionMount.append(statusLine);
+      }
+      actionMount.dataset.deviceId = device.id;
+      document.getElementById('deviceActionSection').classList.toggle('is-hidden', actionElements.length === 0);
       deviceSettingsList.append(item);
     }
     if (focusedId && focusedControl) {
-      const row = [...deviceSettingsList.querySelectorAll('[data-device-id]')]
-        .find((item) => item.dataset.deviceId === focusedId);
+      const row = focusedId === selectedDeviceId ? deviceDetailView : null;
       const replacement = row?.querySelector(`[data-device-control="${focusedControl}"]`);
       replacement?.focus({ preventScroll: true });
       if (selection && replacement instanceof HTMLInputElement && selection.every((point) => point !== null)) {
@@ -1176,20 +1711,18 @@
       const status = document.createElement('p');
       status.className = 'hej-muted hej-device-note';
       status.setAttribute('role', 'status');
+      status.dataset.commandStatus = 'true';
       if (!controlsAvailable) status.textContent = tr('Homebridge에서 리모컨을 사용할 준비가 되지 않았습니다.',
         'The remote is not ready in Homebridge.');
+      if (commandStatuses.has(device.id)) status.textContent = commandStatuses.get(device.id);
       for (const [label, command] of commands) {
         const button = document.createElement('button');
         button.type = 'button'; button.className = 'hej-action secondary'; button.textContent = label;
-        button.disabled = !controlsAvailable;
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          try {
-            await requestWithTimeout('/remote-command', { deviceId: device.id, command }, 15000, label);
-            status.textContent = tr('명령 전송 완료', 'Command sent');
-          } catch (error) { status.textContent = tr('명령을 보내지 못했습니다.', 'Could not send the command.'); }
-          finally { button.disabled = !controlsAvailable; }
-        });
+        const commandKey = JSON.stringify(command);
+        button.dataset.commandKey = commandKey;
+        button.disabled = !controlsAvailable || pendingCommands.has(`${device.id}:${commandKey}`);
+        button.addEventListener('click', () => sendDeviceAction(device.id, commandKey, button,
+          () => requestWithTimeout('/remote-command', { deviceId: device.id, command }, 15000, label)));
         group.append(button);
       }
       if (['IrTv', 'IrSettopbox'].includes(device.deviceType)) {
@@ -1203,20 +1736,17 @@
         channel.setAttribute('aria-label', tr('채널 번호', 'Channel number'));
         const go = document.createElement('button');
         go.type = 'button'; go.className = 'hej-action secondary'; go.textContent = tr('채널 이동', 'Go to channel');
-        go.disabled = !controlsAvailable;
+        go.dataset.commandKey = 'setChannel';
+        go.disabled = !controlsAvailable || pendingCommands.has(`${device.id}:setChannel`);
         go.addEventListener('click', async () => {
           const number = Number(channel.value);
           if (!/^\d{1,3}$/.test(channel.value) || number > 999) {
-            status.textContent = tr('0부터 999까지의 채널 번호를 입력해 주세요.', 'Enter a channel number from 0 to 999.');
+            setCommandStatus(device.id, tr('0부터 999까지의 채널 번호를 입력해 주세요.', 'Enter a channel number from 0 to 999.'));
             return;
           }
-          go.disabled = true;
-          try {
-            await requestWithTimeout('/remote-command', { deviceId: device.id,
-              command: { type: 'setChannel', channel: number } }, 15000, tr('채널 이동', 'Go to channel'));
-            status.textContent = tr('명령 전송 완료', 'Command sent');
-          } catch { status.textContent = tr('명령을 보내지 못했습니다.', 'Could not send the command.'); }
-          finally { go.disabled = !controlsAvailable; }
+          void sendDeviceAction(device.id, 'setChannel', go, () => requestWithTimeout('/remote-command', {
+            deviceId: device.id, command: { type: 'setChannel', channel: number },
+          }, 15000, tr('채널 이동', 'Go to channel')));
         });
         group.append(channel, go);
       }
@@ -1234,7 +1764,7 @@
     const powerRow = document.createElement('div');
     powerRow.className = 'hej-command-row is-power';
     const status = document.createElement('p');
-    status.className = 'hej-muted hej-device-note'; status.setAttribute('role', 'status');
+    status.className = 'hej-muted hej-device-note'; status.setAttribute('role', 'status'); status.dataset.commandStatus = 'true';
     const currentTemperature = document.createElement('p');
     currentTemperature.className = 'hej-muted hej-device-note';
     currentTemperature.dataset.temperatureDeviceId = device.id;
@@ -1245,19 +1775,17 @@
     currentSettings.textContent = tr('마지막으로 읽은 설정: 확인할 수 없음', 'Last reported settings: unavailable');
     if (!controlsAvailable) status.textContent = tr('Homebridge에서 에어컨 조작을 사용할 준비가 되지 않았습니다.',
       'Air conditioner controls are not ready in Homebridge.');
+    if (commandStatuses.has(device.id)) status.textContent = commandStatuses.get(device.id);
     const send = async (command, button) => {
-      button.disabled = true;
-      try {
-        await requestWithTimeout('/air-conditioner-command', { deviceId: device.id, command }, 15000,
-          tr('에어컨 명령', 'Air conditioner command'));
-        status.textContent = tr('명령 전송 완료', 'Command sent');
-      } catch { status.textContent = tr('명령을 보내지 못했습니다.', 'Could not send the command.'); }
-      finally { button.disabled = !controlsAvailable; }
+      const key = button.dataset.commandKey;
+      return sendDeviceAction(device.id, key, button, () => requestWithTimeout('/air-conditioner-command',
+        { deviceId: device.id, command }, 15000, tr('에어컨 명령', 'Air conditioner command')));
     };
     for (const [label, power] of [[tr('에어컨 켜기', 'Turn on AC'), true], [tr('에어컨 끄기', 'Turn off AC'), false]]) {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'hej-action secondary'; button.textContent = label;
-      button.disabled = !controlsAvailable;
+      button.dataset.commandKey = `power:${power}`;
+      button.disabled = !controlsAvailable || pendingCommands.has(`${device.id}:${button.dataset.commandKey}`);
       button.addEventListener('click', () => send({ power }, button)); powerRow.append(button);
     }
     const temperature = document.createElement('input');
@@ -1270,12 +1798,13 @@
     temperature.setAttribute('aria-label', tr('설정 온도', 'Target temperature'));
     const setTemperature = document.createElement('button');
     setTemperature.type = 'button'; setTemperature.className = 'hej-action secondary';
-    setTemperature.disabled = !controlsAvailable;
+    setTemperature.dataset.commandKey = 'temperature';
+    setTemperature.disabled = !controlsAvailable || pendingCommands.has(`${device.id}:temperature`);
     setTemperature.textContent = tr('온도 설정', 'Set temperature');
     setTemperature.addEventListener('click', () => {
       const value = Number(temperature.value);
       if (!Number.isInteger(value) || value < 16 || value > 30 || !temperature.value) {
-        status.textContent = tr('16도부터 30도까지 입력해 주세요.', 'Enter 16 to 30 degrees.'); return;
+        setCommandStatus(device.id, tr('16도부터 30도까지 입력해 주세요.', 'Enter 16 to 30 degrees.')); return;
       }
       void send({ temperature: value }, setTemperature);
     });
@@ -1290,7 +1819,8 @@
     });
     const setMode = document.createElement('button');
     setMode.type = 'button'; setMode.className = 'hej-action secondary'; setMode.textContent = tr('운전 방식 설정', 'Set mode');
-    setMode.disabled = !controlsAvailable;
+    setMode.dataset.commandKey = 'mode';
+    setMode.disabled = !controlsAvailable || pendingCommands.has(`${device.id}:mode`);
     setMode.addEventListener('click', () => send({ mode: mode.value }, setMode));
     const speed = document.createElement('select');
     speed.dataset.deviceControl = 'hvacFanSpeed';
@@ -1303,7 +1833,8 @@
     });
     const setSpeed = document.createElement('button');
     setSpeed.type = 'button'; setSpeed.className = 'hej-action secondary'; setSpeed.textContent = tr('바람 세기 설정', 'Set fan speed');
-    setSpeed.disabled = !controlsAvailable;
+    setSpeed.dataset.commandKey = 'fanSpeed';
+    setSpeed.disabled = !controlsAvailable || pendingCommands.has(`${device.id}:fanSpeed`);
     setSpeed.addEventListener('click', () => send({ fanSpeed: speed.value }, setSpeed));
     const temperatureRow = document.createElement('div');
     temperatureRow.className = 'hej-command-row';
@@ -1328,23 +1859,21 @@
     const group = document.createElement('div'); group.className = 'hej-command-panel';
     const powerRow = document.createElement('div'); powerRow.className = 'hej-command-row is-power';
     const status = document.createElement('p');
-    status.className = 'hej-muted hej-device-note'; status.setAttribute('role', 'status');
+    status.className = 'hej-muted hej-device-note'; status.setAttribute('role', 'status'); status.dataset.commandStatus = 'true';
     if (!available) status.textContent = tr('Homebridge에서 공기청정기 조작을 사용할 준비가 되지 않았습니다.',
       'Air purifier controls are not ready in Homebridge.');
+    if (commandStatuses.has(device.id)) status.textContent = commandStatuses.get(device.id);
     const send = async (command, button) => {
-      button.disabled = true;
-      try {
-        await requestWithTimeout('/purifier-command', { deviceId: device.id, command }, 15000,
-          tr('공기청정기 명령', 'Air purifier command'));
-        status.textContent = tr('명령 전송 완료', 'Command sent');
-      } catch { status.textContent = tr('명령을 보내지 못했습니다.', 'Could not send the command.'); }
-      finally { button.disabled = !available; }
+      const key = button.dataset.commandKey;
+      return sendDeviceAction(device.id, key, button, () => requestWithTimeout('/purifier-command',
+        { deviceId: device.id, command }, 15000, tr('공기청정기 명령', 'Air purifier command')));
     };
     for (const [label, power] of [[tr('공기청정기 켜기', 'Turn on purifier'), true],
       [tr('공기청정기 끄기', 'Turn off purifier'), false]]) {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'hej-action secondary'; button.textContent = label;
-      button.disabled = !available;
+      button.dataset.commandKey = `power:${power}`;
+      button.disabled = !available || pendingCommands.has(`${device.id}:${button.dataset.commandKey}`);
       button.addEventListener('click', () => send({ power }, button));
       powerRow.append(button);
     }
@@ -1359,7 +1888,8 @@
     });
     const setMode = document.createElement('button');
     setMode.type = 'button'; setMode.className = 'hej-action secondary';
-    setMode.textContent = tr('운전 방식 설정', 'Set mode'); setMode.disabled = !available;
+    setMode.textContent = tr('운전 방식 설정', 'Set mode'); setMode.dataset.commandKey = 'mode';
+    setMode.disabled = !available || pendingCommands.has(`${device.id}:mode`);
     setMode.addEventListener('click', () => send({ mode: mode.value }, setMode));
     const modeRow = document.createElement('div'); modeRow.className = 'hej-command-row';
     modeRow.append(settingLabel(tr('바꿀 운전 방식', 'New mode'), mode), setMode);
@@ -1370,7 +1900,7 @@
   function updateTemperatureDisplays(diagnostics) {
     const updated = Date.parse(diagnostics.updatedAt ?? '');
     const stale = !Number.isFinite(updated) || Date.now() - updated > 30000;
-    for (const element of deviceSettingsList.querySelectorAll('[data-temperature-device-id]')) {
+    for (const element of deviceDetailView.querySelectorAll('[data-temperature-device-id]')) {
       const device = (diagnostics.devices ?? []).find((entry) => entry.id === element.dataset.temperatureDeviceId);
       const temperature = device?.temperatureCelsius;
       element.textContent = !stale && Number.isFinite(temperature)
@@ -1385,13 +1915,13 @@
     const purifierMode = { auto: tr('자동', 'Auto'), manual: tr('수동', 'Manual'), sleep: tr('취침', 'Sleep') };
     const unknown = tr('확인할 수 없음', 'Unknown');
     const powerText = (power) => power === true ? tr('켜짐', 'On') : power === false ? tr('꺼짐', 'Off') : unknown;
-    for (const element of deviceSettingsList.querySelectorAll('[data-hvac-device-id]')) {
+    for (const element of deviceDetailView.querySelectorAll('[data-hvac-device-id]')) {
       const settings = !stale && (diagnostics.devices ?? []).find((item) => item.id === element.dataset.hvacDeviceId)?.hvacSettings;
       const target = Number.isInteger(settings?.targetTemperature) ? `${settings.targetTemperature}°C` : unknown;
       element.textContent = tr(`마지막으로 읽은 설정: 전원 ${powerText(settings?.power)} · 설정 온도 ${target} · 운전 방식 ${hvacMode[settings?.mode] ?? unknown} · 바람 세기 ${fanSpeed[settings?.fanSpeed] ?? unknown}. 실제 냉난방 동작 여부는 확인할 수 없습니다.`,
         `Last reported settings: power ${powerText(settings?.power)} · target temperature ${target} · mode ${hvacMode[settings?.mode] ?? unknown} · fan speed ${fanSpeed[settings?.fanSpeed] ?? unknown}. Actual heating or cooling is not confirmed.`);
     }
-    for (const element of deviceSettingsList.querySelectorAll('[data-purifier-device-id]')) {
+    for (const element of deviceDetailView.querySelectorAll('[data-purifier-device-id]')) {
       const settings = !stale && (diagnostics.devices ?? []).find((item) => item.id === element.dataset.purifierDeviceId)?.purifierSettings;
       element.textContent = tr(`마지막으로 읽은 설정: 전원 ${powerText(settings?.power)} · 운전 방식 ${purifierMode[settings?.mode] ?? unknown}. 실제 동작 여부는 확인할 수 없습니다.`,
         `Last reported settings: power ${powerText(settings?.power)} · mode ${purifierMode[settings?.mode] ?? unknown}. Actual operation is not confirmed.`);
@@ -1410,34 +1940,60 @@
   }
 
   async function refreshDiagnostics() {
-    if (settingsView.classList.contains('is-hidden')) return;
+    if (settingsView.classList.contains('is-hidden') || !diagnosticsSubscribed || accountChangePending
+      || Date.now() < diagnosticsRetryAt) return;
+    if (diagnosticsOutstanding >= 2) {
+      document.getElementById('globalStatus').textContent = tr(
+        '연결 응답이 멈췄어요. 설정 창을 닫았다 다시 열어 주세요.',
+        'Connection responses stopped. Close and reopen settings.');
+      closeStalledSettings.classList.remove('is-hidden');
+      if (currentDiagnostics) currentDiagnostics.controlsAvailable = false;
+      if (selectedDeviceId) renderDeviceSettings(currentDiagnostics?.devices ?? []);
+      return;
+    }
     const generation = ++diagnosticsGeneration;
+    diagnosticsOutstanding++;
     try {
+      const rawRequest = window.homebridge.request('/diagnostics', {});
+      void rawRequest.finally(() => { diagnosticsOutstanding--; }).catch(() => undefined);
       const [diagnostics, hapCache, matterCache] = await Promise.all([
-        requestWithTimeout('/diagnostics', {}, 10000, tr('장치 상태 확인', 'Check device status')),
+        withRequestDeadline(rawRequest, 10000, tr('장치 상태 확인', 'Check device status')),
         window.homebridge?.getCachedAccessories?.().catch(() => []) ?? [],
         window.homebridge?.getCachedMatterAccessories?.().catch(() => []) ?? [],
       ]);
       if (generation !== diagnosticsGeneration || settingsView.classList.contains('is-hidden')) return;
-      if (currentDiagnostics?.devices?.length && !(diagnostics.devices ?? []).length) {
-        deviceDrafts.clear();
-        deviceControlDrafts.clear();
-      }
+      if (!applySessionRevision(diagnostics.uiSessionRevision)) return;
+      closeStalledSettings.classList.add('is-hidden');
       currentDiagnostics = diagnostics;
-      renderDiagnostics(diagnostics, cacheIds(hapCache, 'hap'), cacheIds(matterCache, 'matter'));
+      currentHapCache = cacheIds(hapCache, 'hap');
+      currentMatterCache = cacheIds(matterCache, 'matter');
+      renderDiagnostics(diagnostics, currentHapCache, currentMatterCache);
       const signature = JSON.stringify([controlsAreReady(),
         (diagnostics.devices ?? []).map((device) => [device.id, device.name, device.deviceType,
           device.inScope, device.meterProfileApplied, device.preference])]);
-      if (signature !== deviceListSignature) {
+      if (selectedDeviceId && signature !== deviceListSignature) {
         deviceListSignature = signature;
         renderDeviceSettings(diagnostics.devices ?? []);
       }
       updateTemperatureDisplays(diagnostics);
+      renderDeviceList();
     } catch {
       if (generation !== diagnosticsGeneration) return;
+      diagnosticsRetryAt = Date.now() + 30000;
       diagnosticsBadge.textContent = tr('상태 확인 실패', 'Status unavailable');
-      connectionSummary.textContent = tr('최근 상태를 확인하지 못했어요. 잠시 후 다시 확인해 주세요.',
-        'Could not check recent status. Please try again shortly.');
+      connectionSummary.textContent = diagnosticsOutstanding >= 2
+        ? tr('연결 응답이 멈췄어요. 설정 창을 닫았다 다시 열어 주세요.',
+          'Connection responses stopped. Close and reopen settings.')
+        : tr('최근 상태를 확인하지 못했어요. 잠시 후 다시 확인해 주세요.',
+          'Could not check recent status. Please try again shortly.');
+      document.getElementById('globalStatus').textContent = tr('최근 상태를 확인할 수 없어요',
+        'Recent status unavailable');
+      if (currentDiagnostics) currentDiagnostics.controlsAvailable = false;
+      if (selectedDeviceId) {
+        deviceListSignature = '';
+        renderDeviceSettings(currentDiagnostics?.devices ?? []);
+      }
+      renderDeviceList();
     }
   }
 
@@ -1464,8 +2020,23 @@
         : realtime === 'disconnected' ? tr('장치 상태 연결 끊김', 'Device updates disconnected')
         : tr('장치 상태를 확인할 수 없음', 'Device updates unavailable');
     connectionSummary.textContent = `${sessionText} · ${realtimeText}`;
+    const helpSummary = document.getElementById('helpConnectionSummary');
+    helpSummary.textContent = `${sessionText} · ${realtimeText}`;
+    const headline = stale ? tr('최근 상태를 확인할 수 없어요', 'Recent status unavailable')
+      : session === 'expired' ? tr('로그인이 만료됐어요. 다시 로그인해 주세요.', 'Sign-in expired. Please sign in again.')
+        : realtime === 'connected' ? tr('장치 상태를 받고 있어요', 'Receiving device updates')
+          : realtimeText;
+    const globalStatus = document.getElementById('globalStatus');
+    if (globalStatus.textContent !== headline) globalStatus.textContent = headline;
+    if (session === 'expired') {
+      relogin.classList.remove('is-hidden');
+      sessionBadge.textContent = tr('다시 로그인 필요', 'Sign in again');
+      sessionBadge.className = 'hej-badge is-bad';
+      sessionDescription.textContent = tr('로그인이 만료됐어요. 다시 로그인해 주세요.',
+        'Sign-in expired. Please sign in again.');
+    }
     diagnosticsList.replaceChildren();
-    for (const device of diagnostics.devices ?? []) {
+    for (const device of (diagnostics.devices ?? []).filter((item) => item.id === selectedDeviceId)) {
       const row = document.createElement('div'); row.className = 'hej-list-item';
       const name = document.createElement('strong'); name.textContent = device.name;
       const state = document.createElement('p'); state.className = 'hej-muted hej-device-note';
@@ -1497,7 +2068,9 @@
       row.append(name, state);
       diagnosticsList.append(row);
     }
-    if (!diagnostics.devices?.length) diagnosticsList.textContent = tr('아직 찾은 장치가 없습니다.', 'No devices found yet.');
+    if (selectedDeviceId && !diagnosticsList.childElementCount) {
+      diagnosticsList.textContent = tr('최근 장치 상태를 확인할 수 없어요.', 'Recent device status unavailable.');
+    }
     window.homebridge?.fixScrollHeight?.();
   }
 
@@ -1531,9 +2104,21 @@
       const target = document.getElementById('diagnosticsExport');
       target.textContent = JSON.stringify(report, null, 2);
       target.classList.remove('is-hidden');
+      document.getElementById('copyDiagnostics').classList.remove('is-hidden');
       window.homebridge?.fixScrollHeight?.();
     } catch {
       window.homebridge.toast.error(tr('진단 내용을 불러오지 못했습니다.', 'Could not load diagnostics.'));
+    }
+  });
+  document.getElementById('copyDiagnostics').addEventListener('click', async () => {
+    const content = document.getElementById('diagnosticsExport').textContent;
+    try {
+      await navigator.clipboard.writeText(content);
+      window.homebridge.toast.success(tr('진단 내용을 복사했습니다.', 'Diagnostics copied.'));
+    } catch {
+      window.homebridge.toast.error(tr('자동 복사를 사용할 수 없어요. 아래 내용을 직접 선택해 복사해 주세요.',
+        'Automatic copy is unavailable. Select the text below to copy it.'));
+      document.getElementById('diagnosticsExport').focus();
     }
   });
 
@@ -1553,6 +2138,11 @@
     const hasPassword = password.value.length > 0;
 
     sendCode.disabled = busy || !hasIdentifier;
+    authCode.closest('.hej-row').classList.toggle('is-hidden', !verificationSent);
+    password.closest('.hej-field').classList.toggle('is-hidden', !verified);
+    login.classList.toggle('is-hidden', !verified);
+    const form = document.querySelector('#loginView .hej-form');
+    form.dataset.loginStep = verified ? 'password' : verificationSent ? 'code' : 'email';
     authCode.disabled = busy || !verificationSent || verified;
     verifyCode.disabled = busy || verified || !verificationSent || !hasSixDigitCode;
     password.disabled = busy || !verified;
@@ -1618,16 +2208,28 @@
   }
 
   function requestWithTimeout(path, body, timeoutMs, label) {
+    return withRequestDeadline(window.homebridge.request(path, body), timeoutMs, label);
+  }
+
+  function withRequestDeadline(request, timeoutMs, label) {
     let timer;
-    const request = window.homebridge.request(path, body);
     const timeout = new Promise((_, reject) => {
       timer = setTimeout(() => {
-        reject(new Error(tr(`${label} 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.`,
-          `${label} is taking longer than expected. Please try again shortly.`)));
+        const error = new Error(tr(`${label} 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.`,
+          `${label} is taking longer than expected. Please try again shortly.`));
+        error.name = 'RequestTimeoutError';
+        reject(error);
       }, timeoutMs);
     });
 
     return Promise.race([request, timeout]).finally(() => clearTimeout(timer));
+  }
+
+  function commandFailureMessage(error) {
+    return error?.error?.code === 'unsupported-command'
+      ? tr('이 장치에서 사용할 수 없는 조작이에요.', 'This control is unavailable for the device.')
+      : tr('응답을 확인하지 못했어요. 기기 동작을 확인해 주세요.',
+        'Could not confirm the response. Check what the device did.');
   }
 
 	  function handleError(event, error) {
@@ -1636,10 +2238,17 @@
         ? 'Could not complete this step. Please check your connection and try again.' : error.message);
 	  }
 
-	  function showLoginView() {
+	  function showLoginView(discardDrafts = false) {
 	    diagnosticsGeneration += 1;
-	    deviceDrafts.clear();
-	    deviceControlDrafts.clear();
+	    if (discardDrafts) {
+	      deviceDrafts.clear();
+	      deviceControlDrafts.clear();
+	      pendingDeviceIds.clear();
+	      featureDraftDirty = false;
+	      scopeDraftDirty = false;
+	      for (const key of Object.keys(featureEdits)) savedFeatureEdits[key] = featureEdits[key];
+	      savedScopeRevision = scopeEditRevision;
+	    }
 	    settingsView.classList.add('is-hidden');
 	    loginView.classList.remove('is-hidden');
 	    loginCompleted = false;
@@ -1649,8 +2258,10 @@
 
   async function showSettingsView(status) {
 	    currentStatus = status;
+	    scopeEditToken = status.scopeEditToken ?? null;
 	    loginView.classList.add('is-hidden');
 	    settingsView.classList.remove('is-hidden');
+	    selectTab(0);
 	    renderSessionStatus(status);
 	    await renderScopeStatus(status);
 	    renderDeviceStatus(status);
@@ -1695,6 +2306,9 @@
 
 	  function renderDeviceStatus(status) {
 	    const summary = status.deviceSummary ?? {};
+	    document.getElementById('supportStats').classList.toggle('is-hidden', !summary.registeredCount);
+	    document.getElementById('noDeviceSupport').classList.toggle('is-hidden', Boolean(summary.registeredCount));
+	    document.getElementById('issueSection').classList.toggle('is-hidden', !summary.unsupportedCount);
 		    registeredCount.textContent = String(summary.registeredCount ?? 0);
 		    supportedCount.textContent = String(summary.supportedCount ?? 0);
 		    unsupportedCount.textContent = String(summary.unsupportedCount ?? 0);
@@ -1795,9 +2409,17 @@
 	  async function renderScopeStatus(status) {
 	    const scope = status.scope ?? { mode: status.scopeOptions?.defaultMode ?? 'first-family' };
 	    const options = status.scopeOptions ?? { families: [] };
+	    scopeEditToken = status.scopeEditToken ?? null;
+	    saveScope.disabled = options.complete !== true || !scopeEditToken;
 	    scopeList.replaceChildren();
-	    scopeStatus.textContent = '';
-	    scopeStatus.classList.remove('is-visible');
+	    if (saveScope.disabled) {
+	      scopeStatus.textContent = tr('집과 방 목록을 모두 불러오지 못해 저장할 수 없어요. 잠시 후 다시 확인해 주세요.',
+	        'Could not load every home and room, so changes cannot be saved yet. Please try again shortly.');
+	      scopeStatus.classList.add('is-visible');
+	    } else {
+	      scopeStatus.textContent = '';
+	      scopeStatus.classList.remove('is-visible');
+	    }
 
 	    const families = options.families ?? [];
 	    if (!families.length) {
@@ -1862,7 +2484,10 @@
 	    return selectedRooms ? selectedRooms.includes(Number(room.roomId)) : true;
 	  }
 
-	  async function saveScopeSelection() {
+  async function saveScopeSelection() {
+    if (!scopeEditToken || saveScope.disabled) return;
+    const ownerRevision = uiSessionRevision;
+    const submittedScopeRevision = scopeEditRevision;
 	    const familyInputs = [...scopeList.querySelectorAll('input[data-family-id]:not([data-room-id])')];
 	    const roomInputs = [...scopeList.querySelectorAll('input[data-room-id]')];
 	    const selectedFamilyIds = familyInputs
@@ -1908,15 +2533,57 @@
 	      };
 	    }
 
-	    const result = await requestWithTimeout('/save-scope', { scope: nextScope }, 15000,
+	    let result;
+	    try {
+      result = await requestWithTimeout('/save-scope', { scope: nextScope, scopeEditToken }, 15000,
         tr('집/방 설정 저장', 'Save homes and rooms'));
+      if (uiSessionRevision !== ownerRevision) return;
+    } catch (error) {
+      if (uiSessionRevision !== ownerRevision) return;
+	      if (['scope-edit-stale', 'scope-edit-unavailable'].includes(error?.error?.code)) {
+	        scopeEditToken = null;
+	        saveScope.disabled = true;
+	        scopeStatus.textContent = tr('집과 방 목록이 바뀌었어요. 다시 불러온 뒤 선택 내용을 확인해 주세요.',
+	          'Homes or rooms changed. Reload the list and review your selection.');
+	        scopeStatus.classList.add('is-visible');
+	        const checked = [...scopeList.querySelectorAll('input')].map((input) => [input.dataset.familyId,
+	          input.dataset.roomId ?? '', input.checked]);
+	        try {
+	          const latest = await requestWithTimeout('/session-status', {}, 10000, tr('집과 방 다시 확인', 'Reload homes and rooms'));
+	          if (!applySessionRevision(latest.uiSessionRevision)) return;
+	          currentStatus = { ...(currentStatus ?? {}), ...latest };
+	          await renderScopeStatus(currentStatus);
+	          for (const [familyId, roomId, value] of checked) {
+	            const input = [...scopeList.querySelectorAll('input')].find((item) => item.dataset.familyId === familyId
+	              && (item.dataset.roomId ?? '') === roomId);
+	            if (input) input.checked = value;
+	          }
+	        } catch { /* Keep visible choices for a later retry. */ }
+	        return;
+	      }
+	      throw error;
+	    }
+    scopeEditToken = result.scopeEditToken ?? null;
+    savedScopeRevision = submittedScopeRevision;
+    scopeDraftDirty = scopeEditRevision !== savedScopeRevision;
+    const changedWhileSaving = scopeDraftDirty
+      ? [...scopeList.querySelectorAll('input')].map((input) => [input.dataset.familyId,
+        input.dataset.roomId ?? '', input.checked]) : null;
 	    currentStatus = {
 	      ...(currentStatus ?? {}),
 	      scope: result.scope ?? nextScope,
 	      deviceSummary: result.deviceSummary ?? currentStatus?.deviceSummary,
 	      issueTemplate: result.issueTemplate ?? currentStatus?.issueTemplate,
+	      scopeEditToken,
 	    };
-	    await renderScopeStatus(currentStatus);
+    await renderScopeStatus(currentStatus);
+    if (changedWhileSaving) {
+      for (const [familyId, roomId, checked] of changedWhileSaving) {
+        const input = [...scopeList.querySelectorAll('input')].find((item) => item.dataset.familyId === familyId
+          && (item.dataset.roomId ?? '') === roomId);
+        if (input) input.checked = checked;
+      }
+    }
 	    renderDeviceStatus(currentStatus);
 	    scopeStatus.textContent = tr('집/방 설정을 저장했습니다. 아래 현황은 새 선택 기준으로 바뀌었습니다. Homebridge를 다시 시작하면 Home 앱 장비도 새 설정으로 바뀝니다.',
         'Saved homes and rooms. Restart Homebridge to update devices in Apple Home.');
@@ -1948,19 +2615,25 @@
   async function initializeUi() {
 	    await setupAppearance();
 	    subscribeDiagnostics();
-	    await logUiEvent('login-ui.opened', { autoLoginForced: true });
+	    void logUiEvent('login-ui.opened', { autoLoginForced: true });
+	    document.getElementById('retryStartup').classList.add('is-hidden');
 	    try {
 	      const status = await requestWithTimeout('/session-status', {}, 10000, tr('로그인 상태 확인', 'Check sign-in'));
+	      document.getElementById('startupView').classList.add('is-hidden');
 	      if (status?.configured) {
 	        await showSettingsView(status);
 	        return;
 	      }
 	      showLoginView();
 	    } catch (error) {
-	      await logUiEvent('session-status.error', { message: error.message });
-	      showLoginView();
+	      void logUiEvent('session-status.error', { message: error.message });
+	      document.getElementById('startupMessage').textContent = tr(
+	        '로그인 상태를 확인하지 못했어요. 기존 설정은 그대로입니다. 다시 확인해 주세요.',
+	        'Could not check sign-in. Existing settings remain. Please check again.');
+	      document.getElementById('retryStartup').classList.remove('is-hidden');
 	    }
 	  }
+  document.getElementById('retryStartup').addEventListener('click', () => void initializeUi());
 
   function setLoginCompleted() {
     loginCompleted = true;
@@ -2054,12 +2727,14 @@
 	  });
 
 	  logout.addEventListener('click', () => withSpinner('logout', async () => {
+	    if ((deviceDrafts.size || deviceControlDrafts.size || featureDraftDirty || scopeDraftDirty) && !window.confirm(tr(
+	      '저장하지 않은 변경사항을 버리고 로그아웃할까요?', 'Discard unsaved changes and sign out?'))) return;
 	    logUiEvent('logout.click');
 	    await requestWithTimeout('/logout', {}, 10000, tr('로그아웃', 'Sign out'));
 	    logUiEvent('logout.success');
 	    window.homebridge.toast.success(tr('로그인 정보를 삭제했습니다.', 'Sign-in data removed.'));
 	    clearLoginForm();
-	    showLoginView();
+	    showLoginView(true);
 	    identifier.focus();
 	  }).catch((error) => handleError('logout', error)));
 
