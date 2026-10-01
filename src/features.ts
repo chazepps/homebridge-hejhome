@@ -16,6 +16,7 @@ export interface DevicePreference {
   freshnessMinutes?: number;
   remoteButtons?: boolean;
   pm25Multiplier?: number;
+  powerSpec?: { activeWatts?: number; standbyWatts?: number };
 }
 export interface FeatureOptions {
   matter: boolean;
@@ -79,7 +80,7 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
       }
       const preference = object(rawPreference);
       for (const key of Object.keys(preference)) {
-        if (!['visibility', 'name', 'role', 'temperatureSensorId', 'freshnessMinutes', 'remoteButtons', 'pm25Multiplier'].includes(key)) {
+        if (!['visibility', 'name', 'role', 'temperatureSensorId', 'freshnessMinutes', 'remoteButtons', 'pm25Multiplier', 'powerSpec'].includes(key)) {
           throw new Error(`Unknown device option: ${key}`);
         }
       }
@@ -129,6 +130,22 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
           throw new Error('PM2.5 multiplier must be a positive number.');
         }
         entry.pm25Multiplier = preference.pm25Multiplier;
+      }
+      if (preference.powerSpec !== undefined) {
+        const source = object(preference.powerSpec);
+        const powerSpec: NonNullable<DevicePreference['powerSpec']> = {};
+        for (const [key, watts] of Object.entries(source)) {
+          if (key !== 'activeWatts' && key !== 'standbyWatts') {
+            throw new Error(`Unknown power specification option: ${key}`);
+          }
+          if (typeof watts !== 'number' || !Number.isFinite(watts) || watts < 0) {
+            throw new Error(`${key} must be a finite nonnegative number.`);
+          }
+          powerSpec[key] = watts;
+        }
+        if (Object.keys(powerSpec).length > 0) {
+          entry.powerSpec = powerSpec;
+        }
       }
       normalized[id] = entry;
     }

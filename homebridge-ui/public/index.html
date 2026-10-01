@@ -546,35 +546,53 @@
     outline-offset: 2px;
   }
 
-  .hej-meter-grid {
-    display: grid;
-    gap: 8px;
-    grid-template-columns: repeat(3, minmax(110px, 1fr));
+  .hej-power-scroll { border: 1px solid var(--hej-border); border-radius: 8px; max-width: 100%; overflow-x: auto;
+    scrollbar-color: var(--hej-muted) var(--hej-card); scrollbar-width: auto; margin-top: 20px; }
+  .hej-power-table { border-collapse: separate; border-spacing: 0; table-layout: fixed; min-width: 540px; width: 100%; }
+  .hej-power-table th, .hej-power-table td { border-bottom: 1px solid var(--hej-border); padding: 16px;
+    text-align: left; vertical-align: middle; }
+  .hej-power-table th { background: var(--hej-card); color: var(--hej-text); font-size: 15px; font-weight: 650; }
+  .hej-power-table th:first-child { width: 42%; }
+  .hej-power-table th:not(:first-child) { width: 29%; text-align: center; }
+  .hej-power-table th + th, .hej-power-table td + td { border-left: 1px solid var(--hej-border); }
+  .hej-power-table tbody tr:last-child td { border-bottom: 0; }
+  .hej-power-table td { background: var(--hej-panel); }
+  .hej-power-table td:first-child, .hej-power-table th:first-child { position: sticky; left: 0; z-index: 1; }
+  .hej-power-device { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .hej-power-device strong { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hej-power-model { border-left: 1px solid var(--hej-border); padding-left: 10px; color: var(--hej-muted); font-size: 13px; white-space: nowrap; }
+  .hej-power-table input { box-sizing: border-box; background: var(--hej-panel); border: 1px solid var(--hej-border);
+    border-radius: 5px; color: var(--hej-text); font: inherit; font-size: 16px; min-width: 0; min-height: 44px; padding: 8px 10px; width: 100%; text-align: right; }
+  .hej-power-table input[aria-invalid="true"] { border-color: var(--hej-error, #c85151); }
+  .hej-power-table input:focus-visible, .hej-power-scroll:focus-visible, #meterProfiles:focus-visible {
+    outline: 3px solid #13a777; outline-offset: 2px; }
+  .hej-power-footer { border-top: 1px solid var(--hej-border); margin-top: 24px; padding-top: 18px;
+    display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+  .hej-power-footer p { font-size: 13px; line-height: 1.7; }
+  #powerSpecsSave { background: #3e7254; color: #fff; flex-shrink: 0; min-height: 44px; }
+  #powerSpecsSave:hover:not(:disabled) { background: #315c43; }
+  #powerSpecsListState:not(:empty) { margin-top: 14px; }
+  .hej-power-unavailable { display: block; color: var(--hej-muted); font-size: 12px; margin-top: 6px; }
+  #meterDetails summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  #meterDetails summary::before { content: '▸'; }
+  #meterDetails[open] summary::before { content: '▾'; }
+  #meterDetails label { display: block; margin-top: 16px; }
+  #meterProfiles { width: 100%; box-sizing: border-box; min-height: 160px; background: var(--hej-card);
+    color: var(--hej-text); border: 1px solid var(--hej-border); border-radius: 5px; padding: 12px; }
+  #saveMeters { margin-top: 16px; }
+  .hej-power-header-mobile { display: none; }
+  @media (max-width: 700px) {
+    .hej-power-table { min-width: 0; width: 100%; }
+    .hej-power-table th:first-child { width: 40%; }
+    .hej-power-table th:not(:first-child) { width: 30%; }
+    .hej-power-table th, .hej-power-table td { padding: 12px 6px; }
+    .hej-power-table th { font-size: 12px; padding-left: 4px; padding-right: 4px; white-space: nowrap; }
+    .hej-power-table input { padding: 8px 4px; }
+    .hej-power-table td:first-child, .hej-power-table th:first-child { position: static; }
+    .hej-power-model, .hej-power-header-wide { display: none; }
+    .hej-power-header-mobile { display: inline; }
+    .hej-power-footer { align-items: stretch; flex-direction: column; }
   }
-
-  .hej-meter-scroll { border: 1px solid var(--hej-border); border-radius: 8px; max-width: 100%; overflow-x: auto;
-    scrollbar-color: var(--hej-muted) var(--hej-card); scrollbar-width: auto; }
-  .hej-meter-table { border-collapse: collapse; table-layout: auto; min-width: 100%; width: max-content; }
-  .hej-meter-table th, .hej-meter-table td { border-bottom: 1px solid var(--hej-border); padding: 10px 8px;
-    text-align: left; vertical-align: middle; white-space: nowrap; }
-  .hej-meter-table th { background: var(--hej-card); color: var(--hej-text); font-size: 13px; line-height: 1.35; }
-  .hej-meter-table td input, .hej-meter-table td select { background: var(--hej-panel); border: 1px solid var(--hej-border);
-    border-radius: 5px; color: var(--hej-text); min-height: 44px; padding: 6px; width: 145px; }
-  .hej-meter-table td:first-child input { width: 225px; }
-  .hej-meter-table td [data-meter-kind] { min-width: 190px; width: auto; }
-  .hej-meter-table td [data-meter-multiplier] { width: 105px; }
-  .hej-meter-table output { display: inline-block; min-width: 155px; }
-  .hej-meter-help { border-top: 1px solid var(--hej-border); display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; margin: 20px 0 16px; padding-top: 16px; }
-  @media (max-width: 700px) { .hej-meter-help { grid-template-columns: minmax(0, 1fr); } }
-  .hej-meter-help div { display: grid; gap: 3px; }
-  .hej-meter-help dt { color: var(--hej-text); font-weight: 700; }
-  .hej-meter-help dd { color: var(--hej-muted); margin: 0; }
-  .hej-meter-example { color: var(--hej-muted); font-style: italic; }
-  .hej-meter-icon-button { align-items: center; display: inline-flex; height: 44px; justify-content: center;
-    min-height: 44px; min-width: 44px; padding: 8px; width: 44px; }
-  .hej-meter-icon-button svg { height: 20px; width: 20px; }
-  #addMeter { margin-top: 12px; }
   .hej-sr-only { border: 0; clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px;
     margin: -1px; overflow: hidden; padding: 0; position: absolute; white-space: nowrap; width: 1px; }
 
@@ -747,9 +765,26 @@
       <p id="helpConnectionSummary" class="hej-muted"></p></section>
     <section class="hej-section"><h2>문제 신고용 정보</h2><p class="hej-muted">개인 정보 없는 진단 내용을 확인하고 필요할 때만 직접 공유하세요.</p>
       <div id="helpDiagnosticsMount"></div></section>
-    <section id="meterHelpSection" class="hej-section"><h2>전력 측정 고급 설정</h2>
-      <div id="meterHelpMount"></div><button id="saveMeters" class="hej-action secondary" type="button">전력 측정 설정 저장</button>
-      <p id="meterStatus" class="hej-status" role="status"></p></section>
+    <section id="panel-meter" class="hej-section" aria-labelledby="powerSpecsTitle">
+      <h2 id="powerSpecsTitle">소비전력 설정</h2>
+      <p class="hej-muted">등록된 장치가 자동으로 표시됩니다. 필요한 장치의 전력값만 입력하세요.</p>
+      <div id="powerSpecsScroll" class="hej-power-scroll" tabindex="0" aria-label="소비전력 설정 표 가로 스크롤">
+        <table id="powerSpecTable" class="hej-power-table" aria-describedby="powerSpecsGuide">
+          <thead><tr><th scope="col">장치</th>
+            <th id="powerSpecActiveHeader" scope="col" aria-label="소비전력 (W)"><span class="hej-power-header-wide">소비전력 (W)</span><span class="hej-power-header-mobile" aria-hidden="true">소비전력 (W)</span></th>
+            <th id="powerSpecStandbyHeader" scope="col" aria-label="대기전력 (W)"><span class="hej-power-header-wide">대기전력 (W)</span><span class="hej-power-header-mobile" aria-hidden="true">대기전력 (W)</span></th>
+          </tr></thead>
+          <tbody id="powerSpecTableBody"></tbody>
+        </table>
+      </div>
+      <p id="powerSpecsListState" class="hej-muted" role="status">장치 목록을 불러오고 있습니다.</p>
+      <div class="hej-power-footer">
+        <p id="powerSpecsGuide" class="hej-muted">소비전력은 사용 중, 대기전력은 대기 상태의 값입니다.<br>입력한 값만 저장합니다. 빈칸은 미설정이며, 0은 0 W로 저장됩니다.</p>
+        <button id="powerSpecsSave" class="hej-action" type="button" disabled>전력 설정 저장</button>
+      </div>
+      <p id="powerSpecsFeedback" class="hej-status" role="status"></p>
+    </section>
+    <section id="meterHelpSection" class="hej-section"><div id="meterHelpMount"></div></section>
   </section>
 
     <section id="upgradeSection" class="hej-section hej-upgrade-warning" aria-label="Hejhome 3.0 update notice">
@@ -797,38 +832,11 @@
       Home 앱에서도 적응형 조명을 켜야 합니다. 클라우드에 주기적으로 명령을 전송합니다.</p>
     <details id="meterDetails">
       <summary>고급: 전력 측정 모델 설정</summary>
-      <p class="hej-muted" id="meterExampleIntro">첫 줄은 실제 장치값이 아닌 가상 참고 예시이며 저장되지 않습니다.</p>
-      <p class="hej-muted" id="meterScrollHint">표를 좌우로 밀거나 표에 초점을 둔 뒤 화살표 키로 이동해 나머지 항목을 확인하세요.</p>
-      <div id="meterTableScroll" data-testid="meter-table-scroll" class="hej-meter-scroll" tabindex="0" aria-label="전력 측정 설정 표 가로 스크롤">
-        <table id="meterTable" data-testid="meter-table" class="hej-meter-table">
-          <thead><tr>
-            <th scope="col">모델</th><th scope="col">측정 종류</th>
-            <th scope="col">계산용 숫자</th><th scope="col">배율</th>
-            <th scope="col">변환 결과</th>
-            <th scope="col">삭제</th>
-          </tr></thead>
-          <tbody id="meterRows"></tbody>
-        </table>
-      </div>
-      <datalist id="meterModelSuggestions"></datalist>
-      <button class="hej-action secondary hej-meter-icon-button" id="addMeter" type="button" aria-label="측정 행 추가" title="측정 행 추가">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-      </button>
-      <dl id="meterColumnHelp" class="hej-meter-help">
-        <div><dt>모델</dt><dd>내 장치에서 모델명을 선택하거나 직접 입력하세요. 선택만으로 측정 기능이나 단위가 확인되지는 않습니다.</dd></div>
-        <div><dt>측정 종류</dt><dd>전력·전압·전류·누적 사용량 중 하나를 선택하세요. 종류를 선택할 때만 기본 원본 항목이 정해집니다.</dd></div>
-        <div><dt>계산용 숫자</dt><dd>계산해 볼 숫자를 직접 입력하세요. 실제 장치값을 자동으로 읽지 않으며 저장하지 않습니다.</dd></div>
-        <div><dt>배율</dt><dd>원본 숫자에 곱해 W·V·A·Wh로 바꾸는 값입니다. 모델의 원본 단위를 확인한 뒤 입력하세요.</dd></div>
-        <div><dt>변환 결과</dt><dd>계산용 숫자 × 배율의 미리보기입니다. 결과도 저장되지 않습니다.</dd></div>
-        <div><dt>측정 행 삭제</dt><dd>이 행의 측정 설정만 삭제합니다. 같은 모델의 다른 측정 종류는 유지됩니다.</dd></div>
-      </dl>
-      <details><summary>전문가용 원본 설정</summary>
-        <p class="hej-muted" id="meterRawGuide">기본 원본 항목은 전력 curPower, 전압 curVoltage, 전류 curCurrent, 누적 사용량 totalWh입니다. 기존 사용자 지정 항목은 아래 원본 설정에서 유지·수정할 수 있습니다.</p>
-        <label for="meterProfiles">원본 설정</label>
-        <textarea id="meterProfiles" class="form-control" rows="6" spellcheck="false">[]</textarea>
-        <p id="meterRawHint" class="hej-muted is-hidden">원본을 편집하는 동안 표 입력을 잠갔습니다. 표에서 계속 편집하려면 원본을 표에 적용하세요.</p>
-        <button id="applyMeterRaw" class="hej-action secondary is-hidden" type="button">원본을 표에 적용</button>
-      </details>
+      <p class="hej-muted">기존 측정 프로필의 모델·원본 항목·단위 배율을 편집합니다. 실제 측정 단위를 확인한 값만 저장하세요.</p>
+      <label for="meterProfiles">전문가용 원본 설정</label>
+      <textarea id="meterProfiles" class="form-control" rows="6" spellcheck="false">[]</textarea>
+      <button id="saveMeters" class="hej-action secondary" type="button">전력 측정 설정 저장</button>
+      <p id="meterStatus" class="hej-status" role="status"></p>
     </details>
     <div class="hej-actions"><button type="button" id="saveFeatures" class="hej-action secondary">베타 기능 저장</button></div>
     <p class="hej-status" id="featuresStatus" role="status"></p>
@@ -961,36 +969,17 @@
       '전력 측정 고급 설정': 'Advanced power meter settings',
       '측정 단위가 확인된 모델에만 설정하세요.': 'Configure only models with confirmed units.',
       '전력 측정 설정 저장': 'Save power meter settings',
-      '첫 줄은 실제 장치값이 아닌 가상 참고 예시이며 저장되지 않습니다.':
-        'The first row is a fictional example, not a reading from a real device, and is never saved.',
-      '측정 종류': 'Measurement type', '계산용 숫자': 'Number for preview', '배율': 'Factor',
-      '변환 결과': 'Converted result',
-      '내 장치에서 모델명을 선택하거나 직접 입력하세요. 선택만으로 측정 기능이나 단위가 확인되지는 않습니다.':
-        'Choose a model from your devices or enter one manually. Choosing it does not confirm metering support or units.',
-      '전력·전압·전류·누적 사용량 중 하나를 선택하세요. 종류를 선택할 때만 기본 원본 항목이 정해집니다.':
-        'Choose power, voltage, current, or total energy used. The default source field is set only when you select a type.',
-      '계산해 볼 숫자를 직접 입력하세요. 실제 장치값을 자동으로 읽지 않으며 저장하지 않습니다.':
-        'Enter a number to try the calculation. No device reading is fetched or saved.',
-      '원본 숫자에 곱해 W·V·A·Wh로 바꾸는 값입니다. 모델의 원본 단위를 확인한 뒤 입력하세요.':
-        'Multiply the source number by this factor to get W, V, A, or Wh. Confirm the model’s source unit first.',
-      '계산용 숫자 × 배율의 미리보기입니다. 결과도 저장되지 않습니다.':
-        'A preview of number × factor. The result is not saved.',
-      '이 행의 측정 설정만 삭제합니다. 같은 모델의 다른 측정 종류는 유지됩니다.':
-        'Removes only this measurement row. Other types for the same model remain.',
-      '기본 원본 항목은 전력 curPower, 전압 curVoltage, 전류 curCurrent, 누적 사용량 totalWh입니다. 기존 사용자 지정 항목은 아래 원본 설정에서 유지·수정할 수 있습니다.':
-        'Default source fields are curPower for power, curVoltage for voltage, curCurrent for current, and totalWh for energy. Existing custom fields can be kept or edited in the raw settings below.',
-      '모델을 선택해도 측정 기능이나 배율은 확인되지 않습니다. 이 설정은 같은 모델에서 지원되는 측정 항목에만 사용됩니다.':
-        'Choosing a model does not confirm its meter fields or factors. Settings are used only for supported measurements on devices with that model name.',
-      '표를 좌우로 밀거나 표에 초점을 둔 뒤 화살표 키로 이동해 나머지 항목을 확인하세요.':
-        'Scroll the table sideways, or focus it and use the arrow keys to see the remaining columns.',
-      '모델': 'Model', '삭제': 'Remove', '측정 행 삭제': 'Remove measurement row',
-      '원본을 편집하는 동안 표 입력을 잠갔습니다. 표에서 계속 편집하려면 원본을 표에 적용하세요.':
-        'Table fields are locked while editing raw settings. Apply the raw settings to continue editing the table.',
-      '원본을 표에 적용': 'Apply raw settings to table',
-      '전력 측정 항목': 'Power reading', '전력 배율 → W': 'Power factor → W',
-      '전압 측정 항목': 'Voltage reading', '전압 배율 → V': 'Voltage factor → V',
-      '전류 측정 항목': 'Current reading', '전류 배율 → A': 'Current factor → A',
-      '누적 사용량': 'Total energy used', '누적 배율 → Wh': 'Total energy factor → Wh',
+      '소비전력 설정': 'Power consumption settings', '장치': 'Device',
+      '등록된 장치가 자동으로 표시됩니다. 필요한 장치의 전력값만 입력하세요.':
+        'Registered devices appear automatically. Enter power values only for the devices you need.',
+      '소비전력 (W)': 'Active power (W)', '대기전력 (W)': 'Standby power (W)',
+      '전력 설정 저장': 'Save power settings', '장치 목록을 불러오고 있습니다.': 'Loading the device list.',
+      '소비전력은 사용 중, 대기전력은 대기 상태의 값입니다.':
+        'Active power is used during operation; standby power is used while idle.',
+      '입력한 값만 저장합니다. 빈칸은 미설정이며, 0은 0 W로 저장됩니다.':
+        'Only entered values are saved. Blank means unset; 0 is saved as 0 W.',
+      '기존 측정 프로필의 모델·원본 항목·단위 배율을 편집합니다. 실제 측정 단위를 확인한 값만 저장하세요.':
+        'Edit model names, source fields, and unit factors in existing measurement profiles. Save only values with confirmed measurement units.',
       'Apple Home는 기본 연결입니다. Matter를 켠 뒤 해당 브리지의 QR로 다른 앱에 연결해 주세요.': 'Apple Home is the default connection. Turn on Matter, then use the bridge QR code to connect other apps.',
       '단위가 확인된 모델의 측정값만 설정합니다. 자세한 안내는 아래에 있습니다.': 'Configure measurements only for models with confirmed units. More guidance is below.',
       '연결할 앱': 'Connected apps', '조명 색 자동 조절': 'Automatic light color',
@@ -1016,10 +1005,15 @@
       translateStaticText();
       document.querySelector('.hej-tabs').setAttribute('aria-label', tr('설정 화면', 'Settings screens'));
       document.getElementById('deviceFilter').setAttribute('aria-label', tr('장치 필터', 'Device filter'));
-      document.getElementById('meterTableScroll').setAttribute('aria-label', tr('전력 측정 설정 표 가로 스크롤', 'Scroll meter settings table'));
-      const addMeter = document.getElementById('addMeter');
-      addMeter.setAttribute('aria-label', tr('측정 행 추가', 'Add measurement row'));
-      addMeter.title = tr('측정 행 추가', 'Add measurement row');
+      document.getElementById('powerSpecsScroll').setAttribute('aria-label', tr('소비전력 설정 표 가로 스크롤', 'Scroll power consumption settings table'));
+      for (const [id, ko, en, compact] of [
+        ['powerSpecActiveHeader', '소비전력 (W)', 'Active power (W)', 'Active (W)'],
+        ['powerSpecStandbyHeader', '대기전력 (W)', 'Standby power (W)', 'Standby (W)'],
+      ]) {
+        const header = document.getElementById(id);
+        header.setAttribute('aria-label', tr(ko, en));
+        header.querySelector('.hej-power-header-mobile').textContent = tr(ko, compact);
+      }
       await updateTheme();
     }
     async function updateTheme() {
@@ -1082,7 +1076,6 @@
   }
   let diagnosticsOutstanding = 0;
   let diagnosticsRetryAt = 0;
-  let meterSourceMode = 'form';
   let diagnosticsGeneration = 0;
   let deviceListSignature = '';
   const deviceDrafts = new Map();
@@ -1107,22 +1100,250 @@
   const closeStalledSettings = document.getElementById('closeStalledSettings');
   closeStalledSettings.addEventListener('click', () => window.homebridge?.closeSettings?.());
 
+  const powerSpecRows = new Map();
+  const powerSpecFields = ['activeWatts', 'standbyWatts'];
+  let powerSpecOwnerRevision = null;
+  let powerSpecListAvailable = false;
+  let powerSpecSavePending = false;
+  let powerSpecSaveGeneration = 0;
+  let powerSpecSaveEpoch = 0;
+  const powerSpecBody = document.getElementById('powerSpecTableBody');
+  const powerSpecSave = document.getElementById('powerSpecsSave');
+  const powerSpecFeedback = document.getElementById('powerSpecsFeedback');
+  const powerSpecListState = document.getElementById('powerSpecsListState');
+
+  function powerSpecValue(raw) { return raw.trim() === '' ? null : Number(raw); }
+  function powerSpecIsDirty(row) {
+    return row.preserveDraft || (row.pendingEdit !== null && row.edit !== row.pendingEdit)
+      || powerSpecFields.some((field) => row.invalid[field] || powerSpecValue(row.draft[field]) !== row.base[field]);
+  }
+  function hasPowerSpecDrafts() { return [...powerSpecRows.values()].some(powerSpecIsDirty); }
+  function powerSpecsCanSave() {
+    return powerSpecListAvailable && Boolean(uiSessionRevision) && powerSpecOwnerRevision === uiSessionRevision
+      && currentStatus?.configured === true && currentStatus.uiSessionRevision === uiSessionRevision
+      && !accountStatusLoading && !accountChangePending;
+  }
+  function updatePowerSpecControls() {
+    const ready = powerSpecsCanSave();
+    const unavailableDraft = [...powerSpecRows.values()].some((row) => !row.available && powerSpecIsDirty(row));
+    powerSpecSave.disabled = !ready || powerSpecSavePending || unavailableDraft || !hasPowerSpecDrafts();
+    for (const row of powerSpecRows.values()) {
+      for (const field of powerSpecFields) row.inputs[field].disabled = !ready || !row.available;
+    }
+  }
+  function suspendPowerSpecs() {
+    powerSpecListAvailable = false;
+    powerSpecBody.replaceChildren();
+    powerSpecFeedback.textContent = '';
+    powerSpecFeedback.classList.remove('is-visible');
+    updatePowerSpecControls();
+  }
+  function resetPowerSpecs() {
+    suspendPowerSpecs();
+    powerSpecRows.clear();
+    powerSpecOwnerRevision = null;
+    powerSpecSavePending = false;
+    powerSpecSaveGeneration++;
+    powerSpecSaveEpoch++;
+    powerSpecListState.textContent = tr('장치 목록을 불러오고 있습니다.', 'Loading the device list.');
+  }
+  function setPowerSpecListUnavailable() {
+    powerSpecListAvailable = false;
+    powerSpecListState.textContent = tr(
+      '장치 목록을 확인할 수 없어 저장할 수 없습니다. 입력값은 유지됩니다. 집/방 선택을 바꿨거나 이전 버전의 목록이면 Homebridge를 다시 시작한 뒤 목록을 확인하세요.',
+      'The device list is unavailable, so settings cannot be saved. Your entries are kept. If the home/room selection changed or the list came from an older version, restart Homebridge and check the list again.');
+    updatePowerSpecControls();
+  }
+  function appendPowerSpecRow(device) {
+    const row = { deviceId: device.id, base: {}, draft: {}, invalid: {}, inputs: {}, available: true, edit: 0,
+      pendingEdit: null, preserveDraft: false };
+    const element = document.createElement('tr');
+    element.dataset.powerDeviceId = device.id;
+    element.dataset.deviceId = device.id;
+    const nameCell = document.createElement('td');
+    const deviceLabel = document.createElement('div'); deviceLabel.className = 'hej-power-device';
+    const name = document.createElement('strong');
+    const model = document.createElement('span'); model.className = 'hej-power-model';
+    const unavailable = document.createElement('span'); unavailable.className = 'hej-power-unavailable';
+    deviceLabel.append(name, model); nameCell.append(deviceLabel, unavailable); element.append(nameCell);
+    Object.assign(row, { element, name, model, unavailable });
+    for (const field of powerSpecFields) {
+      const cell = document.createElement('td');
+      const input = document.createElement('input');
+      input.type = 'number'; input.min = '0'; input.step = 'any'; input.inputMode = 'decimal';
+      input.autocomplete = 'off'; input.dataset.powerField = field;
+      input.addEventListener('input', () => {
+        row.draft[field] = input.value;
+        row.invalid[field] = input.validity.badInput || (input.value !== ''
+          && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0));
+        input.setAttribute('aria-invalid', String(row.invalid[field]));
+        row.edit++;
+        if (!powerSpecSavePending) {
+          powerSpecFeedback.textContent = '';
+          powerSpecFeedback.classList.remove('is-visible');
+        }
+        updatePowerSpecControls();
+      });
+      row.inputs[field] = input;
+      cell.append(input); element.append(cell);
+    }
+    powerSpecRows.set(device.id, row);
+    powerSpecBody.append(element);
+    return row;
+  }
+  function renderPowerSpecs(diagnostics, requestEpoch) {
+    if (accountChangePending) return;
+    if (!uiSessionRevision || diagnostics.uiSessionRevision !== uiSessionRevision) {
+      setPowerSpecListUnavailable();
+      return;
+    }
+    if (powerSpecOwnerRevision !== uiSessionRevision) {
+      resetPowerSpecs();
+      powerSpecOwnerRevision = uiSessionRevision;
+      // The first owned list initializes the new account even though reset invalidated older requests.
+      requestEpoch = powerSpecSaveEpoch;
+    }
+    powerSpecListAvailable = diagnostics.deviceListAvailable === true && Array.isArray(diagnostics.devices)
+      && Number.isFinite(Date.parse(diagnostics.generatedAt ?? ''));
+    if (!powerSpecListAvailable) { setPowerSpecListUnavailable(); return; }
+    const devices = diagnostics.devices.filter((device) => device.inScope === true && typeof device.id === 'string' && device.id);
+    const availableIds = new Set(devices.map((device) => device.id));
+    for (const device of devices) {
+      let row = powerSpecRows.get(device.id);
+      const isNew = !row;
+      row ??= appendPowerSpecRow(device);
+      row.available = true;
+      const name = device.name || device.id;
+      row.name.textContent = name;
+      row.name.title = name;
+      row.name.setAttribute('aria-label', name);
+      row.model.textContent = device.modelName || '';
+      row.model.title = device.modelName || '';
+      row.model.hidden = !device.modelName;
+      row.unavailable.textContent = '';
+      row.element.removeAttribute('data-unavailable');
+      const isFocused = powerSpecFields.some((field) => document.activeElement === row.inputs[field]);
+      if (isNew || (requestEpoch === powerSpecSaveEpoch && !powerSpecIsDirty(row) && !isFocused && !powerSpecSavePending)) {
+        for (const field of powerSpecFields) {
+          const value = device.preference?.powerSpec?.[field];
+          row.base[field] = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+          row.draft[field] = row.base[field] === null ? '' : String(row.base[field]);
+          row.invalid[field] = false;
+          if (row.inputs[field].value !== row.draft[field]) row.inputs[field].value = row.draft[field];
+          row.inputs[field].setAttribute('aria-invalid', 'false');
+        }
+      }
+      for (const field of powerSpecFields) row.inputs[field].setAttribute('aria-label',
+        `${name} · ${field === 'activeWatts' ? tr('소비전력 (W)', 'Active power (W)') : tr('대기전력 (W)', 'Standby power (W)')}`);
+    }
+    let unavailableDraft = false;
+    for (const [id, row] of powerSpecRows) {
+      if (availableIds.has(id)) continue;
+      if (!powerSpecIsDirty(row)) { row.element.remove(); powerSpecRows.delete(id); continue; }
+      row.available = false;
+      unavailableDraft = true;
+      row.element.dataset.unavailable = 'true';
+      row.unavailable.textContent = tr('현재 장치 목록에 없어 저장할 수 없습니다.', 'Unavailable in the current device list; cannot save.');
+    }
+    powerSpecListState.textContent = unavailableDraft
+      ? tr('변경한 장치가 목록에서 사라졌습니다. 입력값을 유지하며, 장치 목록이 확인되면 저장할 수 있습니다.',
+        'A device with changes is no longer in the list. Entries are kept; saving is available when the device returns.')
+      : devices.length ? '' : tr('선택한 집과 방에 등록된 장치가 없습니다.', 'No registered devices in the selected homes and rooms.');
+    updatePowerSpecControls();
+  }
+  powerSpecSave.addEventListener('click', async () => {
+    if (!powerSpecsCanSave() || powerSpecSavePending) return;
+    const changed = [...powerSpecRows.values()].filter(powerSpecIsDirty);
+    if (!changed.length || changed.some((row) => !row.available)) return;
+    const invalid = changed.flatMap((row) => powerSpecFields.map((field) => ({ row, field })))
+      .find(({ row, field }) => row.invalid[field] || (row.draft[field] !== ''
+        && (!Number.isFinite(Number(row.draft[field])) || Number(row.draft[field]) < 0)));
+    if (invalid) {
+      powerSpecFeedback.textContent = tr('0 이상의 유한한 숫자를 입력하거나 빈칸으로 두세요.', 'Enter a finite number of 0 or greater, or leave the field blank.');
+      powerSpecFeedback.classList.add('is-visible');
+      invalid.row.inputs[invalid.field].focus();
+      return;
+    }
+    const ownerRevision = uiSessionRevision;
+    const submissions = changed.map((row) => ({ row, edit: row.edit, update: { deviceId: row.deviceId,
+      activeWatts: powerSpecValue(row.draft.activeWatts), standbyWatts: powerSpecValue(row.draft.standbyWatts),
+      expected: { ...row.base } } }));
+    const saveGeneration = ++powerSpecSaveGeneration;
+    for (const { row, edit } of submissions) row.pendingEdit = edit;
+    powerSpecSavePending = true;
+    updatePowerSpecControls();
+    powerSpecFeedback.textContent = tr('저장 중입니다.', 'Saving.');
+    powerSpecFeedback.classList.add('is-visible');
+    try {
+      const result = await requestWithTimeout('/save-power-specs', {
+        uiSessionRevision: ownerRevision, updates: submissions.map((entry) => entry.update),
+      }, 15000, tr('전력 설정 저장', 'Save power settings'));
+      if (ownerRevision !== uiSessionRevision || powerSpecOwnerRevision !== ownerRevision || accountChangePending
+        || saveGeneration !== powerSpecSaveGeneration) return;
+      if (!result?.ok || result.uiSessionRevision !== ownerRevision || !Array.isArray(result.powerSpecs)) throw new Error('Invalid save response');
+      const saved = new Map(result.powerSpecs.map((spec) => [spec.deviceId, spec]));
+      if (submissions.some(({ row }) => !saved.has(row.deviceId)
+        || powerSpecFields.some((field) => saved.get(row.deviceId)[field] !== null
+          && (typeof saved.get(row.deviceId)[field] !== 'number' || !Number.isFinite(saved.get(row.deviceId)[field])
+            || saved.get(row.deviceId)[field] < 0)))) throw new Error('Incomplete save response');
+      powerSpecSaveEpoch++;
+      powerSpecFeedback.classList.add('is-visible');
+      for (const { row, edit } of submissions) {
+        row.pendingEdit = null;
+        row.preserveDraft = false;
+        for (const field of powerSpecFields) {
+          row.base[field] = saved.get(row.deviceId)[field];
+          if (row.edit === edit) {
+            row.draft[field] = row.base[field] === null ? '' : String(row.base[field]);
+            row.invalid[field] = false;
+            if (row.inputs[field].value !== row.draft[field]) row.inputs[field].value = row.draft[field];
+          }
+        }
+      }
+      powerSpecFeedback.textContent = hasPowerSpecDrafts()
+        ? tr('전력 설정을 저장했습니다. 저장 중 추가한 변경사항은 아직 저장되지 않았습니다.',
+          'Power settings saved. Changes made while saving are still unsaved.')
+        : tr('전력 설정을 저장했습니다.', 'Power settings saved.');
+      void refreshDiagnostics();
+    } catch (error) {
+      if (ownerRevision !== uiSessionRevision || powerSpecOwnerRevision !== ownerRevision || accountChangePending
+        || saveGeneration !== powerSpecSaveGeneration) return;
+      for (const { row, edit } of submissions) {
+        // A failed response cannot settle edits made while that submission was pending.
+        if (row.edit !== edit) row.preserveDraft = true;
+        row.pendingEdit = null;
+      }
+      powerSpecFeedback.classList.add('is-visible');
+      const errorCode = error?.requestError?.code ?? error?.error?.code ?? error?.code;
+      powerSpecFeedback.textContent = errorCode === 'power-specs-conflict'
+        ? tr('다른 곳에서 설정이 변경되어 저장하지 못했습니다. 입력값은 유지됩니다. 최신 설정을 확인한 뒤 다시 열어 주세요.',
+          'Settings changed elsewhere and could not be saved. Entries are kept. Check the latest settings and reopen this page.')
+        : tr('전력 설정을 저장하지 못했습니다. 입력값은 유지됩니다. 장치 목록과 연결을 확인한 뒤 다시 시도하세요.',
+          'Could not save power settings. Entries are kept. Check the device list and connection, then try again.');
+    } finally {
+      if (ownerRevision === uiSessionRevision && powerSpecOwnerRevision === ownerRevision
+        && saveGeneration === powerSpecSaveGeneration) {
+        powerSpecSavePending = false;
+        updatePowerSpecControls();
+      }
+    }
+  });
+
   function applySessionRevision(revision) {
     if (!revision) return true;
     if (!uiSessionRevision) {
       uiSessionRevision = revision;
-      if (meterPreviewOwnerRevision === null) meterPreviewOwnerRevision = revision;
       return true;
     }
     if (revision === uiSessionRevision) return !accountChangePending;
     uiSessionRevision = revision;
     diagnosticsGeneration++;
     currentDiagnostics = null;
-    refreshMeterModelChoices();
+    suspendPowerSpecs();
     pendingDeviceIds.clear();
     commandStatuses.clear();
     pendingCommands.clear();
-    if (deviceDrafts.size || deviceControlDrafts.size || featureDraftDirty || scopeDraftDirty) {
+    if (deviceDrafts.size || deviceControlDrafts.size || featureDraftDirty || scopeDraftDirty || hasPowerSpecDrafts()) {
       accountChangePending = true;
       selectedDeviceId = null;
       deviceDetailView.classList.add('is-hidden');
@@ -1142,6 +1363,7 @@
           if (!window.confirm(tr('이전 계정의 저장하지 않은 변경사항을 버릴까요?',
             'Discard unsaved changes from the previous account?'))) return;
           deviceDrafts.clear(); deviceControlDrafts.clear(); commandStatuses.clear();
+          resetPowerSpecs();
           featureDraftDirty = false; scopeDraftDirty = false;
           for (const key of Object.keys(featureEdits)) savedFeatureEdits[key] = featureEdits[key];
           savedScopeRevision = scopeEditRevision;
@@ -1164,7 +1386,7 @@
     document.getElementById('matterFeature').checked = false;
     document.getElementById('adaptiveFeature').checked = false;
     document.getElementById('meterProfiles').value = '[]';
-    renderMeterRows([]);
+    resetPowerSpecs();
     document.getElementById('meterStatus').textContent = '';
     deviceList.replaceChildren();
     deviceList.textContent = tr('새 계정의 설정을 확인하고 있어요.', 'Checking settings for the new account.');
@@ -1176,7 +1398,7 @@
   async function reloadCurrentAccount(expectedRevision = uiSessionRevision) {
     const requestGeneration = ++accountReloadGeneration;
     accountStatusLoading = true;
-    for (const id of ['saveFeatures', 'saveLighting', 'saveMeters', 'addMeter', 'saveScope']) {
+    for (const id of ['saveFeatures', 'saveLighting', 'saveMeters', 'powerSpecsSave', 'saveScope']) {
       document.getElementById(id).disabled = true;
     }
     tabButtons[1].disabled = true;
@@ -1199,9 +1421,10 @@
         accountStatusLoading = false;
         tabButtons[1].disabled = false;
         tabButtons[2].disabled = false;
-        for (const id of ['saveFeatures', 'saveLighting', 'saveMeters', 'addMeter']) {
+        for (const id of ['saveFeatures', 'saveLighting', 'saveMeters']) {
           document.getElementById(id).disabled = false;
         }
+        updatePowerSpecControls();
       }
     }
   }
@@ -1277,9 +1500,6 @@
   document.getElementById('matterFeature').addEventListener('input', () => markFeatureDraft('matter'));
   document.getElementById('adaptiveFeature').addEventListener('input', () => markFeatureDraft('adaptiveLighting'));
   document.getElementById('meterProfiles').addEventListener('input', () => markFeatureDraft('meters'));
-  document.getElementById('meterRows').addEventListener('input', (event) => {
-    if (!event.target.matches('[data-meter-preview]')) markFeatureDraft('meters');
-  });
   scopeList.addEventListener('input', () => { scopeEditRevision++; scopeDraftDirty = true; });
   organizeSections();
   function controlsAreReady() {
@@ -1467,7 +1687,6 @@
       if (currentStatus) currentStatus.features = { ...(currentStatus.features ?? {}), ...(saved.features ?? features) };
       if (Array.isArray(features.meters) && featureEdits.meters === submittedEdit.meters
         && document.getElementById('meterProfiles').value === meterDraftAtSave) {
-        if (meterSourceMode === 'raw') renderMeterRows(saved.features?.meters ?? features.meters);
         document.getElementById('meterProfiles').value = JSON.stringify(saved.features?.meters ?? features.meters, null, 2);
       }
       for (const [key, revision] of Object.entries(submittedEdit)) savedFeatureEdits[key] = revision;
@@ -1497,7 +1716,7 @@
     const button = document.getElementById('saveMeters');
     const status = document.getElementById('meterStatus');
     try {
-      return saveFeaturePatch({ meters: readMeterRows() }, button, status,
+      return saveFeaturePatch({ meters: readMeterProfiles() }, button, status,
         tr('전력 측정 설정 저장', 'Save power meter settings'));
     } catch (error) {
       status.textContent = error instanceof SyntaxError
@@ -1508,244 +1727,14 @@
   });
 
   const meterKinds = [
-    ['power', '전력', 'Power', 'W', 'curPower'],
-    ['voltage', '전압', 'Voltage', 'V', 'curVoltage'],
-    ['current', '전류', 'Current', 'A', 'curCurrent'],
-    ['energy', '누적 사용량', 'Total energy used', 'Wh', 'totalWh'],
+    ['power', '전력', 'Power', 'W'],
+    ['voltage', '전압', 'Voltage', 'V'],
+    ['current', '전류', 'Current', 'A'],
+    ['energy', '누적 사용량', 'Total energy used', 'Wh'],
   ];
-  const meterKindById = new Map(meterKinds.map((entry) => [entry[0], entry]));
-  let meterPreviewOwnerRevision = null;
-  function makeMeterIcon(kind) {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2.5');
-    svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('aria-hidden', 'true');
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', kind === 'remove' ? 'M5 12h14' : 'M12 5v14M5 12h14');
-    svg.append(path);
-    return svg;
-  }
-
-  function observedMeterModels() {
-    const models = new Map();
-    for (const device of currentDiagnostics?.devices ?? []) {
-      if (device.inScope && typeof device.modelName === 'string' && device.modelName.trim()
-        && !models.has(device.modelName)) models.set(device.modelName, device.name);
-    }
-    return models;
-  }
-
-  function refreshMeterModelChoices() {
-    const models = observedMeterModels();
-    const signature = JSON.stringify([...models]);
-    const list = document.getElementById('meterModelSuggestions');
-    if (list.dataset.modelOptions === signature) return;
-    list.replaceChildren();
-    for (const [modelName, deviceName] of models) {
-      const suggestion = option(modelName, deviceName);
-      suggestion.label = `${deviceName} · ${modelName}`;
-      list.append(suggestion);
-    }
-    list.dataset.modelOptions = signature;
-  }
-
-  function updateMeterPreview(row) {
-    const kind = row.querySelector('[data-meter-kind]').value;
-    const preview = row.querySelector('[data-meter-preview]').value;
-    const factor = row.querySelector('[data-meter-multiplier]').value;
-    const output = row.querySelector('[data-meter-result]');
-    const product = Number(preview) * Number(factor);
-    if (!kind || preview === '' || factor === '' || !Number.isFinite(Number(preview))
-      || !Number.isFinite(Number(factor)) || Number(factor) <= 0 || !Number.isFinite(product)) {
-      output.textContent = '—';
-      return;
-    }
-    const unit = meterKindById.get(kind)[3];
-    const converted = Number(product.toPrecision(10));
-    output.textContent = kind === 'energy' && Math.abs(converted) >= 1000
-      ? `${converted} Wh (${Number((converted / 1000).toPrecision(8))} kWh)`
-      : `${converted} ${unit}`;
-  }
-
-  function appendMeterRow(profile = {}) {
-    const row = document.createElement('tr');
-    row.dataset.testid = 'meter-row';
-    const modelCell = document.createElement('td');
-    const model = document.createElement('input');
-    model.dataset.meterModel = 'true';
-    model.setAttribute('list', 'meterModelSuggestions');
-    model.setAttribute('aria-label', tr('모델명', 'Model name'));
-    model.value = profile.model ?? '';
-    model.placeholder = tr('모델 검색 또는 직접 입력', 'Search or enter a model');
-    model.addEventListener('input', () => {
-      if (observedMeterModels().has(model.value)) row.dataset.observedModel = model.value;
-      else delete row.dataset.observedModel;
-    });
-    modelCell.append(model);
-    row.append(modelCell);
-    const kindCell = document.createElement('td');
-    const kindSelect = document.createElement('select');
-    kindSelect.dataset.meterKind = 'true';
-    kindSelect.setAttribute('aria-label', tr('측정 종류', 'Measurement type'));
-    kindSelect.append(option('', tr('선택해 주세요', 'Select a type')));
-    for (const [id, ko, en, unit] of meterKinds) {
-      kindSelect.append(option(id, `${language === 'en' ? en : ko} (${unit})`));
-    }
-    kindSelect.value = profile.kind ?? '';
-    row.dataset.meterFieldCode = profile.field ?? (meterKindById.get(kindSelect.value)?.[4] ?? '');
-    kindSelect.addEventListener('input', () => {
-      row.dataset.meterFieldCode = meterKindById.get(kindSelect.value)?.[4] ?? '';
-      updateMeterPreview(row);
-    });
-    kindCell.append(kindSelect); row.append(kindCell);
-    const previewCell = document.createElement('td');
-    const preview = document.createElement('input');
-    preview.type = 'number'; preview.step = 'any'; preview.dataset.meterPreview = 'true';
-    preview.setAttribute('aria-label', tr('계산용 숫자', 'Number for preview'));
-    preview.value = profile.preview ?? '';
-    preview.addEventListener('input', () => updateMeterPreview(row));
-    previewCell.append(preview); row.append(previewCell);
-    const multiplierCell = document.createElement('td');
-    const multiplier = document.createElement('input');
-    multiplier.type = 'number'; multiplier.step = 'any'; multiplier.min = '0';
-    multiplier.dataset.meterMultiplier = 'true';
-    multiplier.setAttribute('aria-label', tr('배율', 'Factor'));
-    multiplier.value = profile.multiplier ?? '';
-    multiplier.addEventListener('input', () => updateMeterPreview(row));
-    multiplierCell.append(multiplier); row.append(multiplierCell);
-    const resultCell = document.createElement('td');
-    const result = document.createElement('output');
-    result.dataset.meterResult = 'true'; result.textContent = '—';
-    result.setAttribute('aria-label', tr('변환 결과', 'Converted result'));
-    resultCell.append(result); row.append(resultCell);
-    const removeCell = document.createElement('td');
-    const remove = document.createElement('button');
-    remove.type = 'button'; remove.className = 'hej-action secondary hej-meter-icon-button';
-    remove.setAttribute('aria-label', tr('측정 행 삭제', 'Remove measurement row'));
-    remove.title = tr('측정 행 삭제', 'Remove measurement row');
-    remove.append(makeMeterIcon('remove'));
-    remove.addEventListener('click', () => {
-      const focusedNext = row.nextElementSibling?.querySelector('input,button')
-        ?? row.previousElementSibling?.querySelector('input,button')
-        ?? document.getElementById('addMeter');
-      row.remove(); meterSourceMode = 'form'; markFeatureDraft('meters');
-      syncMeterRawFromForm();
-      focusedNext?.focus({ preventScroll: true });
-    });
-    removeCell.append(remove); row.append(removeCell);
-    document.getElementById('meterRows').append(row);
-    refreshMeterModelChoices();
-    if (observedMeterModels().has(model.value)) row.dataset.observedModel = model.value;
-    updateMeterPreview(row);
-    return row;
-  }
-
-  function renderMeterRows(profiles) {
-    const container = document.getElementById('meterRows');
-    const previews = new Map();
-    if (meterPreviewOwnerRevision === uiSessionRevision) {
-      for (const old of container.querySelectorAll('[data-testid="meter-row"]')) {
-        const model = old.querySelector('[data-meter-model]').value;
-        const kind = old.querySelector('[data-meter-kind]').value;
-        if (model && kind) previews.set(JSON.stringify([model, kind]), old.querySelector('[data-meter-preview]').value);
-      }
-    }
-    container.replaceChildren();
-    const sample = document.createElement('tr');
-    sample.dataset.testid = 'meter-example-row'; sample.className = 'hej-meter-example';
-    const values = [tr('참고 예(가상)', 'Fictional example'),
-      tr('전력', 'Power'), '2200', '0.1', '220 W', '—'];
-    for (const value of values) {
-      const cell = document.createElement('td'); cell.textContent = value; sample.append(cell);
-    }
-    container.append(sample);
-    for (const profile of profiles) {
-      for (const [kind] of meterKinds) {
-        if (profile[kind] !== undefined) {
-          appendMeterRow({ model: profile.model, kind, field: profile[kind].field,
-            multiplier: profile[kind].multiplier,
-            preview: previews.get(JSON.stringify([profile.model, kind])) ?? '' });
-        }
-      }
-    }
-    meterPreviewOwnerRevision = uiSessionRevision;
-    meterSourceMode = 'form';
-    setMeterTableLocked(false);
-  }
-
-  function setMeterTableLocked(locked) {
-    for (const control of document.querySelectorAll('#meterRows [data-testid="meter-row"] input, #meterRows [data-testid="meter-row"] select, #meterRows [data-testid="meter-row"] button')) {
-      control.disabled = locked;
-    }
-    document.getElementById('meterRawHint').classList.toggle('is-hidden', !locked);
-    document.getElementById('applyMeterRaw').classList.toggle('is-hidden', !locked);
-  }
-
-  function serializeMeterRowsDraft() {
-    const rows = [...document.querySelectorAll('[data-testid="meter-row"]')];
-    const grouped = new Map();
-    const blanks = [];
-    for (const row of rows) {
-      const typedModel = row.querySelector('[data-meter-model]').value;
-      const model = row.dataset.observedModel === typedModel ? typedModel : typedModel.trim();
-      const kind = row.querySelector('[data-meter-kind]').value;
-      if (!kind) {
-        blanks.push({ model });
-        continue;
-      }
-      const profile = grouped.get(model) ?? { model };
-      const rawMultiplier = row.querySelector('[data-meter-multiplier]').value;
-      if (Object.hasOwn(profile, kind)) {
-        blanks.push({ model, [kind]: { field: row.dataset.meterFieldCode,
-          multiplier: rawMultiplier ? Number(rawMultiplier) : null } });
-        continue;
-      }
-      profile[kind] = { field: row.dataset.meterFieldCode || meterKindById.get(kind)[4],
-        multiplier: rawMultiplier ? Number(rawMultiplier) : null };
-      grouped.set(model, profile);
-    }
-    return [...grouped.values(), ...blanks];
-  }
-
-  function validateMeterTableRows() {
-    const seen = new Set();
-    const rows = [...document.querySelectorAll('[data-testid="meter-row"]')];
-    for (const [index, row] of rows.entries()) {
-      const number = index + 1;
-      const typedModel = row.querySelector('[data-meter-model]').value;
-      const model = row.dataset.observedModel === typedModel ? typedModel : typedModel.trim();
-      const kind = row.querySelector('[data-meter-kind]').value;
-      const factor = row.querySelector('[data-meter-multiplier]').value;
-      if (!model.trim()) throw new Error(tr(`${number}행: 모델명을 입력해 주세요.`, `Row ${number}: enter a model name.`));
-      if (!kind) throw new Error(tr(`${number}행: 측정 종류를 선택해 주세요.`, `Row ${number}: select a measurement type.`));
-      const key = JSON.stringify([model, kind]);
-      if (seen.has(key)) throw new Error(tr(`${number}행: 같은 모델의 같은 측정 종류가 중복됩니다.`,
-        `Row ${number}: this model and measurement type are duplicated.`));
-      seen.add(key);
-      if (!factor || !Number.isFinite(Number(factor)) || Number(factor) <= 0) {
-        const [, ko, en] = meterKindById.get(kind);
-        throw new Error(tr(`${number}행 ${ko}: 0보다 큰 배율을 입력해 주세요.`,
-          `Row ${number} ${en}: enter a factor greater than zero.`));
-      }
-    }
-  }
-
-  function syncMeterRawFromForm() {
-    if (meterSourceMode === 'form') {
-      document.getElementById('meterProfiles').value = JSON.stringify(serializeMeterRowsDraft(), null, 2);
-    }
-  }
-
-  function readMeterRows() {
-    if (meterSourceMode === 'raw') {
-      const profiles = JSON.parse(document.getElementById('meterProfiles').value);
-      validateMeterProfiles(profiles);
-      return profiles;
-    }
-    validateMeterTableRows();
-    const profiles = serializeMeterRowsDraft();
+  function readMeterProfiles() {
+    const profiles = JSON.parse(document.getElementById('meterProfiles').value);
     validateMeterProfiles(profiles);
-    document.getElementById('meterProfiles').value = JSON.stringify(profiles, null, 2);
     return profiles;
   }
 
@@ -1780,51 +1769,6 @@
     }
   }
 
-  const meterProfilesInput = document.getElementById('meterProfiles');
-  meterProfilesInput.closest('details').addEventListener('toggle', (event) => {
-    if (event.target.open && meterSourceMode === 'form') {
-      meterProfilesInput.value = JSON.stringify(serializeMeterRowsDraft(), null, 2);
-    }
-  });
-  meterProfilesInput.addEventListener('input', () => {
-    meterSourceMode = 'raw';
-    setMeterTableLocked(true);
-  });
-  document.getElementById('applyMeterRaw').addEventListener('click', () => {
-    try {
-      renderMeterRows(readMeterRows());
-      document.getElementById('meterStatus').classList.remove('is-visible');
-    } catch (error) {
-      const status = document.getElementById('meterStatus');
-      status.textContent = error instanceof SyntaxError
-        ? tr('원본 설정 형식을 확인해 주세요.', 'Check the raw settings format.') : error.message;
-      status.classList.add('is-visible');
-    }
-  });
-  document.getElementById('meterRows').addEventListener('input', () => {
-    meterSourceMode = 'form';
-    syncMeterRawFromForm();
-  });
-
-  document.getElementById('addMeter').addEventListener('click', () => {
-    if (meterSourceMode === 'raw') {
-      try {
-        renderMeterRows(readMeterRows());
-      } catch (error) {
-        const status = document.getElementById('meterStatus');
-        status.textContent = error instanceof SyntaxError
-          ? tr('원본 설정 형식을 확인해 주세요.', 'Check the raw settings format.') : error.message;
-        status.classList.add('is-visible');
-        return;
-      }
-    }
-    const row = appendMeterRow();
-    syncMeterRawFromForm();
-    const model = row.querySelector('[data-meter-model]');
-    model?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    model?.focus({ preventScroll: true });
-    markFeatureDraft('meters');
-  });
 
   function option(value, label) {
     const item = document.createElement('option');
@@ -2321,11 +2265,13 @@
         'Connection responses stopped. Close and reopen settings.');
       closeStalledSettings.classList.remove('is-hidden');
       if (currentDiagnostics) currentDiagnostics.controlsAvailable = false;
+      setPowerSpecListUnavailable();
       if (selectedDeviceId) renderDeviceSettings(currentDiagnostics?.devices ?? []);
       return;
     }
     const generation = ++diagnosticsGeneration;
     const revisionAtRequest = uiSessionRevision;
+    const powerSpecEpochAtRequest = powerSpecSaveEpoch;
     diagnosticsOutstanding++;
     try {
       const rawRequest = window.homebridge.request('/diagnostics', {});
@@ -2341,7 +2287,7 @@
       if (!applySessionRevision(diagnostics.uiSessionRevision)) return;
       closeStalledSettings.classList.add('is-hidden');
       currentDiagnostics = diagnostics;
-      refreshMeterModelChoices();
+      renderPowerSpecs(diagnostics, powerSpecEpochAtRequest);
       currentHapCache = cacheIds(hapCache, 'hap');
       currentMatterCache = cacheIds(matterCache, 'matter');
       renderDiagnostics(diagnostics, currentHapCache, currentMatterCache);
@@ -2357,6 +2303,7 @@
     } catch {
       if (generation !== diagnosticsGeneration) return;
       diagnosticsRetryAt = Date.now() + 30000;
+      setPowerSpecListUnavailable();
       diagnosticsBadge.textContent = tr('상태 확인 실패', 'Status unavailable');
       connectionSummary.textContent = diagnosticsOutstanding >= 2
         ? tr('연결 응답이 멈췄어요. 설정 창을 닫았다 다시 열어 주세요.',
@@ -2619,6 +2566,7 @@
 	    diagnosticsGeneration += 1;
 	    if (discardDrafts) {
 	      deviceDrafts.clear();
+      resetPowerSpecs();
 	      deviceControlDrafts.clear();
 	      pendingDeviceIds.clear();
 	      featureDraftDirty = false;
@@ -2652,7 +2600,6 @@
     document.getElementById('matterFeature').checked = features.matter === true;
     document.getElementById('adaptiveFeature').checked = features.adaptiveLighting === true;
     document.getElementById('meterProfiles').value = JSON.stringify(features.meters ?? [], null, 2);
-	    renderMeterRows(features.meters ?? []);
 	    void refreshDiagnostics();
 	    window.homebridge?.fixScrollHeight?.();
 	  }
@@ -3110,7 +3057,7 @@
 	  });
 
 	  logout.addEventListener('click', () => withSpinner('logout', async () => {
-	    if ((deviceDrafts.size || deviceControlDrafts.size || featureDraftDirty || scopeDraftDirty) && !window.confirm(tr(
+	    if ((deviceDrafts.size || deviceControlDrafts.size || featureDraftDirty || scopeDraftDirty || hasPowerSpecDrafts()) && !window.confirm(tr(
 	      '저장하지 않은 변경사항을 버리고 로그아웃할까요?', 'Discard unsaved changes and sign out?'))) return;
 	    logUiEvent('logout.click');
 	    await requestWithTimeout('/logout', {}, 10000, tr('로그아웃', 'Sign out'));

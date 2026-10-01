@@ -294,7 +294,6 @@ for (const target of ['matter', 'adaptive', 'meters'] as const) {
     await page.getByRole('tab', { name: target === 'meters' ? '도움말' : '연결 설정', exact: true }).click();
     if (target === 'meters') {
       await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
-      await page.getByText('전문가용 원본 설정', { exact: true }).click();
     }
     const control = page.locator(target === 'matter' ? '#matterFeature' : target === 'adaptive' ? '#adaptiveFeature' : '#meterProfiles');
     const first = [{ model: 'Meter A', power: { field: 'curPower', multiplier: 1 } }];
@@ -488,7 +487,6 @@ for (const section of ['matter', 'lighting', 'meters', 'scope'] as const) {
     await page.getByRole('tab', { name: section === 'meters' ? '도움말' : '연결 설정', exact: true }).click();
     if (section === 'meters') {
       await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
-      await page.getByText('전문가용 원본 설정', { exact: true }).click();
     }
     const control = page.locator(section === 'matter' ? '#matterFeature' : section === 'lighting' ? '#adaptiveFeature'
       : section === 'meters' ? '#meterProfiles' : '[data-room-id="2"]');
@@ -525,15 +523,16 @@ for (const section of ['matter', 'lighting', 'meters', 'scope'] as const) {
 }
 
 for (const operation of ['add', 'remove'] as const) {
-  test(`meter ${operation} without typing is still an unsaved change at logout`, async ({ page }) => {
+  test(`actual-meter JSON ${operation} is still an unsaved change at logout`, async ({ page }) => {
     await mountUi(page, { status: { features: { matter: false, adaptiveLighting: false,
       meters: operation === 'remove' ? [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] : [] } } });
     await page.getByRole('tab', { name: '도움말', exact: true }).click();
     await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
-    await page.getByRole('button', { name: operation === 'add' ? '측정 행 추가' : '측정 행 삭제', exact: true }).click();
+    const draft = operation === 'add' ? '[{"model":"NEW","power":{"field":"curPower","multiplier":1}}]' : '[]';
+    await page.locator('#meterProfiles').fill(draft);
     await cancelLogout(page);
     await page.getByRole('tab', { name: '도움말', exact: true }).click();
-    await expect(page.locator('[data-meter-model]')).toHaveCount(operation === 'add' ? 1 : 0);
+    await expect(page.locator('#meterProfiles')).toHaveValue(draft);
   });
 }
 
@@ -543,7 +542,6 @@ test('saving meters does not clear an unrelated unsaved Matter change', async ({
   await page.locator('#matterFeature').check();
   await page.getByRole('tab', { name: '도움말', exact: true }).click();
   await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
-  await page.getByText('전문가용 원본 설정', { exact: true }).click();
   await page.locator('#meterProfiles').fill(JSON.stringify([{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }]));
   await page.locator('#saveMeters').click();
   await expect(page.locator('#meterStatus')).toContainText('저장');

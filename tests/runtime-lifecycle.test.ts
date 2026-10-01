@@ -3,7 +3,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { API, Logging } from 'homebridge';
 import { HomebridgeAPI } from '../node_modules/homebridge/dist/api.js';
-import type { HejDevice, HejSession } from '../src/types.js';
+import type { HejDevice, HejSession, HejhomePlatformConfig } from '../src/types.js';
+import { DeviceSnapshotStore } from '../src/storage/deviceSnapshotStore.js';
 import type { HejRestLogEvent } from '../src/hej/rest.js';
 import { supportsDeviceRole } from '../src/devices/capabilities.js';
 import { sendRuntimeCommand } from '../src/runtime/commands.js';
@@ -54,7 +55,7 @@ afterEach(async () => {
 function device(id: string): HejDevice {
   return { id, name: id, deviceType: 'ZigbeeSwitch1', online: true, deviceState: { power: true } };
 }
-async function fixture(preferences?: Record<string, unknown>) {
+async function fixture(preferences?: Record<string, unknown>, scope: NonNullable<HejhomePlatformConfig['scope']> = { mode: 'all' }) {
   const dir = await fs.mkdtemp(path.join('/tmp', 'hej-runtime-'));
   const store = new SessionStore(dir);
   const session: HejSession = { identifier: 'private', accessToken: 'secret-one', jsessionId: 'cookie',
@@ -65,7 +66,7 @@ async function fixture(preferences?: Record<string, unknown>) {
     on: (e: string, fn: () => void | Promise<unknown>) => listeners.set(e, fn), registerPlatformAccessories: vi.fn(),
     unregisterPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn() } as unknown as API;
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as unknown as Logging;
-  const platform = new HejhomePlatform(log, { platform: 'Hejhome', scope: { mode: 'all' },
+  const platform = new HejhomePlatform(log, { platform: 'Hejhome', scope,
     features: preferences ? { devices: preferences } : {} } as never, api);
   const internal = platform as unknown as { initialize(): Promise<void>; discoverDevices(): Promise<void>;
     discoveryRunning: Promise<void> | null; checkSessionAndInitialize(): Promise<void>;
@@ -111,6 +112,13 @@ test('failed partial discovery does not publish additions or delete cached devic
   await expect(internal.discoverDevices()).rejects.toThrow('family unavailable');
   expect([...platform.accessories.values()].map((a) => a.context.device.id)).toEqual(['one']);
   expect(api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+});
+test('runtime snapshots retain the discovery scope used to filter the full provider family list', async () => {
+  mocks.families = [{ familyId: 1, name: 'First' }, { familyId: 2, name: 'Second' }];
+  const { dir } = await fixture(undefined, { mode: 'custom', includedFamilyIds: [2] });
+  const snapshot = await new DeviceSnapshotStore(dir).load();
+  expect(snapshot?.families.map((entry) => entry.family.familyId)).toEqual([2]);
+  expect(snapshot?.discoveryScope).toEqual({ mode: 'custom', includedFamilyIds: [2] });
 });
 test('Matter-only devices remain controllable and receive MQTT with no HAP accessory', async () => {
   const { platform } = await fixture({ one: { visibility: 'matter', name: 'Renamed' } });

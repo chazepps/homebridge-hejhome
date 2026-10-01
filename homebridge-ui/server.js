@@ -60,6 +60,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
     this.onRequest('/diagnostics', this.handleDiagnostics.bind(this));
     this.onRequest('/diagnostics-export', this.handleDiagnosticsExport.bind(this));
     this.onRequest('/save-device-settings', this.handleSaveDeviceSettings.bind(this));
+    this.onRequest('/save-power-specs', this.handleSavePowerSpecs.bind(this));
     this.onRequest('/remote-command', this.handleRemoteCommand.bind(this));
     this.onRequest('/air-conditioner-command', this.handleAirConditionerCommand.bind(this));
     this.onRequest('/purifier-command', this.handlePurifierCommand.bind(this));
@@ -251,6 +252,9 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
 
   async handleSaveDeviceSettings(payload) {
     return await this.timedRequest('device-settings.save', {}, async () => {
+      if (payload?.preference && Object.hasOwn(payload.preference, 'powerSpec')) {
+        throw new Error('소비전력 사양은 소비전력 설정에서 저장해 주세요.');
+      }
       const id = String(payload?.deviceId ?? '');
       const normalized = normalizeFeatures({ devices: { [id]: payload?.preference } });
       const preference = normalized.devices?.[id];
@@ -292,15 +296,80 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
           throw new Error('이 장치에는 측정값 유효 시간을 설정할 수 없습니다.');
         }
         const devices = { ...previous.devices };
-        if (Object.keys(preference ?? {}).length === 0) {
+        const nextPreference = { ...preference,
+          ...(devices[id]?.powerSpec ? { powerSpec: devices[id].powerSpec } : {}) };
+        if (Object.keys(nextPreference).length === 0) {
           delete devices[id];
         } else {
-          devices[id] = preference;
+          devices[id] = nextPreference;
         }
         return { features: normalizeFeatures({ ...previous, devices }) };
       });
       return { ok: true, deviceId: id, preference: saved.features.devices?.[id] ?? {} };
     }, '장비 설정을 저장하지 못했습니다.');
+  }
+
+  async handleSavePowerSpecs(payload) {
+    return await this.timedRequest('power-specs.save', {}, async () => {
+      const updates = validatePowerSpecUpdates(payload);
+      const { owner, session } = await this.loadOwnedState();
+      if (!owner || payload.uiSessionRevision !== this.revisionForAccount(session?.identifier)) {
+        throw new PowerSpecsError('power-specs-stale');
+      }
+      const validateCurrentState = async (platform) => {
+        const current = await this.loadOwnedState();
+        if (!current.owner || current.owner !== owner || !current.snapshot
+          || payload.uiSessionRevision !== this.revisionForAccount(current.session?.identifier)) {
+          throw new PowerSpecsError('power-specs-stale');
+        }
+        const scope = platform.scope ?? { mode: 'first-family' };
+        if (!snapshotMatchesScope(current.snapshot, scope)) {
+          throw new PowerSpecsError('power-specs-stale');
+        }
+        // A matching discovery scope proves which full-provider family selection produced this filtered snapshot.
+        const available = new Set(current.snapshot.families.flatMap((entry) => entry.devices
+          .filter((device) => scope.mode !== 'custom' || isDeviceInScope(device, entry, 0, scope)).map((device) => device.id)));
+        const features = normalizeFeatures(platform.features);
+        for (const update of updates) {
+          if (!available.has(update.deviceId)) {
+            throw new PowerSpecsError('power-specs-stale');
+          }
+          const saved = powerSpecValues(features.devices?.[update.deviceId]?.powerSpec);
+          if (saved.activeWatts !== update.expected.activeWatts || saved.standbyWatts !== update.expected.standbyWatts) {
+            throw new PowerSpecsError('power-specs-conflict');
+          }
+        }
+        return features;
+      };
+      const saved = await this.savePlatformPatch(async (platform) => {
+        const previous = await validateCurrentState(platform);
+        const devices = { ...previous.devices };
+        for (const update of updates) {
+          const preference = { ...devices[update.deviceId] };
+          const powerSpec = {};
+          for (const key of ['activeWatts', 'standbyWatts']) {
+            if (update[key] !== null) {
+              powerSpec[key] = update[key];
+            }
+          }
+          if (Object.keys(powerSpec).length > 0) {
+            preference.powerSpec = powerSpec;
+          } else {
+            delete preference.powerSpec;
+          }
+          if (Object.keys(preference).length > 0) {
+            devices[update.deviceId] = preference;
+          } else {
+            delete devices[update.deviceId];
+          }
+        }
+        return { features: normalizeFeatures({ ...previous, devices }) };
+      }, async () => {
+        await validateCurrentState(await this.loadPlatformConfig());
+      });
+      return { ok: true, uiSessionRevision: payload.uiSessionRevision,
+        powerSpecs: updates.map(({ deviceId }) => ({ deviceId, ...powerSpecValues(saved.features.devices?.[deviceId]?.powerSpec) })) };
+    }, '소비전력 사양을 저장하지 못했습니다.');
   }
 
   async handleDiagnostics() {
@@ -311,11 +380,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       const scope = platform.scope ?? { mode: 'first-family' };
       const devices = (snapshot?.families ?? []).flatMap((entry, familyIndex) => entry.devices.map((device) => {
         const observed = runtimeDevices.get(device.id);
-        const familyId = Number(entry.family.familyId);
-        const roomIds = scope.includedRoomsByFamilyId?.[String(familyId)];
-        const inScope = scope.mode === 'all' || (scope.mode === 'custom'
-          ? scope.includedFamilyIds?.includes(familyId) && (!roomIds || roomIds.includes(Number(device.roomId)))
-          : familyIndex === 0);
+        const inScope = isDeviceInScope(device, entry, familyIndex, scope);
         return {
           id: device.id,
           name: features.devices?.[device.id]?.name ?? device.name,
@@ -343,6 +408,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
         generatedAt: snapshot?.generatedAt ?? null,
         updatedAt: runtime?.updatedAt ?? null,
         uiSessionRevision: this.revisionForAccount(session?.identifier),
+        deviceListAvailable: snapshotMatchesScope(snapshot, scope),
         controlsAvailable: runtime?.controlsAvailable === true,
         connection: runtime?.connection ?? { session: 'unknown', realtime: 'unknown' },
         devices,
@@ -553,7 +619,12 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       ...config,
       platforms: nextPlatforms,
     };
-    await this.saveHomebridgeConfig(nextConfig, validateBeforeRename);
+    await this.saveHomebridgeConfig(nextConfig, async () => {
+      if (JSON.stringify(await this.loadHomebridgeConfig()) !== JSON.stringify(config)) {
+        throw new Error('설정이 변경되었습니다. 새로 확인한 뒤 다시 저장해 주세요.');
+      }
+      await validateBeforeRename?.();
+    });
     return nextPlatform;
   }
 
@@ -669,6 +740,56 @@ class ScopeEditError extends Error {
       : '집/방 목록이나 로그인 정보가 바뀌었습니다. 목록을 다시 확인해 주세요.');
     this.code = code;
   }
+}
+
+class PowerSpecsError extends Error {
+  constructor(code) {
+    super(code === 'power-specs-conflict' ? '저장된 소비전력 사양이 변경되었습니다. 목록을 다시 확인해 주세요.'
+      : code === 'power-specs-stale' ? '장비 목록이나 로그인 정보가 변경되었습니다. 목록을 다시 확인해 주세요.'
+        : '소비전력 사양은 0 이상의 숫자로 입력해 주세요.');
+    this.code = code;
+  }
+}
+
+function validatePowerSpecUpdates(payload) {
+  const isObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+  const watts = (value) => value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  if (!isObject(payload) || Object.keys(payload).some((key) => !['uiSessionRevision', 'updates'].includes(key))
+    || typeof payload.uiSessionRevision !== 'string' || !payload.uiSessionRevision || !Array.isArray(payload.updates)
+    || payload.updates.length === 0) {
+    throw new PowerSpecsError('power-specs-invalid');
+  }
+  const ids = new Set();
+  return payload.updates.map((update) => {
+    if (!isObject(update) || Object.keys(update).some((key) => !['deviceId', 'activeWatts', 'standbyWatts', 'expected'].includes(key))
+      || typeof update.deviceId !== 'string' || !update.deviceId.trim() || update.deviceId.length > 128
+      || ['__proto__', 'prototype', 'constructor'].includes(update.deviceId) || ids.has(update.deviceId)
+      || !isObject(update.expected) || Object.keys(update.expected).some((key) => !['activeWatts', 'standbyWatts'].includes(key))
+      || !['activeWatts', 'standbyWatts'].every((key) => watts(update[key]) && watts(update.expected[key]))) {
+      throw new PowerSpecsError('power-specs-invalid');
+    }
+    ids.add(update.deviceId);
+    return { deviceId: update.deviceId, activeWatts: update.activeWatts, standbyWatts: update.standbyWatts,
+      expected: { activeWatts: update.expected.activeWatts, standbyWatts: update.expected.standbyWatts } };
+  });
+}
+
+function powerSpecValues(powerSpec) {
+  return { activeWatts: powerSpec?.activeWatts ?? null, standbyWatts: powerSpec?.standbyWatts ?? null };
+}
+
+function isDeviceInScope(device, entry, familyIndex, scope) {
+  const familyId = Number(entry.family.familyId);
+  const roomIds = scope.includedRoomsByFamilyId?.[String(familyId)];
+  return scope.mode === 'all' || (scope.mode === 'custom'
+    ? scope.includedFamilyIds?.includes(familyId) && (!roomIds || roomIds.includes(Number(device.roomId)))
+    : familyIndex === 0);
+}
+
+function snapshotMatchesScope(snapshot, scope) {
+  const provenance = snapshot?.discoveryScope;
+  return Boolean(provenance && ['all', 'custom', 'first-family'].includes(provenance.mode)
+    && scopeRevision(provenance) === scopeRevision(scope));
 }
 
 function scopeRevision(scope) {
@@ -808,7 +929,7 @@ function isLikelyExpiredSession(error) {
 
 function toRequestError(message, error) {
   return new RequestError(message, { detail: sanitizeForLog(error instanceof Error ? error.message : String(error)),
-    ...(error instanceof ScopeEditError ? { code: error.code } : {}) });
+    ...(error instanceof ScopeEditError || error instanceof PowerSpecsError ? { code: error.code } : {}) });
 }
 
 function normalizeHvacSettings(value) {

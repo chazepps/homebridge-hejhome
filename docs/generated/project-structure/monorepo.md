@@ -154,6 +154,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── platform-accessory.test.ts
 │   ├── platform-beta.test.ts
 │   ├── platform.test.ts
+│   ├── power-specs.test.ts
 │   ├── public-surface.test.ts
 │   ├── purifier-contract.test.ts
 │   ├── realtime-purifier-door.test.ts
@@ -181,11 +182,12 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── diagnostics-transitions.spec.ts
 │   │   ├── host-fixture.ts
 │   │   ├── login-ui.spec.ts
-│   │   ├── meter-table.spec.ts
-│   │   └── navigation-workflow.spec.ts
+│   │   ├── navigation-workflow.spec.ts
+│   │   └── power-specs.spec.ts
 │   ├── ui-diagnostics-server.test.ts
 │   ├── ui-features-server.test.ts
 │   ├── ui-live-diagnostics-server.test.ts
+│   ├── ui-power-specs-server.test.ts
 │   ├── ui-scope-server.test.ts
 │   └── ui-server-source.test.ts
 ├── tools

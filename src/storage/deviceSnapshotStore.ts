@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { HejDevice, HejFamily } from '../types.js';
+import type { HejDevice, HejFamily, HejhomePlatformConfig } from '../types.js';
 
 export interface HejDeviceSnapshot {
   ownerFingerprint?: string;
+  discoveryScope?: NonNullable<HejhomePlatformConfig['scope']>;
   generatedAt: string;
   familyCount: number;
   deviceCount: number;
@@ -25,9 +26,11 @@ export class DeviceSnapshotStore {
     return this.snapshotPath;
   }
 
-  async save(families: Array<{ family: HejFamily; devices: HejDevice[] }>, ownerFingerprint?: string): Promise<HejDeviceSnapshot> {
+  async save(families: Array<{ family: HejFamily; devices: HejDevice[] }>, ownerFingerprint?: string,
+    discoveryScope?: NonNullable<HejhomePlatformConfig['scope']>): Promise<HejDeviceSnapshot> {
     const snapshot: HejDeviceSnapshot = {
       ...(ownerFingerprint ? { ownerFingerprint } : {}),
+      ...(discoveryScope ? { discoveryScope: structuredClone(discoveryScope) } : {}),
       generatedAt: new Date().toISOString(),
       familyCount: families.length,
       deviceCount: families.reduce((total, entry) => total + entry.devices.length, 0),

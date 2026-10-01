@@ -450,8 +450,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       return;
     }
     this.lastDiscoveryAt = Date.now();
+    const discoveryScope = structuredClone(this.config.scope ?? { mode: 'first-family' as const });
     const families = await client.getFamilies();
-    const scope = resolveDiscoveryScope(this.config, families);
+    const scope = resolveDiscoveryScope({ scope: discoveryScope }, families);
     const snapshotFamilies: Array<{ family: HejFamily; devices: HejDevice[] }> = [];
     // Stage the entire selected scope before mutating either protocol or the cache.
     for (const selected of scope) {
@@ -529,7 +530,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     if (generation !== this.generation || this.stopping) {
       return;
     }
-    await this.snapshotStore.save(snapshotFamilies, ownerFingerprint);
+    await this.snapshotStore.save(snapshotFamilies, ownerFingerprint, discoveryScope);
     if (generation !== this.generation || this.stopping) {
       return;
     }

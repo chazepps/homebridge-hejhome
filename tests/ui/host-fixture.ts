@@ -11,6 +11,7 @@ export interface UiDevice {
 export interface UiHostState {
   status: Record<string, unknown>;
   diagnostics: { devices: UiDevice[]; [key: string]: unknown };
+  config: { devicePreferences: Record<string, Record<string, unknown>> };
   calls: Array<{ route: string; payload: unknown }>;
   toasts: Array<{ kind: string; message: string }>;
   holdNext: Record<string, number>;
@@ -40,15 +41,25 @@ export async function installUiHost(page: Page | Frame, options: Options = {}): 
         scopeEditToken: 'scope-edit-ticket-1',
         features: { matter: false, adaptiveLighting: false, meters: [] }, scope: { mode: 'first-family' },
         scopeOptions: { complete: true, families: [] }, supportedModels: [], ...options.status },
-      diagnostics: { uiSessionRevision: 'account-revision-1', generatedAt: now, updatedAt: now, controlsAvailable: true,
+      diagnostics: { uiSessionRevision: 'account-revision-1', generatedAt: now, updatedAt: now, controlsAvailable: true, deviceListAvailable: true,
         connection: { session: 'valid', realtime: 'connected' },
         devices: (options.devices ?? []).map((device) => ({ inScope: true, online: true, homekit: true, matter: false,
           lastControl: 'unknown', lastSeenAt: now, meterProfileApplied: false,
           roleChangeSupported: ['Plug', 'RelayController', 'Switch1'].includes(device.deviceType), preference: {}, ...device })),
         ...options.diagnostics },
+      config: { devicePreferences: structuredClone((options.status?.features as
+        { devices?: Record<string, Record<string, unknown>> } | undefined)?.devices ?? {}) },
       calls: [], toasts: [], holdNext: {}, failNext: {}, pending: [], accountIdentifier: 'user@example.test',
     };
+    for (const device of state.diagnostics.devices) {
+      state.config.devicePreferences[device.id] = structuredClone(device.preference ?? {});
+    }
+    (state.status.features as Record<string, unknown>).devices = structuredClone(state.config.devicePreferences);
     const copy = (value: unknown) => structuredClone(value);
+    const powerSpec = (preference: Record<string, unknown> | undefined) => {
+      const value = preference?.powerSpec as Record<string, unknown> | undefined;
+      return { activeWatts: value?.activeWatts ?? null, standbyWatts: value?.standbyWatts ?? null };
+    };
     const reply = (route: string, payload: unknown): unknown => {
       if (route === '/session-status') {
         return copy(state.status);
@@ -56,11 +67,55 @@ export async function installUiHost(page: Page | Frame, options: Options = {}): 
       if (route === '/diagnostics') {
         return copy(state.diagnostics);
       }
+      if (route === '/save-power-specs') {
+        const body = payload as { uiSessionRevision: string; updates: Array<{ deviceId: string;
+          activeWatts: number | null; standbyWatts: number | null;
+          expected: { activeWatts: number | null; standbyWatts: number | null } }> };
+        if (!state.status.configured || !state.status.sessionValid || body?.uiSessionRevision !== state.status.uiSessionRevision
+          || state.diagnostics.uiSessionRevision !== state.status.uiSessionRevision || state.diagnostics.deviceListAvailable !== true) {
+          throw Object.assign(new Error('계정이 바뀌었어요. 새 계정을 확인해 주세요.'), { requestError: { code: 'power-specs-stale' } });
+        }
+        if (!Array.isArray(body.updates) || !body.updates.length) {
+          throw new Error('변경한 장치가 없어요.');
+        }
+        const seen = new Set<string>();
+        const next = copy(state.config.devicePreferences) as typeof state.config.devicePreferences;
+        const valid = (value: unknown) => value === null || typeof value === 'number' && Number.isFinite(value) && value >= 0;
+        for (const update of body.updates) {
+          const device = state.diagnostics.devices.find((entry) => entry.id === update.deviceId && entry.inScope === true);
+          if (!device || seen.has(update.deviceId) || !valid(update.activeWatts) || !valid(update.standbyWatts)
+            || !update.expected || !valid(update.expected.activeWatts) || !valid(update.expected.standbyWatts)) {
+            throw new Error('장치와 소비전력 값을 확인해 주세요.');
+          }
+          seen.add(update.deviceId);
+          const current = powerSpec(next[update.deviceId]);
+          if (current.activeWatts !== update.expected.activeWatts || current.standbyWatts !== update.expected.standbyWatts) {
+            throw Object.assign(new Error('저장된 전력 사양이 바뀌었어요. 다시 확인해 주세요.'), { requestError: { code: 'power-specs-conflict' } });
+          }
+          const preference = { ...next[update.deviceId] };
+          delete preference.powerSpec;
+          if (update.activeWatts !== null || update.standbyWatts !== null) {
+            preference.powerSpec = { ...(update.activeWatts !== null ? { activeWatts: update.activeWatts } : {}),
+              ...(update.standbyWatts !== null ? { standbyWatts: update.standbyWatts } : {}) };
+          }
+          next[update.deviceId] = preference;
+        }
+        state.config.devicePreferences = next;
+        for (const device of state.diagnostics.devices) {
+          device.preference = copy(next[device.id] ?? {}) as Record<string, unknown>;
+        }
+        (state.status.features as Record<string, unknown>).devices = copy(next);
+        return { ok: true, uiSessionRevision: state.status.uiSessionRevision,
+          powerSpecs: body.updates.map((update) => ({ deviceId: update.deviceId, ...powerSpec(next[update.deviceId]) })) };
+      }
       if (route === '/save-device-settings') {
         const body = payload as { deviceId: string; preference: Record<string, unknown> };
         const device = state.diagnostics.devices.find((entry) => entry.id === body.deviceId);
         if (device) {
-          device.preference = copy(body.preference) as Record<string, unknown>;
+          device.preference = { ...copy(body.preference) as Record<string, unknown>,
+            ...(device.preference?.powerSpec ? { powerSpec: copy(device.preference.powerSpec) } : {}) };
+          state.config.devicePreferences[device.id] = copy(device.preference) as Record<string, unknown>;
+          (state.status.features as Record<string, unknown>).devices = copy(state.config.devicePreferences);
         }
         return { ok: true, preference: copy(body.preference) };
       }
@@ -84,7 +139,9 @@ export async function installUiHost(page: Page | Frame, options: Options = {}): 
           state.accountIdentifier = identifier;
           state.status.uiSessionRevision = `account-revision-${state.calls.length}`;
           state.diagnostics.uiSessionRevision = state.status.uiSessionRevision;
-          state.diagnostics.devices = state.nextLoginDevices ?? [];
+          state.diagnostics.devices = (state.nextLoginDevices ?? []).map((device) => ({ inScope: true, online: true, preference: {}, ...device }));
+          state.config.devicePreferences = Object.fromEntries(state.diagnostics.devices.map((device) => [device.id, copy(device.preference ?? {})]));
+          (state.status.features as Record<string, unknown>).devices = copy(state.config.devicePreferences);
         }
         Object.assign(state.status, { configured: true, sessionValid: true, sessionCheckStatus: 'valid' });
         state.diagnostics.connection = { session: 'valid', realtime: 'connected' };
@@ -108,7 +165,13 @@ export async function installUiHost(page: Page | Frame, options: Options = {}): 
         if (state.holdNext[route]) {
           state.holdNext[route]--;
           return new Promise((resolve, reject) => state.pending.push({ route, reject,
-            resolve: (value) => resolve(value === undefined ? reply(route, payload) : value) }));
+            resolve: (value) => {
+              try {
+                resolve(value === undefined ? reply(route, payload) : value);
+              } catch (error) {
+                reject(error);
+              }
+            } }));
         }
         return reply(route, payload);
       },

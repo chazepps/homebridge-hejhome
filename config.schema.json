@@ -134,6 +134,24 @@
                 "pm25Multiplier": {
                   "type": "number",
                   "exclusiveMinimum": 0
+                },
+                "powerSpec": {
+                  "title": "소비전력 사양 / Power specifications",
+                  "description": "사용자가 입력한 사양이며 실시간 측정값이 아닙니다. / User-entered specifications, not live measurements.",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "activeWatts": {
+                      "title": "동작 소비전력 (W) / Active power (W)",
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "standbyWatts": {
+                      "title": "대기전력 (W) / Standby power (W)",
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
                 }
               }
             }

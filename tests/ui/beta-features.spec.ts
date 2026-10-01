@@ -28,19 +28,19 @@ test('connection and lighting options require separate explicit saves and surviv
   await expect(adaptive).toBeChecked();
 });
 
-test('expert and form meter edits share the saved value including deletion of the last model', async ({ page }) => {
+test('actual-meter expert JSON preserves custom fields and saves deletion of the last model', async ({ page }) => {
   await mountUi(page, { status: { features: { matter: true, adaptiveLighting: true,
     meters: [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] } } });
   await page.getByRole('tab', { name: '도움말', exact: true }).click();
   await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
-  await page.getByText('전문가용 원본 설정', { exact: true }).click();
-  const profiles = [{ model: 'P1', power: { field: 'curPower', multiplier: 2 } }];
+  const profiles = [{ model: 'P1', power: { field: 'vendorWatts', multiplier: 0.1 },
+    energy: { field: 'historicalWh', multiplier: 1 } }];
   await page.locator('#meterProfiles').fill(JSON.stringify(profiles));
   await page.locator('#saveMeters').click();
   await expect.poll(async () => (await requestCalls(page, '/save-features')).map((call) => call.payload))
     .toEqual([{ features: { meters: profiles } }]);
-  await expect(page.locator('[data-meter-multiplier]')).toHaveValue('2');
-  await page.getByRole('button', { name: '측정 행 삭제', exact: true }).click();
+  await expect.poll(async () => JSON.parse(await page.locator('#meterProfiles').inputValue())).toEqual(profiles);
+  await page.locator('#meterProfiles').fill('[]');
   await page.locator('#saveMeters').click();
   await expect.poll(async () => (await requestCalls(page, '/save-features')).at(-1)?.payload).toEqual({ features: { meters: [] } });
   expect(await page.evaluate(() => window.__hejHost.status.features)).toMatchObject({ matter: true, adaptiveLighting: true, meters: [] });
@@ -51,10 +51,11 @@ test('invalid expert JSON is not saved and remains available for correction', as
   await mountUi(page);
   await page.getByRole('tab', { name: '도움말', exact: true }).click();
   await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
-  await page.getByText('전문가용 원본 설정', { exact: true }).click();
-  await page.locator('#meterProfiles').fill('{not json');
-  await page.locator('#saveMeters').click();
-  await expect(page.locator('#meterStatus')).toContainText(/저장하지 못|확인|올바른/);
-  await expect(page.locator('#meterProfiles')).toHaveValue('{not json');
+  for (const raw of ['{not json', '[{"model":"P","power":{"field":"curPower","multiplier":1e400}}]']) {
+    await page.locator('#meterProfiles').fill(raw);
+    await page.locator('#saveMeters').click();
+    await expect(page.locator('#meterStatus')).toContainText(/저장하지 못|확인|올바른|배율/);
+    await expect(page.locator('#meterProfiles')).toHaveValue(raw);
+  }
   expect(await requestCalls(page, '/save-features')).toHaveLength(0);
 });

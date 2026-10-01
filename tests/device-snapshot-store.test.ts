@@ -7,6 +7,19 @@ import { describe, expect, test } from 'vitest';
 import { DeviceSnapshotStore } from '../src/storage/deviceSnapshotStore.js';
 
 describe('DeviceSnapshotStore', () => {
+  test('persists discovery scope provenance separately from the filtered family list', async () => {
+    const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hejhome-snapshot-scope-'));
+    try {
+      const store = new DeviceSnapshotStore(storageRoot);
+      await store.save([{ family: { familyId: 2, name: 'Second home' }, devices: [] }], 'owner',
+        { mode: 'custom', includedFamilyIds: [2], includedRoomsByFamilyId: { '2': [21] } });
+      expect((await store.load())?.discoveryScope).toEqual({ mode: 'custom', includedFamilyIds: [2],
+        includedRoomsByFamilyId: { '2': [21] } });
+    } finally {
+      fs.rmSync(storageRoot, { recursive: true, force: true });
+    }
+  });
+
   test('persists a device discovery snapshot under the Homebridge storage path', async () => {
     const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hejhome-snapshot-'));
     const store = new DeviceSnapshotStore(storageRoot);
