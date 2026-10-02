@@ -1,3 +1,5 @@
+**한국어** | [English](README.en.md)
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/main/branding/logo.png" alt="헤이홈 로고" height="110">
 </p>
@@ -5,7 +7,7 @@
 <h1 align="center">Homebridge 헤이홈</h1>
 
 <p align="center">
-  헤이홈 기기를 Apple Home에 연결하는 비공식 플러그인
+  헤이홈 기기를 Apple Home에 연결하는 플러그인
 </p>
 
 <p align="center">
@@ -16,7 +18,7 @@
 
 헤이홈 앱에 등록한 조명·스위치·플러그·센서를 Apple Home에서 사용하고, Siri와 홈 앱 자동화에 연결할 수 있습니다. 지원 기기는 Matter를 통해 Google Home·SmartThings에도 연결할 수 있습니다.
 
-헤이홈 계정과 인터넷 연결이 필요하며, 기기 제어에는 헤이홈 클라우드를 사용합니다. 제조사와 독립적으로 개발·유지보수하는 오픈소스 프로젝트입니다.
+헤이홈 계정과 인터넷 연결이 필요하며, 기기 제어에는 헤이홈 클라우드를 사용합니다.
 
 > **3.0 베타 안내**
 > 이 문서는 개발 중인 **3.0.0-beta.1** 기준입니다. 해당 버전은 아직 npm에 게시하지 않았으며, 공개된 정식 버전과 기능·실행 환경이 다를 수 있습니다. 베타가 게시되면 사용자가 직접 선택해 설치해야 합니다.
