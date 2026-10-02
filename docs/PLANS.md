@@ -10,7 +10,7 @@
 
 ## Active Execution Plan
 
-`3.0.0-beta.1` is published on npm's `beta` channel and as a [GitHub prerelease](https://github.com/chazepps/homebridge-hejhome/releases/tag/v3.0.0-beta.1). The stable `latest` channel remains `2.1.1`. Both versions are available through Homebridge's version picker. Current support and installation instructions are in [the 3.0 beta guide](product-specs/3.0-beta-guide.md).
+The next maintenance releases are `2.1.2` on `latest` and `3.0.1-beta.1` on `beta`. They update the development-only TypeScript ESLint tools to 8.71.0. Runtime features and supported environments are unchanged. Current beta support and installation instructions are in [the 3.0 beta guide](product-specs/3.0-beta-guide.md).
 
 ## Feature Expansion Action Checklist
 

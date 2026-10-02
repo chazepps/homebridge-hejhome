@@ -21,7 +21,7 @@ Use lights, switches, plugs and sensors registered in the Hejhome app through Ap
 A Hejhome account and an internet connection are required. Device control uses the Hejhome cloud.
 
 > **About the 3.0 beta**
-> This document covers **3.0.0-beta.1**. **Stable v2 uses `latest`; beta v3 uses `beta`.** Normal installations and updates use the stable version. Select the v3 beta explicitly. Features and system requirements differ between the two versions.
+> This document covers **3.0.1-beta.1**. **Stable v2 uses `latest`; beta v3 uses `beta`.** Normal installations and updates use the stable version. Select the v3 beta explicitly. Features and system requirements differ between the two versions.
 
 [Getting started](#getting-started) · [Settings](#settings) · [Supported devices](#supported-devices-and-features) · [Upgrading](#upgrading-from-2x) · [Troubleshooting](#troubleshooting)
 
@@ -90,8 +90,8 @@ Find `@chazepps/homebridge-hejhome` in the **Plugins** section of Homebridge UI.
 
 | Choice | Channel | Version | How to install |
 | --- | --- | --- | --- |
-| Stable v2 | `latest` | `2.1.1` | Normal installation or update, or `@latest` |
-| Beta v3 | `beta` | `3.0.0-beta.1` | Select the beta in the version picker, or use `@beta` |
+| Stable v2 | `latest` | `2.1.2` | Normal installation or update, or `@latest` |
+| Beta v3 | `beta` | `3.0.1-beta.1` | Select the beta in the version picker, or use `@beta` |
 
 Open **Install Previous Version** (or Install Alternate Version, depending on the UI) from the installed plugin's menu to choose a version. Version 3 requires Homebridge 2.4 or later. Each installation runs one selected version.
 
@@ -103,7 +103,7 @@ npm install -g @chazepps/homebridge-hejhome@latest
 **To explicitly select the v3 beta, use:**
 
 ```sh
-npm install -g @chazepps/homebridge-hejhome@3.0.0-beta.1
+npm install -g @chazepps/homebridge-hejhome@3.0.1-beta.1
 ```
 
 `@beta` installs the version on the beta channel. Specify the exact version as above to stay on a particular beta. Check the current channel versions with:
@@ -129,7 +129,7 @@ npm pack --ignore-scripts
 Transfer the generated package to the Homebridge installation environment and install it.
 
 ```sh
-npm install -g ./chazepps-homebridge-hejhome-3.0.0-beta.1.tgz
+npm install -g ./chazepps-homebridge-hejhome-3.0.1-beta.1.tgz
 ```
 
 Restart Homebridge or the relevant child bridge, then reopen the plugin settings. This installs a local package without publishing it to npm.
