@@ -1,7 +1,7 @@
 {
   "name": "@chazepps/homebridge-hejhome",
   "displayName": "Hejhome",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": false,
   "description": "The Hejhome plugin allows you to access your Hejhome device(s) from HomeKit.",
   "author": {
@@ -90,11 +90,12 @@
     "nodemon": "^3.1.14",
     "rimraf": "^6.1.3",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.59.4",
+    "typescript-eslint": "^8.71.0",
     "vitest": "^5.0.0"
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "provenance": true,
+    "tag": "latest"
   }
 }
