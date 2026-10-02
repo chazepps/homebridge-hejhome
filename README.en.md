@@ -25,6 +25,41 @@ A Hejhome account and an internet connection are required. Device control uses t
 
 [Getting started](#getting-started) · [Settings](#settings) · [Supported devices](#supported-devices-and-features) · [Upgrading](#upgrading-from-2x) · [Troubleshooting](#troubleshooting)
 
+## Screenshots
+
+The 3.0 beta in dark mode, shown in Korean. Click an image to view it at full size.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Devices</strong><br>
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-devices.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-devices.png" alt="Device list and Apple Home and Matter connection readiness" width="100%">
+      </a>
+    </td>
+    <td width="50%" valign="top">
+      <strong>Connections</strong><br>
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-connections.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-connections.png" alt="Account, home and room selection, and Matter connection settings" width="100%">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Power</strong><br>
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-power.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-power.png" alt="Device power and standby power inputs" width="100%">
+      </a>
+    </td>
+    <td width="50%" valign="top">
+      <strong>Help</strong><br>
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-help.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-help.png" alt="Connection status, diagnostics, and beta guidance" width="100%">
+      </a>
+    </td>
+  </tr>
+</table>
+
 ## Features
 
 - **Connect only the devices you need** — Choose homes, rooms and a connection method for each device.

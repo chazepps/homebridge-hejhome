@@ -29,6 +29,11 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── FRONTEND.md
 │   ├── generated
 │   │   └── README.md
+│   ├── images
+│   │   ├── v3-beta-connections.png
+│   │   ├── v3-beta-devices.png
+│   │   ├── v3-beta-help.png
+│   │   └── v3-beta-power.png
 │   ├── PLANS.md
 │   ├── PRODUCT_SENSE.md
 │   ├── product-specs

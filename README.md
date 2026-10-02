@@ -25,6 +25,41 @@
 
 [시작하기](#시작하기) · [설정 화면](#설정-화면) · [지원 기기](#지원-기기와-기능) · [업데이트 안내](#2x에서-업데이트하기) · [문제 해결](#연결이-안-될-때)
 
+## 화면 미리보기
+
+3.0 베타의 어두운 테마입니다. 이미지를 누르면 원본 크기로 볼 수 있습니다.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>장치</strong><br>
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-devices.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-devices.png" alt="장치 목록과 Apple Home·Matter 연결 준비 상태" width="100%">
+      </a>
+    </td>
+    <td width="50%" valign="top">
+      <strong>연결</strong><br>
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-connections.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-connections.png" alt="계정, 집과 방, Matter 연결 설정" width="100%">
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>전력</strong><br>
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-power.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-power.png" alt="장치별 소비전력과 대기전력 입력" width="100%">
+      </a>
+    </td>
+    <td width="50%" valign="top">
+      <strong>도움말</strong><br>
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-help.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-help.png" alt="연결 상태와 진단, 베타 사용 안내" width="100%">
+      </a>
+    </td>
+  </tr>
+</table>
+
 ## 주요 기능
 
 - **필요한 장치만 연결** — 사용할 집·방과 장치별 연결 방식을 선택합니다.
