@@ -1,4 +1,5 @@
 import { isReservedMeasurementField } from './runtime/measurementFields.js';
+import { MAX_POWER_ESTIMATE_WATTS } from './runtime/powerEstimates.js';
 
 export interface MeterSource { field: string; multiplier: number }
 export interface MeterProfile {
@@ -138,8 +139,8 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
           if (key !== 'activeWatts' && key !== 'standbyWatts') {
             throw new Error(`Unknown power specification option: ${key}`);
           }
-          if (typeof watts !== 'number' || !Number.isFinite(watts) || watts < 0) {
-            throw new Error(`${key} must be a finite nonnegative number.`);
+          if (typeof watts !== 'number' || !Number.isFinite(watts) || watts < 0 || watts > MAX_POWER_ESTIMATE_WATTS) {
+            throw new Error(`${key} must be a finite number from 0 to ${MAX_POWER_ESTIMATE_WATTS} W.`);
           }
           powerSpec[key] = watts;
         }

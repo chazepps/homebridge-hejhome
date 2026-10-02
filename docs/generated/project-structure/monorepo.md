@@ -105,10 +105,12 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── health.ts
 │   │   ├── measurementFields.ts
 │   │   ├── observations.ts
+│   │   ├── powerEstimates.ts
 │   │   └── status.ts
 │   ├── settings.ts
 │   ├── storage
 │   │   ├── deviceSnapshotStore.ts
+│   │   ├── estimatedEnergyStore.ts
 │   │   ├── logStore.ts
 │   │   └── sessionStore.ts
 │   ├── types.ts
@@ -147,6 +149,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── matter-cache-restore.test.ts
 │   ├── matter-conformance.test.ts
 │   ├── matter-dimming.test.ts
+│   ├── matter-power-estimates.test.ts
 │   ├── matter.test.ts
 │   ├── official-gates.test.ts
 │   ├── pi-snapshot-fixture.test.ts
@@ -154,6 +157,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── platform-accessory.test.ts
 │   ├── platform-beta.test.ts
 │   ├── platform.test.ts
+│   ├── power-estimates.test.ts
 │   ├── power-specs.test.ts
 │   ├── public-surface.test.ts
 │   ├── purifier-contract.test.ts

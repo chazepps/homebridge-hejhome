@@ -1,6 +1,7 @@
 import type { MatterAPI, MatterAccessory } from 'homebridge';
 import type { DevicePreference, MeterProfile } from '../features.js';
 import type { HejDevice } from '../types.js';
+import type { EstimatedElectricalState } from '../runtime/powerEstimates.js';
 import { PLUGIN_NAME, PLATFORM_NAME } from '../settings.js';
 import { createMatterAccessory, MatterDimmingController } from './accessory.js';
 
@@ -13,6 +14,8 @@ export class MatterAdapter {
   private readonly dimmers = new Map<string, MatterDimmingController>();
   private queue = Promise.resolve();
   private disposed = false;
+  private electricalAccount: string | undefined;
+  private readonly accountEnergyPending = new Set<string>();
 
   constructor(
     private readonly api: MatterAPI,
@@ -20,7 +23,34 @@ export class MatterAdapter {
     private readonly meters: MeterProfile[],
     private readonly onError: (error: unknown) => void,
     private readonly devicePreferences: Record<string, DevicePreference> = {},
+    private readonly electricalEstimate?: (device: HejDevice) => EstimatedElectricalState | undefined,
   ) {}
+
+  setElectricalAccount(owner: string): void {
+    if (this.electricalAccount === owner) {
+      return;
+    }
+    this.electricalAccount = owner;
+    // Serialize the boundary after older reports so an in-flight update cannot
+    // put the previous account's cadence marker back after invalidation.
+    this.queue = this.queue.catch(this.onError).then(() => {
+      for (const key of this.reported.keys()) {
+        if (/\/electrical(Power|Energy)Measurement$/.test(key)) {
+          this.reported.delete(key);
+        }
+      }
+      for (const [key, timer] of this.timers) {
+        if (key.endsWith('/electricalEnergyMeasurement')) {
+          clearTimeout(timer);
+          this.timers.delete(key);
+        }
+      }
+      this.accountEnergyPending.clear();
+      for (const uuid of this.active) {
+        this.accountEnergyPending.add(uuid);
+      }
+    });
+  }
 
   restore(accessory: MatterAccessory): void {
     this.accessories.set(accessory.UUID, accessory);
@@ -44,6 +74,7 @@ export class MatterAdapter {
       await this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       this.accessories.delete(uuid);
       this.active.delete(uuid);
+      this.accountEnergyPending.delete(uuid);
       for (const key of this.reported.keys()) {
         if (key.startsWith(`${uuid}/`)) {
           this.reported.delete(key);
@@ -69,7 +100,11 @@ export class MatterAdapter {
   }
 
   async reconcile(devices: HejDevice[]): Promise<void> {
-    this.reported.clear();
+    for (const key of this.reported.keys()) {
+      if (!key.endsWith('/electricalEnergyMeasurement')) {
+        this.reported.delete(key);
+      }
+    }
     for (const timer of this.timers.values()) {
       clearTimeout(timer);
     }
@@ -85,7 +120,25 @@ export class MatterAdapter {
         continue;
       }
       retained.add(accessory.UUID);
-      const restored = this.accessories.get(accessory.UUID);
+      let restored = this.accessories.get(accessory.UUID);
+      if (restored) {
+        for (const cluster of ['electricalPowerMeasurement', 'electricalEnergyMeasurement']) {
+          const wanted = accessory.clusters?.[cluster] !== undefined;
+          const hadCluster = restored.clusters?.[cluster] !== undefined;
+          const stateReader: Partial<MatterAPI> = this.api;
+          const actual = stateReader.getAccessoryState && (wanted || hadCluster)
+            ? await this.api.getAccessoryState(accessory.UUID, cluster) : restored.clusters?.[cluster];
+          if (wanted !== (actual !== undefined)) {
+            // Homebridge's restore shape check predates its automatically composed
+            // electrical behaviors. Rebuild through public APIs, retaining UUID/type.
+            await this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [restored]);
+            this.accessories.delete(accessory.UUID);
+            this.active.delete(accessory.UUID);
+            restored = undefined;
+            break;
+          }
+        }
+      }
       if (restored && !this.active.has(accessory.UUID)
         && accessory.parts?.some((part) => part.id === 'air-quality')
         && restored.parts?.some((part) => part.id === 'air-quality')) {
@@ -112,6 +165,7 @@ export class MatterAdapter {
         await this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         this.accessories.delete(uuid);
         this.active.delete(uuid);
+        this.accountEnergyPending.delete(uuid);
       }
     }
     const activeIds = new Set(devices.map((d) => d.id));
@@ -169,6 +223,7 @@ export class MatterAdapter {
     this.timers.clear();
     this.devices.clear();
     this.reported.clear();
+    this.accountEnergyPending.clear();
     for (const dimmer of this.dimmers.values()) {
       dimmer.cancel(true);
     }
@@ -190,7 +245,7 @@ export class MatterAdapter {
         throw new Error('Hejhome bridge is shutting down.');
       }
       await this.send(id, requirements);
-    }, this.meters, dimmer, this.devicePreferences[id]?.pm25Multiplier);
+    }, this.meters, dimmer, this.devicePreferences[id]?.pm25Multiplier, this.electricalEstimate?.(device));
   }
 
   private async report(uuid: string, clusters: Record<string, Record<string, unknown>>, partId?: string): Promise<void> {
@@ -201,7 +256,8 @@ export class MatterAdapter {
       if (previous?.data === data) {
         continue;
       }
-      if (cluster === 'electricalEnergyMeasurement' && previous && Date.now() - previous.at < 60_000) {
+      if (cluster === 'electricalEnergyMeasurement' && previous && !this.accountEnergyPending.has(uuid)
+        && Date.now() - previous.at < 60_000) {
         if (!this.timers.has(key)) {
           const timer = setTimeout(() => {
             this.timers.delete(key);
@@ -218,6 +274,9 @@ export class MatterAdapter {
       }
       await this.api.updateAccessoryState(uuid, cluster, attributes, partId);
       this.reported.set(key, { data, at: Date.now() });
+      if (cluster === 'electricalEnergyMeasurement' && attributes.cumulativeEnergyImported != null) {
+        this.accountEnergyPending.delete(uuid);
+      }
     }
   }
 }

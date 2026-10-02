@@ -86,7 +86,7 @@ test('normal diagnostic polling preserves draft focus and caret', async ({ page 
   expect(await savedCalls(page)).toEqual([]);
 });
 
-for (const invalid of ['-1', '1e400', '1e', 'e']) {
+for (const invalid of ['-1', '1000000.001', '1e400', '1e', 'e']) {
   test(`invalid watt input ${invalid} cannot save or clear a previously saved value`, async ({ page }) => {
     await mountUi(page, { devices: [{ ...devices[0]!, preference: { powerSpec: { activeWatts: 5, standbyWatts: 1 } } }] });
     await openPower(page);
@@ -98,6 +98,44 @@ for (const invalid of ['-1', '1e400', '1e', 'e']) {
     await expect(page.locator('#powerSpecsFeedback')).toContainText(/확인|숫자|입력|이상/);
     expect(await savedCalls(page)).toEqual([]);
     expect(await page.evaluate(() => window.__hejHost.config.devicePreferences['plug-1']?.powerSpec)).toEqual({ activeWatts: 5, standbyWatts: 1 });
+  });
+}
+
+for (const language of ['ko', 'en'] as const) {
+  test(`estimate status follows eligibility and Matter settings while unsupported saved values remain clearable in ${language}`, async ({ page }) => {
+    await mountUi(page, { language, devices: [
+      { ...devices[0]!, powerSpecEligibility: { supported: true, reason: 'supported' } },
+      { id: 'multi', name: 'Multiple loads', deviceType: 'Switch2',
+        powerSpecEligibility: { supported: false, reason: 'multiple-loads' },
+        preference: { name: 'Keep name', powerSpec: { activeWatts: 20, standbyWatts: 0 } } },
+      { id: 'metered', name: 'Measured plug', deviceType: 'Plug',
+        powerSpecEligibility: { supported: true, reason: 'supported' }, powerEstimateMeterPriority: true },
+      { id: 'unknown', name: 'Old diagnostics', deviceType: 'Plug' },
+    ] });
+    await openPower(page, language);
+    await expect(row(page).locator('.hej-power-support')).toContainText(language === 'ko' ? /추정 지원/ : /Estimate supported/);
+    await expect(row(page, 'multi').locator('.hej-power-support')).toContainText(language === 'ko' ? /미지원.*여러 부하/ : /Unsupported.*multiple loads/);
+    await expect(row(page, 'metered').locator('.hej-power-support')).toContainText(language === 'ko' ? /실측.*우선/ : /Measured.*priority/);
+    await expect(row(page, 'unknown').locator('.hej-power-support')).toContainText(language === 'ko' ? /확인 필요/ : /unconfirmed/);
+    await expect(page.locator('#powerSpecsMatterState')).toContainText(language === 'ko' ? /꺼져/ : /Matter is off/);
+    await active(page).fill('12.5');
+    await page.getByRole('tab', { name: language === 'ko' ? '연결 설정' : 'Connection settings', exact: true }).click();
+    await page.locator('#matterFeature').check();
+    await page.locator('#saveFeatures').click();
+    await expect(page.locator('#featuresStatus')).toContainText(language === 'ko' ? /저장/ : /Saved/);
+    await openPower(page, language);
+    await expect(page.locator('#powerSpecsMatterState')).toContainText(language === 'ko' ? /켜져/ : /Matter is on/);
+    await expect(active(page)).toHaveValue('12.5');
+    await expect(active(page, 'multi')).toHaveValue('20');
+    await expect(standby(page, 'multi')).toHaveValue('0');
+    await active(page, 'multi').fill('');
+    await standby(page, 'multi').fill('');
+    await save(page);
+    await expect.poll(() => savedCalls(page)).toEqual([{ uiSessionRevision: 'account-revision-1', updates: [
+      { deviceId: 'plug-1', activeWatts: 12.5, standbyWatts: null, expected: { activeWatts: null, standbyWatts: null } },
+      { deviceId: 'multi', activeWatts: null, standbyWatts: null, expected: { activeWatts: 20, standbyWatts: 0 } },
+    ] }]);
+    expect(await page.evaluate(() => window.__hejHost.config.devicePreferences.multi)).toEqual({ name: 'Keep name' });
   });
 }
 
@@ -436,7 +474,7 @@ for (const { language, theme, width } of renderCases) {
     if (language === 'en') {
       await expect(panel).not.toContainText(/[가-힣]/);
     }
-    const directory = path.resolve('.superpowers/sdd/2026-10-01-power-specs/screenshots');
+    const directory = path.resolve('.superpowers/sdd/2026-10-02-power-matter/screenshots');
     fs.mkdirSync(directory, { recursive: true });
     await panel.screenshot({ path: path.join(directory, `${language}-${theme}-${width}-blank.png`) });
   });

@@ -13,6 +13,7 @@ import { AccessoryManager, type AccessoryManagerDeps } from '../node_modules/hom
 import { StateManager } from '../node_modules/homebridge/dist/matter/server/StateManager.js';
 import { BehaviorRegistry, RegistryManager } from '../node_modules/homebridge/dist/matter/behaviors/index.js';
 import { MatterAdapter } from '../src/matter/adapter.js';
+import type { EstimatedElectricalState } from '../src/runtime/powerEstimates.js';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -21,7 +22,7 @@ afterEach(async () => {
   }
 });
 
-async function host(storage: string, cycle: number) {
+async function host(storage: string, cycle: number, estimate?: () => EstimatedElectricalState) {
   const environment = new Environment(`hej-pm-cache-${cycle}`, Environment.default);
   environment.set(StorageService, new MockStorageService(environment));
   const node = await ServerNode.create({ id: `pm-cache-${cycle}`, environment });
@@ -59,7 +60,7 @@ async function host(storage: string, cycle: number) {
     getAccessoryState: vi.fn((uuid: string, cluster: string, partId?: string) =>
       Promise.resolve(states.getAccessoryState(uuid, cluster, partId))),
   } as unknown as MatterAPI;
-  const adapter = new MatterAdapter(api, vi.fn(), [], vi.fn(), { purifier: { pm25Multiplier: 0.5 } });
+  const adapter = new MatterAdapter(api, vi.fn(), [], vi.fn(), { purifier: { pm25Multiplier: 0.5 } }, estimate);
   cleanups.push(async () => {
     adapter.dispose();
   });
@@ -106,4 +107,70 @@ test('serialized PM2.5 part keeps its ID and regains NumericMeasurement after di
   expect(restarted.states.getAccessoryState(uuid, 'pm25ConcentrationMeasurement', 'air-quality')?.measuredValue).toBeNull();
   await restarted.adapter.update(sample(30));
   expect(restarted.states.getAccessoryState(uuid, 'pm25ConcentrationMeasurement', 'air-quality')?.measuredValue).toBe(15);
+});
+
+
+test('an existing RGB light gains estimated electrical clusters after cache restore and retains its UUID and light type', async () => {
+  const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-matter-power-cache-'));
+  cleanups.push(() => fs.rm(storage, { recursive: true, force: true }));
+  const sample = { id: 'lamp', name: 'Stand', deviceType: 'LightRgbw5', online: true,
+    deviceState: { power: true, lightMode: 'COLOUR' as const, brightness: 50, hsvColor: { hue: 120, saturation: 60, brightness: 50 } } };
+  const first = await host(storage, 2);
+  await first.adapter.reconcile([sample]);
+  await first.cache.save(first.accessories);
+  const restarted = await host(storage, 3, () => ({ activePower: 10000, cumulativeEnergyImported: 1234 }));
+  const serialized = restarted.cache.getAllCached()[0]!;
+  const uuid = 'hejhome:matter:lamp';
+  const restored: MatterAccessory = { UUID: serialized.uuid, displayName: serialized.displayName, serialNumber: serialized.serialNumber,
+    manufacturer: serialized.manufacturer, model: serialized.model, context: serialized.context,
+    deviceType: deviceTypes.ExtendedColorLight, clusters: serialized.clusters ?? {},
+    handlers: Object.fromEntries(Object.keys(serialized.clusters ?? {}).map((key) => [key, {}])) };
+  await restarted.manager.registerAccessory('homebridge-hejhome', 'Hejhome', restored, restarted.deps);
+  const oldEndpoint = restarted.accessories.get(uuid)!.endpoint;
+  restarted.accessories.get(uuid)!._restoredFromCache = true;
+  restarted.adapter.restore(restored);
+  await restarted.adapter.reconcile([sample]);
+  const registered = restarted.accessories.get(uuid)!;
+  expect(registered.UUID).toBe(uuid);
+  expect(registered.deviceType.name).toBe(deviceTypes.ExtendedColorLight.name);
+  expect(registered.endpoint).not.toBe(oldEndpoint);
+  expect(registered.endpoint?.lifecycle.isReady).toBe(true);
+  expect(restarted.states.getAccessoryState(uuid, 'electricalPowerMeasurement')).toMatchObject({ activePower: 10000,
+    accuracy: [{ measurementType: 5, measured: false }] });
+  expect(restarted.states.getAccessoryState(uuid, 'electricalEnergyMeasurement')).toMatchObject({
+    cumulativeEnergyImported: { energy: 1234 }, accuracy: { measurementType: 14, measured: false } });
+  const descriptor = restarted.states.getAccessoryState(uuid, 'descriptor');
+  expect((descriptor?.deviceTypeList as Array<{ deviceType: number }>).map((entry) => entry.deviceType)).toEqual(
+    expect.arrayContaining([0x010d, 0x0510]));
+  await restarted.cache.save(restarted.accessories);
+  const diskCache = new MatterAccessoryCache(storage, 'bridge');
+  await diskCache.load();
+  const cachedWithEnergy = diskCache.getAllCached().find((item) => item.uuid === uuid)!;
+  expect(cachedWithEnergy.clusters?.electricalPowerMeasurement).toMatchObject({ activePower: 10000 });
+});
+
+test('actual electrical endpoint replaces the previous account total immediately but retains same-account cadence', async () => {
+  const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-matter-owner-'));
+  cleanups.push(() => fs.rm(storage, { recursive: true, force: true }));
+  let estimate: EstimatedElectricalState = { activePower: 10000, cumulativeEnergyImported: 4321 };
+  const runtime = await host(storage, 4, () => estimate);
+  const lamp = { id: 'lamp', name: 'Lamp', deviceType: 'LightRgbw5', online: true,
+    deviceState: { power: true, lightMode: 'COLOUR' as const, brightness: 50, hsvColor: { hue: 120, saturation: 60, brightness: 50 } } };
+  const uuid = 'hejhome:matter:lamp';
+  runtime.adapter.setElectricalAccount('account-a');
+  await runtime.adapter.reconcile([lamp]);
+  expect(runtime.states.getAccessoryState(uuid, 'electricalEnergyMeasurement')?.cumulativeEnergyImported).toEqual({ energy: 4321 });
+  estimate = { activePower: null, cumulativeEnergyImported: null };
+  await runtime.adapter.update({ ...lamp, online: false });
+  runtime.adapter.setElectricalAccount('account-b');
+  await runtime.adapter.update({ ...lamp, online: false });
+  expect(runtime.states.getAccessoryState(uuid, 'electricalEnergyMeasurement')?.cumulativeEnergyImported).toBeNull();
+  estimate = { activePower: 10000, cumulativeEnergyImported: 200 };
+  await runtime.adapter.reconcile([lamp]);
+  expect(runtime.states.getAccessoryState(uuid, 'bridgedDeviceBasicInformation')?.reachable).toBe(true);
+  expect(runtime.states.getAccessoryState(uuid, 'electricalEnergyMeasurement')?.cumulativeEnergyImported).toEqual({ energy: 200 });
+  runtime.adapter.setElectricalAccount('account-b');
+  estimate = { activePower: 10000, cumulativeEnergyImported: 201 };
+  await runtime.adapter.reconcile([lamp]);
+  expect(runtime.states.getAccessoryState(uuid, 'electricalEnergyMeasurement')?.cumulativeEnergyImported).toEqual({ energy: 200 });
 });

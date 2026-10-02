@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { API, Logging } from 'homebridge';
+import { deviceTypes, MatterStatus, type API, type Logging, type MatterAPI } from 'homebridge';
 import { HomebridgeAPI } from '../node_modules/homebridge/dist/api.js';
 import type { HejDevice, HejSession, HejhomePlatformConfig } from '../src/types.js';
 import { DeviceSnapshotStore } from '../src/storage/deviceSnapshotStore.js';
@@ -9,6 +9,7 @@ import type { HejRestLogEvent } from '../src/hej/rest.js';
 import { supportsDeviceRole } from '../src/devices/capabilities.js';
 import { sendRuntimeCommand } from '../src/runtime/commands.js';
 import { loadRuntimeStatus } from '../src/runtime/status.js';
+import type { PowerEstimates } from '../src/runtime/powerEstimates.js';
 import type { HejRealtimeEvents } from '../src/hej/realtime.js';
 
 const mocks = vi.hoisted(() => ({ clients: [] as Array<Record<string, ReturnType<typeof vi.fn>>>,
@@ -55,22 +56,22 @@ afterEach(async () => {
 function device(id: string): HejDevice {
   return { id, name: id, deviceType: 'ZigbeeSwitch1', online: true, deviceState: { power: true } };
 }
-async function fixture(preferences?: Record<string, unknown>, scope: NonNullable<HejhomePlatformConfig['scope']> = { mode: 'all' }) {
+async function fixture(preferences?: Record<string, unknown>, scope: NonNullable<HejhomePlatformConfig['scope']> = { mode: 'all' }, matter?: MatterAPI) {
   const dir = await fs.mkdtemp(path.join('/tmp', 'hej-runtime-'));
   const store = new SessionStore(dir);
   const session: HejSession = { identifier: 'private', accessToken: 'secret-one', jsessionId: 'cookie',
     usernameCookie: 'user', autoLogin: true, expiresAt: Date.now() + 3600000 };
   await store.save(session);
   const host = new HomebridgeAPI(); const listeners = new Map<string, () => void | Promise<unknown>>();
-  const api = { hap: host.hap, platformAccessory: host.platformAccessory, user: { storagePath: () => dir },
+  const api = { hap: host.hap, platformAccessory: host.platformAccessory, user: { storagePath: () => dir }, ...(matter ? { matter } : {}),
     on: (e: string, fn: () => void | Promise<unknown>) => listeners.set(e, fn), registerPlatformAccessories: vi.fn(),
     unregisterPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn() } as unknown as API;
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as unknown as Logging;
   const platform = new HejhomePlatform(log, { platform: 'Hejhome', scope,
-    features: preferences ? { devices: preferences } : {} } as never, api);
+    features: { ...(preferences ? { devices: preferences } : {}), ...(matter ? { matter: true } : {}) } } as never, api);
   const internal = platform as unknown as { initialize(): Promise<void>; discoverDevices(): Promise<void>;
     discoveryRunning: Promise<void> | null; checkSessionAndInitialize(): Promise<void>;
-    initializing: boolean; sessionChecking: boolean; statusStore: { flush(): Promise<void> } };
+    initializing: boolean; sessionChecking: boolean; powerEstimates: PowerEstimates; refreshHealth(): void; statusStore: { flush(): Promise<void> } };
   cleanup.push(async () => {
     const shutdown = listeners.get('shutdown')?.();
     vi.useRealTimers();
@@ -704,4 +705,162 @@ test.each(['light', 'outlet'] as const)('legacy Airpurifier role %s cannot repla
   expect(await airQuality.getCharacteristic(platform.Characteristic.PM2_5Density).handleGetRequest()).toBe(10);
   await sendRuntimeCommand(dir, { deviceId: 'air', kind: 'purifier', command: { mode: 'sleep' } });
   expect(mocks.clients[0]!.controlDevice).toHaveBeenCalledWith('air', { mode: 'sleep' });
+});
+
+
+test('power estimate uses discovery and native reports but never optimistic command ACKs', async () => {
+  mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', online: true,
+    deviceState: { power: true, brightness: 50, lightMode: 'WHITE' } }];
+  const { platform, internal } = await fixture({ one: { powerSpec: { activeWatts: 10, standbyWatts: 0.1 } } });
+  const projected = () => internal.powerEstimates?.project(mocks.devices[0]!);
+  expect(projected()?.activePower).toBe(10000);
+  await platform.controlDevice('one', { power: false }, 'hap');
+  expect(projected()?.activePower).toBeNull();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'one', deviceState: { brightness: 80 } });
+  expect(projected()?.activePower).toBeNull();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'one', deviceState: { power: false } });
+  expect(projected()?.activePower).toBe(100);
+});
+
+test('discovery already in flight at command dispatch cannot resume manual energy estimation', async () => {
+  mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } }];
+  const { platform, internal } = await fixture({ one: { powerSpec: { activeWatts: 10, standbyWatts: 0.1 } } });
+  let resolve!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((done) => {
+    resolve = done;
+  }));
+  const discovery = internal.discoverDevices();
+  await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+  await platform.controlDevice('one', { power: false }, 'matter');
+  resolve(mocks.devices); await discovery;
+  expect(internal.powerEstimates?.project(mocks.devices[0]!)?.activePower).toBeNull();
+  await internal.discoverDevices();
+  expect(internal.powerEstimates.project(mocks.devices[0]!)?.activePower).toBe(10000);
+});
+
+test('estimation pauses across transport recovery and session loss and resumes only on a native power field', async () => {
+  mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } }];
+  const { internal, store } = await fixture({ one: { powerSpec: { activeWatts: 10 } } });
+  const projected = () => internal.powerEstimates?.project(mocks.devices[0]!);
+  expect(projected()?.activePower).toBe(10000);
+  mocks.realtime[0]!.events.onStatus?.('connect.closed');
+  expect(projected()?.activePower).toBeNull();
+  mocks.realtime[0]!.events.onStatus?.('connect.success');
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'one', deviceState: { brightness: 40 } });
+  expect(projected()?.activePower).toBeNull();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'one', deviceState: { power: true } });
+  expect(projected()?.activePower).toBe(10000);
+  await store.clear(); await internal.checkSessionAndInitialize();
+  expect(projected()?.activePower).toBeNull();
+});
+
+test('credential rotation restores the same account energy before new discovery without a downtime interval', async () => {
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
+  try {
+    mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } }];
+    const { internal, store, session } = await fixture({ one: { powerSpec: { activeWatts: 10 } } });
+    clock.mockReturnValue(3600); internal.refreshHealth();
+    expect(internal.powerEstimates?.project(mocks.devices[0]!)?.cumulativeEnergyImported).toBe(10);
+    await store.save({ ...session, accessToken: 'rotated' });
+    clock.mockReturnValue(99999999); await internal.checkSessionAndInitialize();
+    expect(internal.powerEstimates.project(mocks.devices[0]!)?.cumulativeEnergyImported).toBe(10);
+    await store.save({ ...session, identifier: 'different-account' });
+    await internal.checkSessionAndInitialize();
+    expect(internal.powerEstimates.project(mocks.devices[0]!)?.cumulativeEnergyImported).toBe(0);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+test('a session mismatch detected by a command immediately pauses estimation before the watcher runs', async () => {
+  mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } }];
+  const { platform, internal, store, session } = await fixture({ one: { powerSpec: { activeWatts: 10 } } });
+  expect(internal.powerEstimates.project(mocks.devices[0]!)?.activePower).toBe(10000);
+  await store.save({ ...session, accessToken: 'rotated-before-command' });
+  await expect(platform.controlDevice('one', { power: false }, 'hap')).rejects.toThrow('session changed');
+  expect(internal.powerEstimates.project(mocks.devices[0]!)?.activePower).toBeNull();
+});
+
+test('a native power patch received for a newly discovered device outranks the initial REST snapshot', async () => {
+  mocks.devices = [];
+  const { internal } = await fixture({ lamp: { powerSpec: { activeWatts: 10, standbyWatts: 0.1 } } });
+  const lamp: HejDevice = { id: 'lamp', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } };
+  let resolve!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((done) => {
+    resolve = done;
+  }));
+  const discovery = internal.discoverDevices();
+  await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'lamp', deviceState: { power: false } });
+  resolve([lamp]); await discovery;
+  expect(internal.powerEstimates.project(lamp)?.activePower).toBe(100);
+});
+
+test('optional energy storage failure cannot prevent native discovery or controls and recovers without fabricated totals', async () => {
+  mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } }];
+  const { platform, internal, store, session, dir } = await fixture({ one: { powerSpec: { activeWatts: 10 } } });
+  const { estimatedEnergyOwner } = await import('../src/storage/estimatedEnergyStore.js');
+  const account = 'unreadable-energy-account';
+  const target = path.join(dir, 'hejhome', `estimated-energy-${estimatedEnergyOwner(account)}.json`);
+  // A directory where the optional JSON file belongs deterministically causes EISDIR.
+  await fs.mkdir(target);
+  await store.save({ ...session, identifier: account });
+  await internal.checkSessionAndInitialize();
+  expect(mocks.clients).toHaveLength(2);
+  expect(platform.getDeviceHealth('one').reachable).toBe(true);
+  await expect(platform.controlDevice('one', { power: false }, 'hap')).resolves.toBeUndefined();
+  expect(internal.powerEstimates.project(mocks.devices[0]!)).toMatchObject({ activePower: null, cumulativeEnergyImported: null });
+  await fs.rmdir(target);
+  // The ordinary watcher retries only after its minute backoff.
+  await internal.checkSessionAndInitialize();
+  mocks.realtime[1]!.events.onDeviceUpdate({ id: 'one', deviceState: { power: true } });
+  expect(internal.powerEstimates.project(mocks.devices[0]!)?.activePower).toBeNull();
+  const wallTime = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60001);
+  try {
+    await internal.checkSessionAndInitialize();
+    mocks.realtime[1]!.events.onDeviceUpdate({ id: 'one', deviceState: { power: true } });
+    expect(internal.powerEstimates.project(mocks.devices[0]!)?.activePower).toBe(10000);
+  } finally {
+    wallTime.mockRestore();
+  }
+});
+
+test('a staged power report for a new device cannot cross a realtime disconnect during discovery', async () => {
+  mocks.devices = [];
+  const { internal } = await fixture({ lamp: { powerSpec: { activeWatts: 10, standbyWatts: 0.1 } } });
+  const lamp: HejDevice = { id: 'lamp', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } };
+  let resolve!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((done) => {
+    resolve = done;
+  }));
+  const discovery = internal.discoverDevices();
+  await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'lamp', deviceState: { power: false } });
+  mocks.realtime[0]!.events.onStatus?.('connect.closed');
+  mocks.realtime[0]!.events.onStatus?.('connect.success');
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'lamp', deviceState: { brightness: 80 } });
+  resolve([lamp]); await discovery;
+  expect(internal.powerEstimates.project(lamp)?.activePower).toBeNull();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'lamp', deviceState: { power: false } });
+  expect(internal.powerEstimates.project(lamp)?.activePower).toBe(100);
+});
+
+
+test('a changed account publishes its own stored energy immediately on an existing reachable Matter light', async () => {
+  mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50,
+    lightMode: 'COLOUR', hsvColor: { hue: 120, saturation: 50, brightness: 50 } } }];
+  const visible = new Map<string, Record<string, unknown>>();
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (value: string) => value },
+    registerPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn(), unregisterPlatformAccessories: vi.fn(),
+    updateAccessoryState: vi.fn(async (_uuid, cluster, attributes) => {
+      visible.set(cluster, attributes);
+    }) } as unknown as MatterAPI;
+  const { internal, store, session, dir } = await fixture({ one: { powerSpec: { activeWatts: 10 } } }, { mode: 'all' }, matter);
+  expect(visible.get('electricalEnergyMeasurement')?.cumulativeEnergyImported).toEqual({ energy: 0 });
+  const { EstimatedEnergyStore } = await import('../src/storage/estimatedEnergyStore.js');
+  await new EstimatedEnergyStore(dir).save('different-account', { one: 200 });
+  await store.save({ ...session, identifier: 'different-account' });
+  await internal.checkSessionAndInitialize();
+  expect(visible.get('bridgedDeviceBasicInformation')?.reachable).toBe(true);
+  expect(visible.get('electricalEnergyMeasurement')?.cumulativeEnergyImported).toEqual({ energy: 200 });
 });

@@ -20,6 +20,7 @@ import {
 import { sanitizeForLog } from '../dist/utils/redact.js';
 import { createSessionLogContext } from '../dist/utils/sessionDiagnostics.js';
 import { getDeviceCapability, supportsDeviceRole } from '../dist/devices/capabilities.js';
+import { MAX_POWER_ESTIMATE_WATTS, powerEstimateSupport } from '../dist/runtime/powerEstimates.js';
 
 class HejhomeUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -396,6 +397,9 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
           homekit: observed?.homekit ?? false,
           matter: observed?.matter ?? false,
           meterProfileApplied: features.meters.some((profile) => profile.model === device.modelName),
+          powerSpecEligibility: powerEstimateSupport(device),
+          powerEstimateMeterPriority: features.meters.some((profile) => profile.model === device.modelName
+            && Boolean(profile.power || profile.energy)),
           preference: features.devices?.[device.id] ?? {},
           inScope: Boolean(inScope),
           roleChangeSupported: supportsDeviceRole(device.deviceType),
@@ -746,14 +750,15 @@ class PowerSpecsError extends Error {
   constructor(code) {
     super(code === 'power-specs-conflict' ? '저장된 소비전력 사양이 변경되었습니다. 목록을 다시 확인해 주세요.'
       : code === 'power-specs-stale' ? '장비 목록이나 로그인 정보가 변경되었습니다. 목록을 다시 확인해 주세요.'
-        : '소비전력 사양은 0 이상의 숫자로 입력해 주세요.');
+        : '소비전력 사양은 0~1,000,000 W 사이의 숫자로 입력해 주세요. / Enter power specifications from 0 to 1,000,000 W.');
     this.code = code;
   }
 }
 
 function validatePowerSpecUpdates(payload) {
   const isObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
-  const watts = (value) => value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  const watts = (value) => value === null || (typeof value === 'number' && Number.isFinite(value)
+    && value >= 0 && value <= MAX_POWER_ESTIMATE_WATTS);
   if (!isObject(payload) || Object.keys(payload).some((key) => !['uiSessionRevision', 'updates'].includes(key))
     || typeof payload.uiSessionRevision !== 'string' || !payload.uiSessionRevision || !Array.isArray(payload.updates)
     || payload.updates.length === 0) {

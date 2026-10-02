@@ -6,7 +6,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { SessionStore, sessionFingerprint } from '../src/storage/sessionStore.js';
 
 type Diagnostics = { uiSessionRevision: string; deviceListAvailable: boolean;
-  devices: { id: string; preference: { powerSpec?: { activeWatts?: number; standbyWatts?: number } }; meterProfileApplied: boolean }[] };
+  devices: { id: string; preference: { powerSpec?: { activeWatts?: number; standbyWatts?: number } }; meterProfileApplied: boolean;
+    powerSpecEligibility: { supported: boolean; reason: string }; powerEstimateMeterPriority: boolean }[] };
 const bridge = vi.hoisted(() => ({ storage: '', config: '', instance: null as unknown,
   handlers: new Map<string, (payload: unknown) => Promise<unknown>>() }));
 vi.mock('@homebridge/plugin-ui-utils', () => ({
@@ -126,12 +127,42 @@ test('null clears one field or only powerSpec, preserving zero and other prefere
   expect((await read()).platforms[1].features.devices).not.toHaveProperty('second');
 });
 
-test.each([-1, NaN, Infinity, -Infinity, '20', '', true, {}, []])('rejects invalid numeric values atomically: %j', async (value) => {
-  const before = await fs.readFile(bridge.config, 'utf8');
-  for (const field of ['activeWatts', 'standbyWatts']) {
-    await expect(save([row('first'), { ...row('second'), [field]: value }])).rejects.toThrow();
+test.each([-1, 1_000_000.001, Number.MAX_VALUE, NaN, Infinity, -Infinity, '20', '', true, {}, []])(
+  'rejects invalid numeric values atomically: %j', async (value) => {
+    const before = await fs.readFile(bridge.config, 'utf8');
+    for (const field of ['activeWatts', 'standbyWatts']) {
+      await expect(save([row('first'), { ...row('second'), [field]: value }])).rejects.toThrow();
+    }
+    expect(await fs.readFile(bridge.config, 'utf8')).toBe(before);
+  },
+);
+
+test('diagnostics shares native estimate eligibility and separates measured priority without losing unsupported specifications', async () => {
+  const snapshotPath = path.join(directory, 'hejhome', 'devices-snapshot.json');
+  const snapshot = JSON.parse(await fs.readFile(snapshotPath, 'utf8'));
+  snapshot.families[0].devices.push(
+    { id: 'native-light', name: 'Light', deviceType: 'LightRgbw5' },
+    { id: 'single-switch', name: 'Single switch', deviceType: 'Switch1' },
+    { id: 'multi', name: 'Multiple loads', deviceType: 'Switch2' },
+    { id: 'ir', name: 'IR', deviceType: 'IrTv' },
+    { id: 'sensor', name: 'Sensor', deviceType: 'SensorTh' },
+    { id: 'curtain', name: 'Curtain', deviceType: 'Curtain' },
+  );
+  await fs.writeFile(snapshotPath, JSON.stringify(snapshot));
+  await save([row('multi', 25, 0), row('ir', 40, 1)]);
+  const diagnostics = await bridge.handlers.get('/diagnostics')!({}) as Diagnostics;
+  const find = (id: string) => diagnostics.devices.find((device) => device.id === id)!;
+  expect(find('first')).toMatchObject({ powerSpecEligibility: { supported: true }, powerEstimateMeterPriority: true });
+  expect(find('native-light')).toMatchObject({ powerSpecEligibility: { supported: true }, powerEstimateMeterPriority: false });
+  expect(find('single-switch').powerSpecEligibility.supported).toBe(true);
+  expect(find('multi')).toMatchObject({ powerSpecEligibility: { supported: false, reason: 'multiple-loads' },
+    preference: { powerSpec: { activeWatts: 25, standbyWatts: 0 } } });
+  for (const id of ['ir', 'sensor', 'curtain']) {
+    expect(find(id).powerSpecEligibility).toMatchObject({ supported: false, reason: 'unsupported-device' });
   }
-  expect(await fs.readFile(bridge.config, 'utf8')).toBe(before);
+  await save([row('multi', null, null, { activeWatts: 25, standbyWatts: 0 })]);
+  expect((await read()).platforms[1].features.devices.multi).toBeUndefined();
+  expect((await read()).platforms[1].features.devices.ir.powerSpec).toEqual({ activeWatts: 40, standbyWatts: 1 });
 });
 
 test('rejects unknown keys, missing fields, invalid expected values, and duplicate, unknown or out-of-scope IDs atomically', async () => {

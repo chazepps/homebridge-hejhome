@@ -16,13 +16,18 @@ test('manual power specs preserve zero, decimals, and independently absent field
   });
 });
 
-test.each([-1, NaN, Infinity, -Infinity, '20', '', true, null, [], {}])(
-  'manual power specs reject non-finite, negative, or nonnumeric watts: %j', (value) => {
+test.each([-1, 1_000_000.001, Number.MAX_VALUE, NaN, Infinity, -Infinity, '20', '', true, null, [], {}])(
+  'manual power specs reject out-of-range, non-finite, or nonnumeric watts: %j', (value) => {
     for (const field of ['activeWatts', 'standbyWatts']) {
       expect(() => normalizeFeatures({ devices: { plug: { powerSpec: { [field]: value } } } })).toThrow();
     }
   },
 );
+
+test('manual power specs accept the Matter conversion boundary', () => {
+  expect(normalizeFeatures({ devices: { plug: { powerSpec: { activeWatts: 1_000_000, standbyWatts: 0 } } } }).devices)
+    .toEqual({ plug: { powerSpec: { activeWatts: 1_000_000, standbyWatts: 0 } } });
+});
 
 test('manual power specs reject unknown keys and nonobjects without altering measured profiles', () => {
   for (const powerSpec of [{ activeWatts: 10, voltage: 220 }, [], null, 10, '10']) {

@@ -573,6 +573,9 @@
   #powerSpecsSave:hover:not(:disabled) { background: #315c43; }
   #powerSpecsListState:not(:empty) { margin-top: 14px; }
   .hej-power-unavailable { display: block; color: var(--hej-muted); font-size: 12px; margin-top: 6px; }
+  .hej-power-support { display: block; color: var(--hej-muted); font-size: 12px; line-height: 1.5; margin-top: 6px; }
+  .hej-power-guidance { color: var(--hej-muted); font-size: 13px; line-height: 1.7; margin-top: 14px; }
+  .hej-power-guidance p { margin: 6px 0; }
   #meterDetails summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
   #meterDetails summary::before { content: '▸'; }
   #meterDetails[open] summary::before { content: '▾'; }
@@ -768,6 +771,11 @@
     <section id="panel-meter" class="hej-section" aria-labelledby="powerSpecsTitle">
       <h2 id="powerSpecsTitle">소비전력 설정</h2>
       <p class="hej-muted">등록된 장치가 자동으로 표시됩니다. 필요한 장치의 전력값만 입력하세요.</p>
+      <div class="hej-power-guidance">
+        <p>입력한 W 사양과 확인된 전원 상태로 전력·누적 사용량을 추정합니다. 상태 미확인, 연결 끊김과 재시작 공백은 계산에서 제외합니다. 전력·전력량 실측 프로필이 있으면 실측을 우선합니다.</p>
+        <p id="powerSpecsMatterState" role="status"></p>
+        <p>Homebridge의 Matter 콘센트 타일은 W를 표시할 수 있습니다. 조명은 원래 종류를 유지하며 타일에 W가 보이지 않을 수 있습니다. Apple Home의 에너지 표시는 OS와 컨트롤러 지원에 따라 다릅니다.</p>
+      </div>
       <div id="powerSpecsScroll" class="hej-power-scroll" tabindex="0" aria-label="소비전력 설정 표 가로 스크롤">
         <table id="powerSpecTable" class="hej-power-table" aria-describedby="powerSpecsGuide">
           <thead><tr><th scope="col">장치</th>
@@ -779,7 +787,7 @@
       </div>
       <p id="powerSpecsListState" class="hej-muted" role="status">장치 목록을 불러오고 있습니다.</p>
       <div class="hej-power-footer">
-        <p id="powerSpecsGuide" class="hej-muted">소비전력은 사용 중, 대기전력은 대기 상태의 값입니다.<br>입력한 값만 저장합니다. 빈칸은 미설정이며, 0은 0 W로 저장됩니다.</p>
+        <p id="powerSpecsGuide" class="hej-muted">소비전력은 켜짐, 대기전력은 꺼짐 상태의 W 사양입니다. 입력 범위는 0~1,000,000 W입니다.<br>빈칸은 미설정이며, 0은 0 W로 저장됩니다. 추정 미지원 장치의 저장값도 유지되며, 비우고 저장하면 해제됩니다.</p>
         <button id="powerSpecsSave" class="hej-action" type="button" disabled>전력 설정 저장</button>
       </div>
       <p id="powerSpecsFeedback" class="hej-status" role="status"></p>
@@ -974,10 +982,14 @@
         'Registered devices appear automatically. Enter power values only for the devices you need.',
       '소비전력 (W)': 'Active power (W)', '대기전력 (W)': 'Standby power (W)',
       '전력 설정 저장': 'Save power settings', '장치 목록을 불러오고 있습니다.': 'Loading the device list.',
-      '소비전력은 사용 중, 대기전력은 대기 상태의 값입니다.':
-        'Active power is used during operation; standby power is used while idle.',
-      '입력한 값만 저장합니다. 빈칸은 미설정이며, 0은 0 W로 저장됩니다.':
-        'Only entered values are saved. Blank means unset; 0 is saved as 0 W.',
+      '소비전력은 켜짐, 대기전력은 꺼짐 상태의 W 사양입니다. 입력 범위는 0~1,000,000 W입니다.':
+        'Active watts apply when on; standby watts apply when off. Enter 0–1,000,000 W.',
+      '빈칸은 미설정이며, 0은 0 W로 저장됩니다. 추정 미지원 장치의 저장값도 유지되며, 비우고 저장하면 해제됩니다.':
+        'Blank means unset; 0 is saved as 0 W. Unsupported devices keep their saved values; clear a field and save to remove it.',
+      '입력한 W 사양과 확인된 전원 상태로 전력·누적 사용량을 추정합니다. 상태 미확인, 연결 끊김과 재시작 공백은 계산에서 제외합니다. 전력·전력량 실측 프로필이 있으면 실측을 우선합니다.':
+        'Power and cumulative energy are estimates from your watt specifications and confirmed power state. Unknown state, disconnections and restart gaps are excluded. Measured power or energy profiles take priority.',
+      'Homebridge의 Matter 콘센트 타일은 W를 표시할 수 있습니다. 조명은 원래 종류를 유지하며 타일에 W가 보이지 않을 수 있습니다. Apple Home의 에너지 표시는 OS와 컨트롤러 지원에 따라 다릅니다.':
+        'Homebridge Matter outlet tiles can show W. Lights keep their original type and may not show W on the tile. Apple Home energy display depends on OS and controller support.',
       '기존 측정 프로필의 모델·원본 항목·단위 배율을 편집합니다. 실제 측정 단위를 확인한 값만 저장하세요.':
         'Edit model names, source fields, and unit factors in existing measurement profiles. Save only values with confirmed measurement units.',
       'Apple Home는 기본 연결입니다. Matter를 켠 뒤 해당 브리지의 QR로 다른 앱에 연결해 주세요.': 'Apple Home is the default connection. Turn on Matter, then use the bridge QR code to connect other apps.',
@@ -1102,6 +1114,7 @@
 
   const powerSpecRows = new Map();
   const powerSpecFields = ['activeWatts', 'standbyWatts'];
+  const maxPowerSpecWatts = 1000000;
   let powerSpecOwnerRevision = null;
   let powerSpecListAvailable = false;
   let powerSpecSavePending = false;
@@ -1124,6 +1137,12 @@
       && !accountStatusLoading && !accountChangePending;
   }
   function updatePowerSpecControls() {
+    const matterEnabled = currentStatus?.features?.matter === true;
+    document.getElementById('powerSpecsMatterState').textContent = matterEnabled
+      ? tr('플러그인 Matter 설정이 켜져 있습니다. Homebridge 해당 브리지의 Matter도 켜고, 전력 사양을 저장한 뒤 Homebridge를 다시 시작하면 적용됩니다.',
+        'Plugin Matter is on. Enable Matter for this Homebridge bridge too, then save the watt specifications and restart Homebridge to apply them.')
+      : tr('플러그인 Matter 설정이 꺼져 있습니다. 연결 설정과 Homebridge 해당 브리지에서 Matter를 켜고, 전력 사양을 저장한 뒤 Homebridge를 다시 시작하면 적용됩니다.',
+        'Plugin Matter is off. Enable Matter in Connection settings and for this Homebridge bridge, then save the watt specifications and restart Homebridge to apply them.');
     const ready = powerSpecsCanSave();
     const unavailableDraft = [...powerSpecRows.values()].some((row) => !row.available && powerSpecIsDirty(row));
     powerSpecSave.disabled = !ready || powerSpecSavePending || unavailableDraft || !hasPowerSpecDrafts();
@@ -1165,17 +1184,18 @@
     const name = document.createElement('strong');
     const model = document.createElement('span'); model.className = 'hej-power-model';
     const unavailable = document.createElement('span'); unavailable.className = 'hej-power-unavailable';
-    deviceLabel.append(name, model); nameCell.append(deviceLabel, unavailable); element.append(nameCell);
-    Object.assign(row, { element, name, model, unavailable });
+    const support = document.createElement('span'); support.className = 'hej-power-support';
+    deviceLabel.append(name, model); nameCell.append(deviceLabel, support, unavailable); element.append(nameCell);
+    Object.assign(row, { element, name, model, support, unavailable });
     for (const field of powerSpecFields) {
       const cell = document.createElement('td');
       const input = document.createElement('input');
-      input.type = 'number'; input.min = '0'; input.step = 'any'; input.inputMode = 'decimal';
+      input.type = 'number'; input.min = '0'; input.max = String(maxPowerSpecWatts); input.step = 'any'; input.inputMode = 'decimal';
       input.autocomplete = 'off'; input.dataset.powerField = field;
       input.addEventListener('input', () => {
         row.draft[field] = input.value;
         row.invalid[field] = input.validity.badInput || (input.value !== ''
-          && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0));
+          && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0 || Number(input.value) > maxPowerSpecWatts));
         input.setAttribute('aria-invalid', String(row.invalid[field]));
         row.edit++;
         if (!powerSpecSavePending) {
@@ -1220,6 +1240,15 @@
       row.model.textContent = device.modelName || '';
       row.model.title = device.modelName || '';
       row.model.hidden = !device.modelName;
+      row.support.textContent = device.powerEstimateMeterPriority === true
+        ? tr('실측 프로필 우선 · 사양 추정 미사용', 'Measured profile takes priority · estimates unused')
+        : device.powerSpecEligibility?.supported === true
+          ? tr('추정 지원 · 확인된 전원 상태 기준', 'Estimate supported · confirmed power state required')
+          : device.powerSpecEligibility?.supported === false
+            ? device.powerSpecEligibility.reason === 'multiple-loads'
+              ? tr('추정 미지원 · 여러 부하', 'Unsupported estimate · multiple loads')
+              : tr('추정 미지원 · 장치 종류', 'Unsupported estimate · device type')
+            : tr('추정 지원 여부 확인 필요', 'Estimate support unconfirmed');
       row.unavailable.textContent = '';
       row.element.removeAttribute('data-unavailable');
       const isFocused = powerSpecFields.some((field) => document.activeElement === row.inputs[field]);
@@ -1257,9 +1286,9 @@
     if (!changed.length || changed.some((row) => !row.available)) return;
     const invalid = changed.flatMap((row) => powerSpecFields.map((field) => ({ row, field })))
       .find(({ row, field }) => row.invalid[field] || (row.draft[field] !== ''
-        && (!Number.isFinite(Number(row.draft[field])) || Number(row.draft[field]) < 0)));
+        && (!Number.isFinite(Number(row.draft[field])) || Number(row.draft[field]) < 0 || Number(row.draft[field]) > maxPowerSpecWatts)));
     if (invalid) {
-      powerSpecFeedback.textContent = tr('0 이상의 유한한 숫자를 입력하거나 빈칸으로 두세요.', 'Enter a finite number of 0 or greater, or leave the field blank.');
+      powerSpecFeedback.textContent = tr('0~1,000,000 W 사이의 숫자를 입력하거나 빈칸으로 두세요.', 'Enter a number from 0 to 1,000,000 W, or leave the field blank.');
       powerSpecFeedback.classList.add('is-visible');
       invalid.row.inputs[invalid.field].focus();
       return;
@@ -1303,7 +1332,8 @@
       powerSpecFeedback.textContent = hasPowerSpecDrafts()
         ? tr('전력 설정을 저장했습니다. 저장 중 추가한 변경사항은 아직 저장되지 않았습니다.',
           'Power settings saved. Changes made while saving are still unsaved.')
-        : tr('전력 설정을 저장했습니다.', 'Power settings saved.');
+        : tr('전력 설정을 저장했습니다. Matter를 켜고 Homebridge를 다시 시작하면 적용됩니다.',
+          'Power settings saved. Enable Matter and restart Homebridge to apply them.');
       void refreshDiagnostics();
     } catch (error) {
       if (ownerRevision !== uiSessionRevision || powerSpecOwnerRevision !== ownerRevision || accountChangePending

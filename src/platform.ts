@@ -11,6 +11,8 @@ import type { HejDevice, HejFamily, HejhomePlatformConfig, HejSession } from './
 import { sanitizeForLog } from './utils/redact.js';
 import { createSessionLogContext } from './utils/sessionDiagnostics.js';
 import { StateObservations } from './runtime/observations.js';
+import { PowerEstimates } from './runtime/powerEstimates.js';
+import { EstimatedEnergyStore, estimatedEnergyOwner } from './storage/estimatedEnergyStore.js';
 import { RuntimeCommandServer, type RuntimeCommandRequest } from './runtime/commands.js';
 import { createIrRemoteRequirements } from './media/irRemoteCommands.js';
 import { getDeviceCapability } from './devices/capabilities.js';
@@ -43,6 +45,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private initialized = false;
   private readonly devices = new Map<string, HejDevice>();
   private readonly observations = new StateObservations();
+  private readonly powerEstimates: PowerEstimates;
   private readonly matterSettlements = new Map<string, ReturnType<typeof setImmediate>>();
   private readonly health: RuntimeHealth;
   private readonly statusStore: RuntimeStatusStore;
@@ -50,6 +53,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private readonly controls = new Map<string, { at: string; success: boolean }>();
   private connection: RuntimeStatus['connection'] = { session: 'unknown', realtime: 'unknown' };
   private sessionFingerprint = '';
+  private powerSessionVerified = false;
+  private energyAccountRetry: { identifier: string; at: number } | null = null;
   private inventoryOwnerFingerprint = '';
   private generation = 0;
   private sessionChecking = false;
@@ -74,6 +79,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   ) {
     this.features = normalizeFeatures(config.features);
     this.health = new RuntimeHealth(() => Date.now(), this.features);
+    this.powerEstimates = new PowerEstimates(this.features.devices ?? {}, this.features.meters,
+      new EstimatedEnergyStore(api.user.storagePath(), (error) => this.warn('power-estimates.invalid-history', { error: error.message })),
+      (error) => this.warn('power-estimates.persistence-failed', { error: String(error) }));
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
     this.logStore = new LogStore(api.user.storagePath());
@@ -84,7 +92,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
     if (api.matter) {
       this.matter = new MatterAdapter(api.matter, (id, requirements) => this.controlDevice(id, requirements, 'matter'),
-        this.features.meters, (error) => this.warn('matter.update.failed', { error: String(error) }), this.features.devices ?? {});
+        this.features.meters, (error) => this.warn('matter.update.failed', { error: String(error) }), this.features.devices ?? {},
+        (device) => this.powerEstimates.project(device));
     } else if (this.features.matter) {
       this.warn('matter.disabled-on-bridge', { message: 'Enable Matter for this bridge in Homebridge UI and restart.' });
     }
@@ -97,6 +106,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
     this.api.on('shutdown', () => {
       this.stopping = true;
+      this.powerEstimates.setConnected(false);
       this.generation++;
       this.cancelMatterSettlements();
       this.cancelDiscoveryRetry();
@@ -109,7 +119,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       for (const handler of this.accessoryHandlers.values()) {
         handler.dispose('shutdown');
       }
-      return Promise.all([this.commandServer.stop(), this.statusStore.flush()]).catch((error) => this.warn('runtime.status.failed', { error: String(error) }));
+      return Promise.all([this.commandServer.stop(), this.statusStore.flush(), this.powerEstimates.flush()])
+        .catch((error) => this.warn('runtime.status.failed', { error: String(error) }));
     });
   }
 
@@ -146,6 +157,12 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       }
       const observedAtDispatch = this.observations.capture(id);
       try {
+        // A command ACK is not a new physical power observation. Pause before dispatch.
+        this.powerEstimates.suspend(id);
+        const currentDevice = this.devices.get(id)!;
+        if (this.matterVisible(id)) {
+          void this.matter?.update(this.matterDevice(currentDevice)).catch((error) => this.warn('matter.update.failed', { error: String(error) }));
+        }
         await this.client.controlDevice(id, requirements);
         if ((this.initialized && !await this.currentSessionMatches()) || generation !== this.generation) {
           throw new Error('Hejhome session changed. Try again.');
@@ -206,7 +223,12 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
   private async currentSessionMatches(): Promise<boolean> {
     const session = await this.sessionStore.load();
-    return !!session && sessionFingerprint(session) === this.sessionFingerprint;
+    const matches = !!session && sessionFingerprint(session) === this.sessionFingerprint;
+    if (!matches) {
+      this.powerSessionVerified = false;
+      this.powerEstimates.setConnected(false);
+    }
+    return matches;
   }
 
   public async controlRemoteButton(id: string, command: unknown, signal?: AbortSignal): Promise<void> {
@@ -337,6 +359,18 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.persistStatus();
   }
 
+  private async loadPowerAccount(identifier: string): Promise<void> {
+    try {
+      await this.powerEstimates.loadAccount(identifier);
+      this.energyAccountRetry = null;
+    } catch (error) {
+      // Optional estimation storage must never prevent native session recovery.
+      // The estimator hides all totals until the same account loads successfully.
+      this.energyAccountRetry = { identifier, at: Date.now() + 60000 };
+      this.warn('power-estimates.history-unavailable', { error: String(error), retryInMs: 60000 });
+    }
+  }
+
   private async replaceSession(session: HejSession): Promise<void> {
     const generation = ++this.generation;
     this.cancelMatterSettlements();
@@ -348,6 +382,12 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.cancelDiscoveryRetry();
     this.realtime?.disconnect();
     this.client?.dispose();
+    await this.loadPowerAccount(session.identifier);
+    if (generation !== this.generation || this.stopping) {
+      return;
+    }
+    this.matter?.setElectricalAccount(estimatedEnergyOwner(session.identifier));
+    this.powerSessionVerified = true;
     this.sessionFingerprint = sessionFingerprint(session);
     this.connection = { session: session.expiresAt <= Date.now() ? 'expired' : 'unknown', realtime: 'connecting' };
     this.receivedConnection = false;
@@ -365,7 +405,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
           this.connection.session = 'valid';
         }
         this.info('rest.request', event);
-        this.persistStatus();
+        this.refreshHealth();
       },
     });
     for (const handler of this.accessoryHandlers.values()) {
@@ -446,6 +486,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     const client = this.client;
     const generation = this.generation;
     const ownerFingerprint = this.sessionFingerprint;
+    const powerObservationStarted = this.powerEstimates.capture();
     if (!client || this.stopping) {
       return;
     }
@@ -471,16 +512,25 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     if (!await this.currentSessionMatches() || generation !== this.generation || this.stopping) {
       return;
     }
-    const devices = snapshotFamilies.flatMap((family) => family.devices).map((device) => {
+    const discovered = snapshotFamilies.flatMap((family) => family.devices);
+    const devices = discovered.map((device) => {
       const patch = patches.get(device.id);
       return { ...device, ...patch, name: this.features.devices?.[device.id]?.name ?? device.name,
         deviceState: { ...device.deviceState, ...this.freshReportedState(device), ...patch?.deviceState } };
     });
     const ids = new Set(devices.map((device) => device.id));
     for (const device of devices) {
+      const newlyDiscovered = !this.devices.has(device.id);
       this.observations.record(device.id, device.deviceState ?? {});
       this.devices.set(device.id, device);
       this.health.observe(device, 'snapshot');
+      const observed = discovered.find((entry) => entry.id === device.id)!;
+      this.powerEstimates.observe(device, observed.deviceState ?? {}, powerObservationStarted);
+      if (newlyDiscovered && patches.get(device.id)?.deviceState) {
+        // Unknown devices cannot be commanded yet; a report staged during their
+        // first discovery is newer than that discovery snapshot.
+        this.powerEstimates.observe(device, patches.get(device.id)!.deviceState!);
+      }
       this.verifiedDevices.add(device.id);
       if (!this.homekitVisible(device.id)) {
         continue;
@@ -522,6 +572,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       }
     }
     this.health.retain(ids);
+    this.powerEstimates.retain(ids);
     try {
       await this.matter?.reconcile(devices.filter((device) => this.matterVisible(device.id)).map((device) => this.matterDevice(device)));
     } catch (error) {
@@ -600,6 +651,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     // Only the received patch refreshes per-field timestamps, never the merged snapshot.
     this.health.observe({ ...next, deviceState: devicePatch.deviceState ?? {} }, 'realtime');
     this.accessoryHandlers.get(this.api.hap.uuid.generate(next.id))?.observeExternal(devicePatch.deviceState ?? {});
+    this.powerEstimates.observe(next, devicePatch.deviceState ?? {});
     this.applyDevice(next, 'external');
     for (const dependent of this.devices.values()) {
       if (dependent.id !== next.id && this.features.devices?.[dependent.id]?.temperatureSensorId === next.id) {
@@ -680,11 +732,13 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       this.receivedConnection = true;
     } else if (event === 'connect.closed' || event === 'disconnect' || event === 'connect.error' || event === 'subscribe.error') {
       this.connection.realtime = 'disconnected';
+      this.discoveryPatches?.clear();
       this.reportedStates.clear();
       this.reportedAt.clear();
       this.health.invalidateMeasurements();
     } else if (event === 'connect.reconnect' || event === 'connect.start') {
       this.connection.realtime = 'connecting';
+      this.discoveryPatches?.clear();
     }
     if (previous !== this.connection.realtime) {
       this.refreshHealth();
@@ -692,6 +746,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private refreshHealth(): void {
+    this.powerEstimates.setConnected(!this.stopping && this.powerSessionVerified && this.connection.realtime === 'connected'
+      && this.connection.session !== 'missing' && this.connection.session !== 'expired');
+    this.powerEstimates.tick();
     for (const device of this.devices.values()) {
       this.accessoryHandlers.get(this.api.hap.uuid.generate(device.id))?.updateDevice(device);
       if (this.matterVisible(device.id)) {
@@ -749,6 +806,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         return;
       }
       if (!session?.accessToken) {
+        this.powerSessionVerified = false;
+        this.energyAccountRetry = null;
+        this.powerEstimates.setConnected(false);
         if (this.initialized) {
           this.generation++;
           this.cancelMatterSettlements();
@@ -768,6 +828,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         this.connection = { session: 'missing', realtime: 'disconnected' };
       } else if (sessionFingerprint(session) !== this.sessionFingerprint) {
         await this.replaceSession(session);
+      }
+      if (this.initialized && this.energyAccountRetry && Date.now() >= this.energyAccountRetry.at) {
+        await this.loadPowerAccount(this.energyAccountRetry.identifier);
       }
       if (this.initialized && !this.discoveryRunning && Date.now() - this.lastDiscoveryAt >= 300000) {
         this.scheduleDiscovery(0);

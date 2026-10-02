@@ -6,7 +6,8 @@ import { calibratePm25 } from '../devices/airQuality.js';
 import { whiteMiredToTemperaturePercent, whiteTemperaturePercentToMired } from '../lighting/temperature.js';
 import type { MeterProfile } from '../features.js';
 import type { HejDevice } from '../types.js';
-import { meterClusters } from './metering.js';
+import { meterClusters, estimateClusters } from './metering.js';
+import type { EstimatedElectricalState } from '../runtime/powerEstimates.js';
 
 type MatterAccessoryPart = NonNullable<MatterAccessory['parts']>[number];
 type Send = (requirements: Record<string, unknown>) => Promise<void>;
@@ -167,6 +168,7 @@ export function createMatterAccessory(
   api: MatterAPI, current: () => HejDevice, send: Send, meters: MeterProfile[],
   dimmer = new MatterDimmingController(),
   pm25Multiplier?: number,
+  estimate?: EstimatedElectricalState,
 ): MatterAccessory | null {
   const device = current();
   const kind = getDeviceCapability(device.deviceType)?.serviceKind;
@@ -434,6 +436,7 @@ export function createMatterAccessory(
   if (kind === 'outlet' || kind === 'power-strip') {
     Object.assign(clusters, meterClusters(device, meters));
   }
+  Object.assign(clusters, estimateClusters(device, meters, estimate));
   accessory.handlers = handlers;
   return accessory;
 }

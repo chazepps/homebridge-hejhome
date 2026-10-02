@@ -137,19 +137,21 @@
                 },
                 "powerSpec": {
                   "title": "소비전력 사양 / Power specifications",
-                  "description": "사용자가 입력한 사양이며 실시간 측정값이 아닙니다. / User-entered specifications, not live measurements.",
+                  "description": "입력한 W 사양과 확인된 전원 상태로 Matter 전력·사용량을 추정합니다. 저장 후 Matter를 켜고 Homebridge를 다시 시작하세요. / Estimate Matter power and energy from entered watts and confirmed power state. Enable Matter and restart Homebridge after saving.",
                   "type": "object",
                   "additionalProperties": false,
                   "properties": {
                     "activeWatts": {
                       "title": "동작 소비전력 (W) / Active power (W)",
                       "type": "number",
-                      "minimum": 0
+                      "minimum": 0,
+                      "maximum": 1000000
                     },
                     "standbyWatts": {
                       "title": "대기전력 (W) / Standby power (W)",
                       "type": "number",
-                      "minimum": 0
+                      "minimum": 0,
+                      "maximum": 1000000
                     }
                   }
                 }
