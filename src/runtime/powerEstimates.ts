@@ -58,6 +58,8 @@ export class PowerEstimates {
 
   async loadAccount(identifier: string): Promise<void> {
     this.ready = false;
+    // Account changes invalidate old evidence even if transport was already down.
+    this.globalBarrier = ++this.revision;
     this.setConnected(false);
     await this.flush();
     const totals = await this.store.load(identifier);
@@ -75,7 +77,7 @@ export class PowerEstimates {
   }
 
   setConnected(connected: boolean): void {
-    if (!connected) {
+    if (!connected && this.connected) {
       for (const id of this.states.keys()) {
         this.suspend(id);
       }

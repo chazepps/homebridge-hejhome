@@ -15,9 +15,17 @@ import type { HejRealtimeEvents } from '../src/hej/realtime.js';
 const mocks = vi.hoisted(() => ({ clients: [] as Array<Record<string, ReturnType<typeof vi.fn>>>,
   realtime: [] as Array<{ events: HejRealtimeEvents; disconnect: ReturnType<typeof vi.fn> }>,
   loggers: [] as Array<(event: HejRestLogEvent) => void>,
-  families: [{ familyId: 1, name: 'Home' }], devices: [] as HejDevice[], fail: false }));
+  families: [{ familyId: 1, name: 'Home' }], devices: [] as HejDevice[], fail: false, connectDuringDiscovery: false }));
 vi.mock('../src/hej/rest.js', () => ({ HejRestClient: class {
-  getFamilies = vi.fn(async () => mocks.families);
+  getFamilies = vi.fn(async () => {
+    if (mocks.connectDuringDiscovery) {
+      // Production order: REST start is logged while MQTT is still connecting.
+      mocks.loggers.at(-1)?.({ path: 'dashboard/family', method: 'GET', status: 'start' });
+      mocks.realtime.at(-1)?.events.onStatus?.('connect.success');
+      mocks.loggers.at(-1)?.({ path: 'dashboard/family', method: 'GET', status: 'success', httpStatus: 200 });
+    }
+    return mocks.families;
+  });
   getDevices = vi.fn(async (family: number) => {
     if (mocks.fail && family === 2) {
       throw new Error('family unavailable');
@@ -35,7 +43,7 @@ vi.mock('../src/storage/logStore.js', () => ({ LogStore: class {
   append = vi.fn(async () => undefined);
 } }));
 vi.mock('../src/hej/realtime.js', () => ({ HejRealtimeClient: class {
-  disconnect = vi.fn(); connect = vi.fn(() => this.events.onStatus?.('connect.success'));
+  disconnect = vi.fn(); connect = vi.fn(() => this.events.onStatus?.(mocks.connectDuringDiscovery ? 'connect.start' : 'connect.success'));
   constructor(public session: HejSession, public events: HejRealtimeEvents) {
     mocks.realtime.push(this);
   }
@@ -45,7 +53,7 @@ import { SessionStore } from '../src/storage/sessionStore.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 beforeEach(() => {
-  mocks.clients.length = 0; mocks.loggers.length = 0; mocks.realtime.length = 0; mocks.fail = false;
+  mocks.clients.length = 0; mocks.loggers.length = 0; mocks.realtime.length = 0; mocks.fail = false; mocks.connectDuringDiscovery = false;
   mocks.families = [{ familyId: 1, name: 'Home' }]; mocks.devices = [device('one')];
 });
 afterEach(async () => {
@@ -863,4 +871,12 @@ test('a changed account publishes its own stored energy immediately on an existi
   await internal.checkSessionAndInitialize();
   expect(visible.get('bridgedDeviceBasicInformation')?.reachable).toBe(true);
   expect(visible.get('electricalEnergyMeasurement')?.cumulativeEnergyImported).toEqual({ energy: 200 });
+});
+
+
+test('REST logging while MQTT connects does not invalidate a fresh startup discovery power report', async () => {
+  mocks.connectDuringDiscovery = true;
+  mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } }];
+  const { internal } = await fixture({ one: { powerSpec: { activeWatts: 10 } } });
+  expect(internal.powerEstimates.project(mocks.devices[0]!)?.activePower).toBe(10000);
 });

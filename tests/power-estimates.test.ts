@@ -220,3 +220,27 @@ test('an account-load I/O failure hides previous-owner energy while keeping the 
   expect(engine.project(lamp())?.cumulativeEnergyImported).toBe(10);
   expect(await store.load('owner-a')).toMatchObject({ lamp: 10 });
 });
+
+
+test('repeated disconnected health reads preserve a discovery begun after the actual disconnect', async () => {
+  const { engine } = await fixture();
+  engine.setConnected(false);
+  const started = engine.capture();
+  engine.setConnected(false);
+  engine.setConnected(false);
+  engine.setConnected(true);
+  engine.observe(lamp(), { power: true }, started);
+  expect(engine.project(lamp())?.activePower).toBe(10000);
+});
+
+test('account replacement still invalidates pending evidence when transport was already disconnected', async () => {
+  const { engine } = await fixture();
+  engine.setConnected(false);
+  const oldAccount = engine.capture();
+  await engine.loadAccount('owner-b');
+  engine.setConnected(true);
+  engine.observe(lamp(), { power: true }, oldAccount);
+  expect(engine.project(lamp())?.activePower).toBeNull();
+  engine.observe(lamp(), { power: true });
+  expect(engine.project(lamp())?.activePower).toBe(10000);
+});
