@@ -3,10 +3,7 @@
         "name": "Homebridge Test",
         "username": "0E:AA:EE:00:00:01",
         "port": 51826,
-        "pin": "031-45-154",
-        "bind": [
-            "en0"
-        ]
+        "pin": "031-45-154"
     },
     "accessories": [],
     "platforms": [

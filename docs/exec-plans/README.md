@@ -7,4 +7,3 @@ New plans should include scope, official gates, test plan, release impact, and r
 ## Feature Expansion
 
 - [Homebridge 기능 확장 액션 체크리스트](2026-09-30-homebridge-feature-action-checklist.md): 우선순위, 선행 증거, 구현·테스트·실기 작업, 완료 조건, 베타 출시 게이트.
-- [기존 운영 안정화 계획](2026-05-28-production-hardening-and-device-expansion.md): 이전 작업의 배경과 완료 기록.

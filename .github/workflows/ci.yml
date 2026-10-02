@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - codex/hejhome-2.1.0-beta
+      - codex/hejhome-3.0.0-beta
   pull_request:
 
 permissions:

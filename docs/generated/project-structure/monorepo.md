@@ -15,20 +15,15 @@ Generated from the current repository tree. Generated project-structure snapshot
 ├── ARCHITECTURE.md
 ├── branding
 │   ├── icon.png
-│   ├── logo.png
-│   └── screenshots
-│       ├── hejhome-plugin-login.png
-│       └── hejhome-plugin-settings.png
+│   └── logo.png
 ├── config.schema.json
 ├── docs
 │   ├── api
 │   │   └── README.md
 │   ├── design-docs
-│   │   ├── beta-ui-redesign-brief.md
 │   │   └── README.md
 │   ├── DESIGN.md
 │   ├── exec-plans
-│   │   ├── 2026-05-28-production-hardening-and-device-expansion.md
 │   │   ├── 2026-09-30-homebridge-feature-action-checklist.md
 │   │   └── README.md
 │   ├── FRONTEND.md
@@ -163,7 +158,6 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── discovery-scope.test.ts
 │   ├── docs-harness.test.ts
 │   ├── fixtures
-│   │   ├── czmm-capability-inventory-20260930.json
 │   │   └── pi-devices-snapshot.json
 │   ├── hap-lifecycle.test.ts
 │   ├── hap-media-review.test.ts

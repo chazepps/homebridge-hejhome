@@ -4,7 +4,7 @@
 
 상태: 3.0.0-beta.1 출시 후보. 2.1.0-beta.1에서 수행한 기능 구현·검증 결과를 이어받고 버전과 사용자 문서를 갱신했다. 체크한 작업만 완료이며, 실기·공급자 계약·호스트 알파 제한이 남은 항목은 열린 상태로 유지한다.
 
-대상: `@chazepps/homebridge-hejhome`, `codex/hejhome-2.1.0-beta`
+대상: `@chazepps/homebridge-hejhome` 3.0 베타, `codex/hejhome-3.0.0-beta`
 
 기준 구현: `edbf64a` / `2.1.0-beta.0`
 
