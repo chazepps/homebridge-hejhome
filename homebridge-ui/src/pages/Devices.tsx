@@ -86,7 +86,14 @@ export default function Devices() {
       && deviceNeedsAttention(device, app.fresh && app.ready && app.diagnostics?.deviceListAvailable === true,
         app.diagnostics?.connection?.session, app.status?.features?.matter === true) : true);
   });
-  const current = selection ? scoped.find((device) => device.id === selection.id) : undefined;
+  const current = selection && app.diagnostics?.deviceListAvailable === true
+    ? devices.find((device) => device.id === selection.id) : undefined;
+  useEffect(() => {
+    if (current) {
+      // Keep the last authoritative snapshot if a later refresh no longer contains this device.
+      setSelection(current);
+    }
+  }, [current]);
   const selected = current ?? selection;
   const afterLayout = (generation: number, action: () => void) => {
     requestAnimationFrame(() => {
@@ -160,7 +167,7 @@ export default function Devices() {
             : app.status?.configured ? t('연결 설정에서 가져올 집과 방을 확인해 주세요.', 'Choose homes and rooms in Connections.')
               : t('로그인하면 장치 목록을 확인할 수 있습니다.', 'Sign in to see your devices.')}</Text></div>}
       </div>
-      {selected && <DeviceInspector key={selected.id} device={selected} available={Boolean(current) && app.diagnostics?.deviceListAvailable === true}
+      {selected && <DeviceInspector key={selected.id} device={selected} available={current?.inScope === true}
         onClose={closeInspector} saved={saved.has(selected.id)} onSaved={() => setSaved((previous) => new Set(previous).add(selected.id))}
         command={commands[selected.id] ?? emptyCommandState} updateCommand={(patch) => setCommands((previous) => ({
           ...previous, [selected.id]: { ...(previous[selected.id] ?? emptyCommandState), ...patch },

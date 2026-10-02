@@ -4,6 +4,7 @@ import { HejRestClient } from './hej/rest.js';
 import { HejRealtimeClient } from './hej/realtime.js';
 import { HejhomePlatformAccessory, mergeDeviceState } from './platformAccessory.js';
 import { resolveDiscoveryScope } from './discovery/scope.js';
+import { RealtimeDiscoveryHints } from './discovery/realtimeHints.js';
 import { DeviceSnapshotStore } from './storage/deviceSnapshotStore.js';
 import { LogStore, type LogLevel } from './storage/logStore.js';
 import { SessionStore, sessionFingerprint } from './storage/sessionStore.js';
@@ -25,6 +26,13 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 import { normalizeFeatures, type FeatureOptions } from './features.js';
 import { MatterAdapter } from './matter/adapter.js';
+
+interface DiscoveryPatch {
+  state: NonNullable<HejDevice['deviceState']>;
+  receivedAt: Map<string, number>;
+  online: boolean | undefined;
+  onlineAt: number;
+}
 
 export class HejhomePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -60,6 +68,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private sessionChecking = false;
   private discoveryRunning: Promise<void> | null = null;
   private discoveryRetry: ReturnType<typeof setTimeout> | null = null;
+  private scheduledDiscoveryHintOnly = false;
+  private discoveryNotBefore = 0;
+  private readonly discoveryHints = new RealtimeDiscoveryHints();
   private retryDelay = 5000;
   private lastDiscoveryAt = 0;
   private receivedConnection = false;
@@ -67,7 +78,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private readonly verifiedDevices = new Set<string>();
   private readonly reportedAt = new Map<string, Map<string, number>>();
   private readonly reportedStates = new Map<string, NonNullable<HejDevice['deviceState']>>();
-  private discoveryPatches: Map<string, Partial<HejDevice>> | null = null;
+  private discoveryPatches: Map<string, DiscoveryPatch> | null = null;
   private initializing = false;
   private localPublicationsPruned = false;
   private sessionWatchTimer: ReturnType<typeof setInterval> | null = null;
@@ -439,39 +450,64 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     await this.refreshDiscovery();
   }
 
-  private async refreshDiscovery(): Promise<void> {
+  private async refreshDiscovery(hintOnly = false): Promise<void> {
     if (this.stopping) {
       return;
     }
     if (this.discoveryRunning) {
-      this.rediscoveryPending = true;
+      this.rediscoveryPending ||= !hintOnly;
       return;
+    }
+    if (hintOnly && !this.discoveryHints.hasPending) {
+      return;
+    }
+    if (Date.now() < this.discoveryNotBefore) {
+      this.scheduleDiscovery(0, hintOnly);
+      return;
+    }
+    if (this.discoveryRetry) {
+      clearTimeout(this.discoveryRetry);
+      this.discoveryRetry = null;
+    }
+    const hintCount = this.discoveryHints.beginPass();
+    if (hintCount) {
+      this.debug('discovery.realtime-hints', { count: hintCount });
     }
     const generation = this.generation;
     const work = this.discoverDevices();
     this.discoveryRunning = work;
+    let failed = false;
     try {
       await work;
-      this.retryDelay = 5000;
+      if (generation === this.generation) {
+        this.retryDelay = 5000;
+        this.discoveryNotBefore = 0;
+      }
     } catch (error) {
       if (generation === this.generation && !this.stopping) {
+        failed = true;
         this.warn('discovery.failed', { error: String(error), retryInMs: this.retryDelay });
-        this.scheduleDiscovery(this.retryDelay);
+        this.discoveryNotBefore = Date.now() + this.retryDelay;
         this.retryDelay = Math.min(this.retryDelay * 2, 60000);
       }
     } finally {
       if (this.discoveryRunning === work) {
         this.discoveryRunning = null;
-        if (this.rediscoveryPending && generation === this.generation && !this.stopping) {
+        if (generation === this.generation && !this.stopping) {
+          const pending = this.rediscoveryPending;
           this.rediscoveryPending = false;
-          this.scheduleDiscovery(1000);
+          if (failed || pending) {
+            this.scheduleDiscovery(failed ? 0 : 1000);
+          } else if (this.discoveryHints.hasPending) {
+            this.scheduleDiscovery(1000, true);
+          }
         }
       }
     }
   }
 
   private async discoverDevices(): Promise<void> {
-    const patches = new Map<string, Partial<HejDevice>>();
+    const patches = new Map<string, DiscoveryPatch>();
     this.discoveryPatches = patches;
     try {
       await this.collectAndApplyDiscovery(patches);
@@ -482,7 +518,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     }
   }
 
-  private async collectAndApplyDiscovery(patches: Map<string, Partial<HejDevice>>): Promise<void> {
+  private async collectAndApplyDiscovery(patches: Map<string, DiscoveryPatch>): Promise<void> {
     const client = this.client;
     const generation = this.generation;
     const ownerFingerprint = this.sessionFingerprint;
@@ -513,23 +549,25 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       return;
     }
     const discovered = snapshotFamilies.flatMap((family) => family.devices);
+    const freshPatches = new Map(discovered.map((device) => [device.id, this.freshDiscoveryPatch(device, patches.get(device.id))]));
     const devices = discovered.map((device) => {
-      const patch = patches.get(device.id);
+      const patch = freshPatches.get(device.id);
       return { ...device, ...patch, name: this.features.devices?.[device.id]?.name ?? device.name,
         deviceState: { ...device.deviceState, ...this.freshReportedState(device), ...patch?.deviceState } };
     });
     const ids = new Set(devices.map((device) => device.id));
+    this.discoveryHints.confirm(ids);
     for (const device of devices) {
-      const newlyDiscovered = !this.devices.has(device.id);
+      const newlyDiscovered = !this.verifiedDevices.has(device.id);
       this.observations.record(device.id, device.deviceState ?? {});
       this.devices.set(device.id, device);
       this.health.observe(device, 'snapshot');
       const observed = discovered.find((entry) => entry.id === device.id)!;
       this.powerEstimates.observe(device, observed.deviceState ?? {}, powerObservationStarted);
-      if (newlyDiscovered && patches.get(device.id)?.deviceState) {
+      if (newlyDiscovered && freshPatches.get(device.id)?.deviceState) {
         // Unknown devices cannot be commanded yet; a report staged during their
         // first discovery is newer than that discovery snapshot.
-        this.powerEstimates.observe(device, patches.get(device.id)!.deviceState!);
+        this.powerEstimates.observe(device, freshPatches.get(device.id)!.deviceState!);
       }
       this.verifiedDevices.add(device.id);
       if (!this.homekitVisible(device.id)) {
@@ -625,28 +663,40 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private handleRealtimeDeviceUpdate(devicePatch: Partial<HejDevice> & { id: string }): void {
     if (this.discoveryPatches) {
       const previous = this.discoveryPatches.get(devicePatch.id);
-      this.discoveryPatches.set(devicePatch.id, { ...previous,
-        ...(Object.keys(devicePatch.deviceState ?? {}).length > 0 ? { online: true } : {}), ...devicePatch,
-        deviceState: { ...previous?.deviceState, ...devicePatch.deviceState } });
+      if (!previous && !this.verifiedDevices.has(devicePatch.id)) {
+        // Verified reports protect live state from the in-flight REST snapshot;
+        // unknown-ID noise may only evict other unverified reports.
+        const unverifiedIds = [...this.discoveryPatches.keys()].filter((id) => !this.verifiedDevices.has(id));
+        for (let index = 0; index <= unverifiedIds.length - 256; index++) {
+          this.discoveryPatches.delete(unverifiedIds[index]!);
+        }
+      }
+      const now = Date.now();
+      const receivedAt = previous?.receivedAt ?? new Map<string, number>();
+      for (const key of Object.keys(devicePatch.deviceState ?? {})) {
+        receivedAt.set(key, now);
+      }
+      const online = devicePatch.online ?? (Object.keys(devicePatch.deviceState ?? {}).length ? true : undefined);
+      this.discoveryPatches.set(devicePatch.id, { state: { ...previous?.state, ...devicePatch.deviceState }, receivedAt,
+        online: online ?? previous?.online, onlineAt: online === undefined ? previous?.onlineAt ?? 0 : now });
     }
     const current = this.devices.get(devicePatch.id);
-    if (!current) {
-      this.scheduleDiscovery(1000);
+    if (!current || !this.verifiedDevices.has(devicePatch.id)) {
+      if (this.discoveryHints.add(devicePatch.id)) {
+        this.scheduleDiscovery(1000, true);
+      }
       return;
     }
     this.observations.record(devicePatch.id, devicePatch.deviceState ?? {});
     const liveReport = Object.keys(devicePatch.deviceState ?? {}).length > 0;
-    if (liveReport || devicePatch.online === true) {
-      this.verifiedDevices.add(devicePatch.id);
-    }
     const timestamps = this.reportedAt.get(devicePatch.id) ?? new Map<string, number>();
     for (const key of Object.keys(devicePatch.deviceState ?? {})) {
       timestamps.set(key, Date.now());
     }
     this.reportedAt.set(devicePatch.id, timestamps);
     this.reportedStates.set(devicePatch.id, { ...this.reportedStates.get(devicePatch.id), ...devicePatch.deviceState });
-    const next = mergeDeviceState({ ...current, ...devicePatch,
-      ...(liveReport && devicePatch.online === undefined ? { online: true } : {}), deviceState: current.deviceState ?? {} },
+    const next = mergeDeviceState({ ...current,
+      ...(devicePatch.online !== undefined ? { online: devicePatch.online } : liveReport ? { online: true } : {}) },
     devicePatch.deviceState ?? {});
     // Only the received patch refreshes per-field timestamps, never the merged snapshot.
     this.health.observe({ ...next, deviceState: devicePatch.deviceState ?? {} }, 'realtime');
@@ -658,6 +708,19 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         this.applyDevice(dependent, 'external');
       }
     }
+  }
+
+  private freshDiscoveryPatch(device: HejDevice, patch: DiscoveryPatch | undefined): Partial<HejDevice> {
+    if (!patch) {
+      return {};
+    }
+    const verified = this.verifiedDevices.has(device.id);
+    const fresh = (at: number) => Date.now() >= at && Date.now() - at <= 5000;
+    const state = Object.fromEntries(Object.entries(patch.state)
+      .filter(([key]) => verified || fresh(patch.receivedAt.get(key) ?? 0)));
+    // Short-lived buffered values may outrank a concurrent snapshot, but applying
+    // them as a snapshot never refreshes physical measurement timestamps.
+    return { deviceState: state, ...(patch.online !== undefined && (verified || fresh(patch.onlineAt)) ? { online: patch.online } : {}) };
   }
 
   private freshReportedState(device: HejDevice): NonNullable<HejDevice['deviceState']> {
@@ -758,19 +821,32 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.persistStatus();
   }
 
-  private scheduleDiscovery(delay: number): void {
-    if (this.stopping || this.discoveryRetry) {
+  private scheduleDiscovery(delay: number, hintOnly = false): void {
+    if (this.stopping) {
       return;
     }
+    if (this.discoveryRunning) {
+      this.rediscoveryPending ||= !hintOnly;
+      return;
+    }
+    if (this.discoveryRetry) {
+      this.scheduledDiscoveryHintOnly &&= hintOnly;
+      return;
+    }
+    this.scheduledDiscoveryHintOnly = hintOnly;
     this.discoveryRetry = setTimeout(() => {
       this.discoveryRetry = null;
-      void this.refreshDiscovery();
-    }, Math.max(delay, 5000 - (Date.now() - this.lastDiscoveryAt)));
+      void this.refreshDiscovery(this.scheduledDiscoveryHintOnly);
+    }, Math.max(delay, this.lastDiscoveryAt + 5000 - Date.now(), this.discoveryNotBefore - Date.now(),
+      hintOnly ? this.discoveryHints.nextScanAt - Date.now() : 0));
     this.discoveryRetry.unref?.();
   }
 
   private cancelDiscoveryRetry(): void {
     this.rediscoveryPending = false;
+    this.discoveryNotBefore = 0;
+    this.discoveryHints.clear();
+    this.discoveryPatches?.clear();
     if (this.discoveryRetry) {
       clearTimeout(this.discoveryRetry);
       this.discoveryRetry = null;

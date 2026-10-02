@@ -26,7 +26,7 @@ export interface Device {
   [key: string]: unknown;
 }
 export interface Diagnostics {
-  uiSessionRevision?: string | null; generatedAt?: string | null; updatedAt?: string | null;
+  uiSessionRevision?: string | null; settingsRevision?: string | null; generatedAt?: string | null; updatedAt?: string | null;
   controlsAvailable?: boolean; deviceListAvailable?: boolean; connection?: { session?: string; realtime?: string };
   devices: Device[];
 }

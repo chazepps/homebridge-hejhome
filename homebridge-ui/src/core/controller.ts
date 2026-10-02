@@ -1,5 +1,5 @@
 import { DraftStore } from './drafts.js';
-import type { AppSnapshot, ConfirmOptions, Diagnostics, Features, HomebridgeHost, RequestOptions, Scope, SessionStatus } from './types.js';
+import type { AppSnapshot, ConfirmOptions, DevicePreference, Diagnostics, Features, HomebridgeHost, RequestOptions, Scope, SessionStatus } from './types.js';
 
 export class StaleAccountError extends Error {
   constructor() {
@@ -29,10 +29,19 @@ export class AppController {
   private diagnosticsOutstanding = 0;
   private diagnosticsRetryAt = 0;
   private diagnosticsGeneration = 0;
+  private diagnosticsFlight: { epoch: number; promise: Promise<void> } | null = null;
   private statusGeneration = 0;
+  private statusOutstanding = 0;
+  private statusRetryAt = 0;
+  private statusVersion = 0;
+  private statusFlight: { epoch: number; version: number; promise: Promise<SessionStatus> } | null = null;
+  private inventoryAt: string | null | undefined;
+  private settingsRevision: string | null | undefined;
+  private statusRefreshNeeded = false;
   private pendingStatus: SessionStatus | null = null;
   private mutations = new Set<string>();
   private loginGeneration = 0;
+  private activeLogin: { observedRevision: string | null; status: SessionStatus | null } | null = null;
   private requestEpoch = 0;
   private accountResetPending = false;
   private paused = false;
@@ -91,16 +100,26 @@ export class AppController {
   private clearDrafts() {
     this.drafts.forEach((draft) => draft.invalidate()); this.drafts.clear(); this.dirty.clear();
   }
-  private bumpEpoch() {
-    this.statusGeneration++; this.diagnosticsGeneration++; this.loginGeneration++;
+  private bumpEpoch(preserveLogin = false) {
+    this.statusGeneration++; this.diagnosticsGeneration++;
+    if (!preserveLogin) {
+      this.loginGeneration++; this.activeLogin = null;
+    }
     this.requestEpoch++;
+    this.statusRetryAt = 0; this.diagnosticsRetryAt = 0;
+    this.inventoryAt = undefined; this.settingsRevision = undefined; this.statusRefreshNeeded = false;
     this.accountResetPending = true;
-    this.publish({ diagnostics: null, busy: false, hapCache: new Set(), matterCache: new Set() });
+    this.publish({ diagnostics: null, busy: preserveLogin && this.snapshot.busy, hapCache: new Set(), matterCache: new Set() });
   }
-  private applyStatus(status: SessionStatus, returnToSettings = false) {
+  private applyStatus(status: SessionStatus, returnToSettings = false, preserveLogin = false) {
     const revision = status.uiSessionRevision ?? null;
     if (this.snapshot.revision && revision && revision !== this.snapshot.revision) {
-      this.bumpEpoch();
+      if (this.activeLogin && !preserveLogin) {
+        this.activeLogin.observedRevision = revision;
+        this.activeLogin.status = status;
+        return;
+      }
+      this.bumpEpoch(preserveLogin);
       this.pendingStatus = status;
       if (this.dirty.size) {
         this.publish({ revision, accountChangePending: true, phase: 'settings',
@@ -114,11 +133,24 @@ export class AppController {
       this.publish({ accountEpoch: this.snapshot.accountEpoch + 1 });
     }
     const phase = status.configured ? 'settings' : 'login';
+    if (this.inventoryAt === undefined && (typeof status.deviceSummary?.generatedAt === 'string' || status.deviceSummary?.generatedAt === null)) {
+      this.inventoryAt = status.deviceSummary.generatedAt;
+    }
+    if (typeof status.settingsRevision === 'string') {
+      this.settingsRevision = status.settingsRevision;
+    }
+    this.pendingStatus = null;
+    if (status.sessionCheckStatus === 'error') {
+      this.deferStatusVerification();
+    }
     this.publish({ status, revision, error: '', accountChangePending: false,
       phase: !returnToSettings && this.snapshot.phase === 'login' && status.configured ? 'login' : phase });
   }
   initialize = async () => {
     this.host.disableSaveButton?.(); this.host.hideSpinner?.();
+    // Startup retry is an explicit user action; automatic refreshes retain backoff.
+    // readStatus still coalesces the active flight and caps unsettled raw requests.
+    this.statusRetryAt = 0;
     this.publish({ phase: 'initializing', error: '' });
     await this.updateAppearance();
     await this.refreshStatus();
@@ -145,32 +177,95 @@ export class AppController {
     }
     return response as T;
   };
-  refreshStatus = async () => {
-    const generation = ++this.statusGeneration;
-    try {
-      const status = await this.request<SessionStatus>('/session-status');
-      if (generation !== this.statusGeneration) {
-        return;
+  private readStatus(): Promise<SessionStatus> {
+    const epoch = this.requestEpoch;
+    const version = this.statusVersion;
+    if (this.statusFlight?.epoch === epoch && this.statusFlight.version === version) {
+      return this.statusFlight.promise;
+    }
+    if (Date.now() < this.statusRetryAt || this.statusOutstanding >= 2) {
+      return Promise.reject(new Error('Session status retry is waiting for an available request slot'));
+    }
+    this.statusOutstanding++;
+    const raw = Promise.resolve().then(() => this.host.request('/session-status', {}));
+    void raw.finally(() => {
+      this.statusOutstanding--;
+    }).catch(() => undefined);
+    const promise = withDeadline(raw, 10000, 'Session status timeout').then((response) => {
+      if (epoch !== this.requestEpoch || version !== this.statusVersion) {
+        throw new StaleAccountError();
       }
+      const status = response as SessionStatus;
       if (!status || typeof status.configured !== 'boolean') {
         throw new Error('Invalid session response');
       }
+      this.statusRetryAt = 0;
+      return status;
+    }).catch((error: unknown) => {
+      if (epoch === this.requestEpoch && !(error instanceof StaleAccountError)) {
+        this.statusRetryAt = Date.now() + 30000;
+      }
+      throw error;
+    }).finally(() => {
+      if (this.statusFlight?.promise === promise) {
+        this.statusFlight = null;
+      }
+    });
+    this.statusFlight = { epoch, version, promise };
+    return promise;
+  }
+  private deferStatusVerification() {
+    this.statusRefreshNeeded = true;
+    this.statusRetryAt = Date.now() + 30000;
+  }
+  refreshStatus = async () => {
+    const generation = ++this.statusGeneration;
+    const inventoryAt = this.inventoryAt;
+    const settingsRevision = this.settingsRevision;
+    try {
+      const status = await this.readStatus();
+      if (generation !== this.statusGeneration) {
+        return;
+      }
       if (this.snapshot.accountChangePending && status.uiSessionRevision === this.snapshot.revision) {
-        this.pendingStatus = status; return;
+        this.pendingStatus = status;
+        if (status.sessionCheckStatus === 'error') {
+          this.deferStatusVerification();
+        } else if (inventoryAt === this.inventoryAt && settingsRevision === this.settingsRevision) {
+          this.statusRefreshNeeded = false;
+        }
+        return;
       }
       this.applyStatus(status);
+      if (status.sessionCheckStatus !== 'error' && inventoryAt === this.inventoryAt && settingsRevision === this.settingsRevision) {
+        this.statusRefreshNeeded = false;
+      }
     } catch (error) {
       if (generation !== this.statusGeneration || error instanceof StaleAccountError) {
         return;
       }
+      this.statusRefreshNeeded = true;
       const message = this.t('로그인 상태를 확인하지 못했어요. 기존 설정은 그대로입니다. 다시 확인해 주세요.',
         'Could not check sign-in. Existing settings remain. Please check again.');
       this.publish({ error: message, phase: this.snapshot.status ? this.snapshot.phase : 'error',
         status: this.snapshot.status ? { ...this.snapshot.status, sessionValid: false, sessionCheckStatus: 'error' } : null });
     }
   };
-  refreshDiagnostics = async () => {
-    if (this.paused || this.snapshot.phase !== 'settings' || this.snapshot.accountChangePending || Date.now() < this.diagnosticsRetryAt) {
+  refreshDiagnostics = (): Promise<void> => {
+    const epoch = this.requestEpoch;
+    if (this.diagnosticsFlight?.epoch === epoch) {
+      return this.diagnosticsFlight.promise;
+    }
+    const flight = this.readDiagnostics().finally(() => {
+      if (this.diagnosticsFlight?.promise === flight) {
+        this.diagnosticsFlight = null;
+      }
+    });
+    this.diagnosticsFlight = { epoch, promise: flight };
+    return flight;
+  };
+  private readDiagnostics = async () => {
+    if (this.paused || !['settings', 'login'].includes(this.snapshot.phase) || Date.now() < this.diagnosticsRetryAt) {
       return;
     }
     if (this.diagnosticsOutstanding >= 2) {
@@ -194,6 +289,13 @@ export class AppController {
         throw new Error('Invalid diagnostics response');
       }
       if (diagnostics.uiSessionRevision && diagnostics.uiSessionRevision !== this.snapshot.revision) {
+        if (this.activeLogin) {
+          this.activeLogin.observedRevision = diagnostics.uiSessionRevision;
+          if (this.activeLogin.status?.uiSessionRevision !== diagnostics.uiSessionRevision) {
+            await this.refreshStatus();
+          }
+          return;
+        }
         // Fence writes immediately; the slower status route establishes the new account's settings.
         this.bumpEpoch();
         this.publish({ revision: diagnostics.uiSessionRevision, accountChangePending: this.dirty.size > 0,
@@ -203,9 +305,26 @@ export class AppController {
       if (!diagnostics.uiSessionRevision || diagnostics.uiSessionRevision !== this.snapshot.revision) {
         throw new Error('Missing diagnostics owner');
       }
+      const inventoryAt = diagnostics.generatedAt ?? null;
+      const settingsRevision = diagnostics.settingsRevision ?? null;
+      if (this.inventoryAt !== undefined && inventoryAt !== this.inventoryAt
+        || this.settingsRevision !== undefined && settingsRevision !== this.settingsRevision) {
+        this.statusRefreshNeeded = true;
+      }
+      this.inventoryAt = inventoryAt;
+      this.settingsRevision = settingsRevision;
+      if (this.snapshot.accountChangePending || this.accountResetPending) {
+        if (this.pendingStatus?.uiSessionRevision !== this.snapshot.revision || this.statusRefreshNeeded) {
+          await this.refreshStatus();
+        }
+        return;
+      }
       this.diagnosticsRetryAt = 0;
       this.publish({ diagnostics, notice: '' });
       void this.refreshCaches(epoch, generation);
+      if (this.statusRefreshNeeded) {
+        await this.refreshStatus();
+      }
     } catch (error) {
       if (generation !== this.diagnosticsGeneration || epoch !== this.requestEpoch) {
         return;
@@ -250,7 +369,7 @@ export class AppController {
     if (epoch !== this.requestEpoch) {
       throw new StaleAccountError();
     }
-    this.diagnosticsGeneration++; this.statusGeneration++;
+    this.diagnosticsGeneration++; this.statusGeneration++; this.statusVersion++;
     this.reconcile(path, body, response);
     return response as T;
   };
@@ -268,32 +387,76 @@ export class AppController {
         scopeEditToken: result.scopeEditToken as string | null,
         ...((result.scopeOptions ?? status.scopeOptions)
           ? { scopeOptions: (result.scopeOptions ?? status.scopeOptions) as NonNullable<SessionStatus['scopeOptions']> } : {}) } });
+    } else if (path === '/save-power-specs' && result.uiSessionRevision === this.snapshot.revision && Array.isArray(result.powerSpecs)) {
+      const preferences = { ...status?.features?.devices };
+      const acknowledged = new Map<string, DevicePreference>();
+      for (const spec of result.powerSpecs as Array<{ deviceId: string; activeWatts: number | null; standbyWatts: number | null }>) {
+        const previous = this.snapshot.diagnostics?.devices.find((device) => device.id === spec.deviceId)?.preference;
+        const preference = { ...preferences[spec.deviceId], ...previous };
+        delete preference.powerSpec;
+        if (spec.activeWatts !== null || spec.standbyWatts !== null) {
+          preference.powerSpec = { ...(spec.activeWatts !== null ? { activeWatts: spec.activeWatts } : {}),
+            ...(spec.standbyWatts !== null ? { standbyWatts: spec.standbyWatts } : {}) };
+        }
+        preferences[spec.deviceId] = preference;
+        acknowledged.set(spec.deviceId, preference);
+      }
+      this.publish({ status: status ? { ...status, features: { ...status.features, devices: preferences } } : null,
+        diagnostics: this.snapshot.diagnostics ? { ...this.snapshot.diagnostics,
+          devices: this.snapshot.diagnostics.devices.map((device) => acknowledged.has(device.id)
+            ? { ...device, preference: acknowledged.get(device.id)! } : device) } : null });
     } else if (path === '/save-device-settings' && result.preference) {
       const id = String(payload.deviceId);
-      this.publish({ diagnostics: this.snapshot.diagnostics ? { ...this.snapshot.diagnostics,
+      // /save-device-settings returns the complete saved preference, including powerSpec deletion.
+      const preference = result.preference as DevicePreference;
+      this.publish({ status: status ? { ...status, features: { ...status.features,
+        devices: { ...status.features?.devices, [id]: preference } } } : null,
+      diagnostics: this.snapshot.diagnostics ? { ...this.snapshot.diagnostics,
         devices: this.snapshot.diagnostics.devices.map((device) => device.id === id
-          ? { ...device, preference: { ...result.preference as object, ...(device.preference?.powerSpec ? { powerSpec: device.preference.powerSpec } : {}) } }
+          ? { ...device, preference }
           : device) } : null });
     }
   }
   beginLogin = () => {
-    this.loginGeneration++; this.diagnosticsGeneration++; this.publish({ phase: 'login', error: '' });
+    this.loginGeneration++; this.activeLogin = null; this.diagnosticsGeneration++; this.publish({ phase: 'login', error: '' });
   };
   login = async (identifier: string, password: string) => {
     const generation = ++this.loginGeneration;
-    this.publish({ busy: true });
+    const fromRevision = this.snapshot.revision;
+    const attempt = { observedRevision: null as string | null, status: null as SessionStatus | null };
+    this.activeLogin = attempt;
+    this.publish({ busy: true, phase: 'login' });
     try {
-      await this.request('/login', { identifier, password, autoLogin: true }, { timeoutMs: 45000 });
+      const ack = await this.request<{ uiSessionRevision?: string }>('/login', { identifier, password, autoLogin: true }, { timeoutMs: 45000 });
       if (generation !== this.loginGeneration) {
         throw new StaleAccountError();
       }
-      const status = await this.request<SessionStatus>('/session-status');
+      this.statusGeneration++; this.statusVersion++; this.statusRetryAt = 0;
+      // Only this login's server ACK authorizes crossing the account revision fence.
+      const revision = ack.uiSessionRevision ?? fromRevision;
+      if (attempt.observedRevision && attempt.observedRevision !== revision) {
+        throw new StaleAccountError();
+      }
+      const status = attempt.status?.uiSessionRevision === revision ? attempt.status : await this.readStatus();
       if (generation !== this.loginGeneration) {
         throw new StaleAccountError();
       }
-      this.applyStatus(status, true);
+      if (status.uiSessionRevision !== revision || attempt.observedRevision && attempt.observedRevision !== revision) {
+        attempt.status = status;
+        throw new StaleAccountError();
+      }
+      this.applyStatus(status, true, true);
       this.notify('success', this.t('Hejhome 로그인이 저장되었습니다.', 'Hejhome sign-in saved.'));
+    } catch (error) {
+      if (generation === this.loginGeneration && attempt.status) {
+        this.activeLogin = null;
+        this.applyStatus(attempt.status);
+      }
+      throw error;
     } finally {
+      if (this.activeLogin === attempt) {
+        this.activeLogin = null;
+      }
       if (generation === this.loginGeneration) {
         this.publish({ busy: false });
       }

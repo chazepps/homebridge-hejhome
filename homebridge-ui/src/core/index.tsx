@@ -52,7 +52,7 @@ export function AppProvider({ children, host }: PropsWithChildren<{ host?: Homeb
       if (document.hidden) {
         return;
       }
-      void controller.refreshStatus().then(controller.refreshDiagnostics);
+      void controller.refreshDiagnostics();
     };
     const stop = () => {
       controller.setPaused(true);

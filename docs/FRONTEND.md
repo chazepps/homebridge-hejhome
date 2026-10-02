@@ -26,6 +26,10 @@ stateDiagram-v2
 
 Password input is disabled until code verification succeeds. Login is disabled until password input contains a value. Auto-login remains the authentication behavior and is explained in the UI.
 
+The login acknowledgement carries `uiSessionRevision`. A revision observed during sign-in is accepted only when it matches the acknowledgement for that attempt; a foreign account transition still fences pending work. Explicit startup retries bypass automatic status backoff while retaining the raw request limit.
+
+Runtime status events refresh local diagnostics rather than the cloud account/room listing. `generatedAt` identifies inventory changes, and `settingsRevision` is an opaque digest of saved scope/features; it remains stable across ordinary runtime updates. A changed inventory, configuration or account triggers a coalesced session-status refresh. Both status and diagnostic requests keep at most two unresolved raw requests, with one current flight and a 30-second failure backoff.
+
 ## Test Anchors
 
 - `tests/ui/login-ui.spec.ts` verifies iframe restrictions, field state, and request order.
@@ -36,6 +40,8 @@ Password input is disabled until code verification succeeds. Login is disabled u
 ## 3.0 beta customer settings
 
 Device settings use stable device identifiers. Drafts, focus, and selection survive status updates and destination/inspector navigation; saved changes apply only after the relevant server response. Scope edits require the server's current account and edit token, and old account responses cannot replace the current view. A dirty scope draft retains the scope/list version it started from: a concurrent saved change blocks saving until the user explicitly loads the latest settings. Partial discovery never discards the current room choices. Host language and lighting mode select Korean/English and light/dark presentation. Connections holds the account, discovery scope, Matter, and adaptive lighting settings. Power holds device power specifications and the separate expert editor for actual meter mappings. Help holds diagnostics, privacy-safe exports, and support information with technical details behind disclosure controls. Cache presence is never described as completed pairing. Actual meter mappings remain editable as expert JSON and are independent of manual power specifications. UI controls use the runtime command channel and distinguish an acknowledged command from confirmed physical behavior. See the beta guide for supported remote buttons and platform limits.
+
+Discarding a device draft adopts the latest authoritative settings received while editing. An unavailable device retains its latest confirmed snapshot and draft but cannot be edited or saved until it returns. A stored measurement-validity value remains visible and explicitly clearable if its measurement profile was removed. Power acknowledgements update the shared diagnostics and feature preferences together, so a later device-name acknowledgement cannot restore an old watt value.
 
 ## Manual power specifications
 

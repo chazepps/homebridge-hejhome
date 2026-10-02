@@ -455,6 +455,11 @@ test('two unsettled diagnostics requests stay capped after UI timeouts and resum
   });
   await publishStatus(page);
   await publishStatus(page);
+  await expect.poll(() => page.evaluate(() => window.__hejHost.pending.filter((item) => item.route === '/diagnostics').length)).toBe(1);
+  // Concurrent refreshes share a flight. A second raw request starts only after timeout and backoff.
+  await page.clock.fastForward(10001);
+  await page.clock.fastForward(30001);
+  await publishStatus(page);
   await expect.poll(() => page.evaluate(() => window.__hejHost.pending.filter((item) => item.route === '/diagnostics').length)).toBe(2);
   await page.clock.runFor(10001);
   await page.clock.runFor(60000);

@@ -78,7 +78,7 @@ async function fixture(preferences?: Record<string, unknown>, scope: NonNullable
   const platform = new HejhomePlatform(log, { platform: 'Hejhome', scope,
     features: { ...(preferences ? { devices: preferences } : {}), ...(matter ? { matter: true } : {}) } } as never, api);
   const internal = platform as unknown as { initialize(): Promise<void>; discoverDevices(): Promise<void>;
-    discoveryRunning: Promise<void> | null; checkSessionAndInitialize(): Promise<void>;
+    discoveryRunning: Promise<void> | null; refreshDiscovery(): Promise<void>; checkSessionAndInitialize(): Promise<void>;
     initializing: boolean; sessionChecking: boolean; powerEstimates: PowerEstimates; refreshHealth(): void; statusStore: { flush(): Promise<void> } };
   cleanup.push(async () => {
     const shutdown = listeners.get('shutdown')?.();
@@ -305,7 +305,8 @@ test('session replacement quarantines cached ownership until the new session ver
   await expect(platform.controlDevice('one', { power: false }, 'hap')).rejects.toThrow();
   expect(mocks.clients[1]!.controlDevice).not.toHaveBeenCalled();
   mocks.realtime[1]!.events.onDeviceUpdate({ id: 'one', deviceState: { power: true } });
-  expect(platform.getDeviceHealth('one').reachable).toBe(true);
+  expect(platform.getDeviceHealth('one').reachable).toBe(false);
+  await expect(platform.controlDevice('one', { power: false }, 'hap')).rejects.toThrow('no longer available');
 });
 
 test('an earlier MQTT report remains authoritative over an untimestamped REST snapshot', async () => {
@@ -879,4 +880,248 @@ test('REST logging while MQTT connects does not invalidate a fresh startup disco
   mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } }];
   const { internal } = await fixture({ one: { powerSpec: { activeWatts: 10 } } });
   expect(internal.powerEstimates.project(mocks.devices[0]!)?.activePower).toBe(10000);
+});
+
+
+test('unresolved realtime hints coalesce and never repeatedly scan or starve a new device', async () => {
+  const { platform, internal } = await fixture();
+  vi.useFakeTimers();
+  const emit = (id: string) => mocks.realtime[0]!.events.onDeviceUpdate({ id, deviceState: { power: true } });
+  for (let i = 0; i < 1000; i++) {
+    emit('outside-scope');
+  }
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(2);
+  for (let i = 0; i < 12; i++) {
+    emit('outside-scope');
+    await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  }
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(2);
+  mocks.devices.push(device('new'));
+  emit('new');
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  expect([...platform.accessories.values()].map((entry) => entry.context.device.id)).toContain('new');
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(3);
+});
+
+test('unknown-ID floods are globally bounded and still discover the latest new device', async () => {
+  const { platform, internal } = await fixture();
+  vi.useFakeTimers();
+  for (let round = 0; round < 6; round++) {
+    for (let id = 0; id < 1200; id++) {
+      mocks.realtime[0]!.events.onDeviceUpdate({ id: `noise-${round}-${id}`, deviceState: { power: true } });
+    }
+    if (round === 5) {
+      mocks.devices.push(device('genuine'));
+      mocks.realtime[0]!.events.onDeviceUpdate({ id: 'genuine', deviceState: { power: true } });
+    }
+    await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  }
+  expect(mocks.clients[0]!.getFamilies.mock.calls.length).toBeLessThanOrEqual(3);
+  await vi.advanceTimersByTimeAsync(30000); await internal.discoveryRunning;
+  expect([...platform.accessories.values()].map((entry) => entry.context.device.id)).toContain('genuine');
+});
+
+test('realtime hints cannot shorten discovery exponential backoff even when queued during a failing pass', async () => {
+  const { internal } = await fixture();
+  vi.useFakeTimers();
+  mocks.clients[0]!.getFamilies!.mockRejectedValue(new Error('provider offline'));
+  await internal.refreshDiscovery();
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning?.catch(() => undefined);
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(3);
+  await vi.advanceTimersByTimeAsync(10000); await internal.discoveryRunning?.catch(() => undefined);
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(4);
+  let reject!: (error: Error) => void;
+  mocks.clients[0]!.getFamilies!.mockImplementationOnce(() => new Promise((_resolve, fail) => {
+    reject = fail;
+  }));
+  await vi.advanceTimersByTimeAsync(20000);
+  expect(reject).toBeTypeOf('function');
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'new', deviceState: { power: true } });
+  reject(new Error('provider offline')); await internal.discoveryRunning?.catch(() => undefined);
+  await vi.advanceTimersByTimeAsync(39999); await internal.discoveryRunning?.catch(() => undefined);
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(5);
+  await vi.advanceTimersByTimeAsync(1); await internal.discoveryRunning?.catch(() => undefined);
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(6);
+});
+
+test('cached but unverified realtime IDs require REST scope verification before control', async () => {
+  const { platform, internal, api } = await fixture();
+  const cached = new api.platformAccessory('Cached', api.hap.uuid.generate('cached'));
+  cached.context.device = device('cached'); platform.configureAccessory(cached);
+  vi.useFakeTimers();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'cached', deviceState: { power: false } });
+  expect(platform.getDeviceHealth('cached').reachable).toBe(false);
+  await expect(platform.controlDevice('cached', { power: true }, 'hap')).rejects.toThrow('no longer available');
+  mocks.devices.push(device('cached'));
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  expect(platform.accessories.get(cached.UUID)).toBe(cached);
+  await expect(platform.controlDevice('cached', { power: true }, 'hap')).resolves.toBeUndefined();
+});
+
+test('unknown realtime metadata cannot override REST identity or bypass configured publication preferences', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (value: string) => value },
+    registerPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn(), unregisterPlatformAccessories: vi.fn(),
+    updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { platform, internal, api } = await fixture({ new: { name: 'Preferred name' }, hidden: { visibility: 'hidden' },
+    hap: { visibility: 'homekit' }, matter: { visibility: 'matter' } }, { mode: 'all' }, matter);
+  vi.useFakeTimers();
+  let release!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((resolve) => {
+    release = resolve;
+  }));
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'new', deviceState: { power: true } });
+  await vi.advanceTimersByTimeAsync(5000);
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'new', name: 'Unverified', deviceType: 'UnknownRobot', modelName: 'unverified',
+    deviceState: { power: false } });
+  release([device('one'), { ...device('new'), modelName: 'confirmed' }, device('hidden'), device('hap'), device('matter')]);
+  await internal.discoveryRunning;
+  const added = platform.accessories.get(api.hap.uuid.generate('new'))!;
+  expect(added).toBeDefined();
+  expect(added.context.device).toMatchObject({ name: 'Preferred name', deviceType: 'ZigbeeSwitch1', modelName: 'confirmed' });
+  expect([...platform.accessories.values()].map((entry) => entry.context.device.id).sort()).toEqual(['hap', 'new', 'one']);
+  const published = vi.mocked(matter.registerPlatformAccessories).mock.calls.flatMap((call) => call[2].map((entry) => entry.UUID));
+  expect(published.sort()).toEqual(['hejhome:matter:matter', 'hejhome:matter:new', 'hejhome:matter:one']);
+  await vi.advanceTimersByTimeAsync(60000); await internal.discoveryRunning;
+  expect(vi.mocked(api.registerPlatformAccessories).mock.calls.flatMap((call) => call[2]).filter((entry) => entry.UUID === added.UUID)).toHaveLength(1);
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(2);
+});
+
+test('a slow discovery does not revive an old unverified power patch when another field updates later', async () => {
+  mocks.devices = [];
+  const { platform, internal } = await fixture({ lamp: { powerSpec: { activeWatts: 10, standbyWatts: 0.1 } } });
+  vi.useFakeTimers();
+  const lamp: HejDevice = { id: 'lamp', name: 'Lamp', deviceType: 'LightRgbw5', deviceState: { power: true, brightness: 50 } };
+  let release!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((resolve) => {
+    release = resolve;
+  }));
+  const discovery = internal.refreshDiscovery();
+  await Promise.resolve();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'lamp', deviceState: { power: false } });
+  await vi.advanceTimersByTimeAsync(6000);
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'lamp', deviceState: { brightness: 80 } });
+  release([lamp]); await discovery;
+  expect(internal.powerEstimates.project(lamp)?.activePower).toBe(10000);
+  expect(platform.accessories.get(platform.api.hap.uuid.generate('lamp'))?.context.device.deviceState.power).toBe(true);
+});
+
+test('hint discovery honors family and room scope and leaves unsupported models diagnostic-only', async () => {
+  const { platform, internal } = await fixture(undefined,
+    { mode: 'custom', includedFamilyIds: [1], includedRoomsByFamilyId: { '1': [11] } });
+  vi.useFakeTimers();
+  mocks.families.push({ familyId: 2, name: 'Outside family' });
+  mocks.clients[0]!.getDevices!.mockImplementation(async (family: number, room: number) => family === 1 && room === 11
+    ? [device('one'), { ...device('unsupported'), deviceType: 'UnknownRobot' }]
+    : [device('outside')]);
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'outside', deviceType: 'ZigbeeSwitch1', deviceState: { power: true } });
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'unsupported', deviceState: { power: true } });
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  expect([...platform.accessories.values()].map((entry) => entry.context.device.id)).toEqual(['one']);
+  expect(mocks.clients[0]!.getDevices!.mock.calls).toEqual([[1, 11], [1, 11]]);
+  expect(platform.getDeviceHealth('unsupported').reachable).toBe(true);
+  expect(platform.getDeviceHealth('outside').reachable).toBe(false);
+});
+
+test('hint discovery never applies a partial inventory to either HAP or Matter', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (value: string) => value },
+    registerPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn(), unregisterPlatformAccessories: vi.fn(),
+    updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { platform, internal, api } = await fixture(undefined, { mode: 'all' }, matter);
+  vi.useFakeTimers();
+  mocks.families.push({ familyId: 2, name: 'Unavailable family' });
+  mocks.devices = [device('new')]; mocks.fail = true;
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'new', deviceState: { power: true } });
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning?.catch(() => undefined);
+  expect([...platform.accessories.values()].map((entry) => entry.context.device.id)).toEqual(['one']);
+  expect(api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  expect(matter.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledTimes(1);
+  mocks.fail = false;
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  expect([...platform.accessories.values()].map((entry) => entry.context.device.id)).toEqual(['new']);
+  expect(matter.unregisterPlatformAccessories).toHaveBeenCalledTimes(1);
+});
+
+test('a session switch clears both pending hints and prior-account suppression', async () => {
+  const { internal, store, session, platform } = await fixture();
+  vi.useFakeTimers();
+  const emit = (id: string) => mocks.realtime.at(-1)!.events.onDeviceUpdate({ id, deviceState: { power: true } });
+  emit('not-yet-visible');
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  emit('old-pending');
+  await store.save({ ...session, identifier: 'other-account', accessToken: 'other-token' });
+  await internal.checkSessionAndInitialize();
+  await vi.advanceTimersByTimeAsync(35000); await internal.discoveryRunning;
+  expect(mocks.clients[1]!.getFamilies).toHaveBeenCalledTimes(1);
+  mocks.devices.push(device('not-yet-visible')); emit('not-yet-visible');
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  expect(mocks.clients[1]!.getFamilies).toHaveBeenCalledTimes(2);
+  expect([...platform.accessories.values()].map((entry) => entry.context.device.id)).toContain('not-yet-visible');
+});
+
+test.each(['logout', 'shutdown'])('%s cancels queued unknown-device discovery', async (action) => {
+  const { internal, store, shutdown } = await fixture();
+  vi.useFakeTimers();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'pending', deviceState: { power: true } });
+  if (action === 'logout') {
+    await store.clear(); await internal.checkSessionAndInitialize();
+  } else {
+    await shutdown();
+  }
+  await vi.advanceTimersByTimeAsync(60000); await internal.discoveryRunning;
+  expect(mocks.clients[0]!.getFamilies).toHaveBeenCalledTimes(1);
+});
+
+test('periodic inventory discovers a previously suppressed ID even without another realtime event', async () => {
+  const { platform, internal } = await fixture();
+  vi.useFakeTimers();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'eventual', deviceState: { power: true } });
+  await vi.advanceTimersByTimeAsync(5000); await internal.discoveryRunning;
+  mocks.devices.push(device('eventual'));
+  vi.setSystemTime(Date.now() + 300001);
+  await internal.checkSessionAndInitialize();
+  await vi.advanceTimersByTimeAsync(1); await internal.discoveryRunning;
+  expect([...platform.accessories.values()].map((entry) => entry.context.device.id)).toContain('eventual');
+});
+
+test('buffered unknown measurements stay unavailable until a verified realtime report arrives', async () => {
+  mocks.devices = [];
+  const { platform, internal } = await fixture();
+  vi.useFakeTimers();
+  let release!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((resolve) => {
+    release = resolve;
+  }));
+  const discovery = internal.refreshDiscovery(); await Promise.resolve();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'sensor', deviceState: { temperature: 25 } });
+  release([{ id: 'sensor', name: 'Sensor', deviceType: 'SensorTh', deviceState: { temperature: 22 } }]); await discovery;
+  expect(platform.getMeasurementHealth('sensor', 'temperature')).toEqual({ reachable: false, reason: 'measurement-unknown' });
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'sensor', deviceState: { temperature: 26 } });
+  expect(platform.getMeasurementHealth('sensor', 'temperature').reachable).toBe(true);
+});
+
+test('unknown realtime floods cannot evict a verified power report from an active discovery', async () => {
+  mocks.devices = [{ id: 'one', name: 'Lamp', deviceType: 'LightRgbw5', online: true,
+    deviceState: { power: true, brightness: 50 } }];
+  const { platform, internal } = await fixture({ one: { powerSpec: { activeWatts: 10, standbyWatts: 0.1 } } });
+  vi.useFakeTimers();
+  let release!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((resolve) => {
+    release = resolve;
+  }));
+  const discovery = internal.refreshDiscovery(); await Promise.resolve();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'one', deviceState: { power: false } });
+  for (let index = 0; index < 1024; index++) {
+    mocks.realtime[0]!.events.onDeviceUpdate({ id: `noise-${index}`, deviceState: { power: true } });
+  }
+  const staged = (platform as unknown as { discoveryPatches: Map<string, unknown> }).discoveryPatches;
+  expect(staged.size).toBeLessThanOrEqual(257);
+  expect(staged.has('noise-1023')).toBe(true);
+  await vi.advanceTimersByTimeAsync(6000);
+  release(mocks.devices); await discovery;
+  expect(internal.powerEstimates.project(mocks.devices[0]!)?.activePower).toBe(100);
+  const accessory = platform.accessories.get(platform.api.hap.uuid.generate('one'))!;
+  expect(accessory.context.device.deviceState.power).toBe(false);
+  expect(await accessory.getService(platform.Service.Lightbulb)!.getCharacteristic(platform.Characteristic.On).handleGetRequest()).toBe(false);
 });

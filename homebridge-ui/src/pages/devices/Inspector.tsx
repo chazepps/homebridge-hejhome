@@ -22,15 +22,20 @@ export function DeviceInspector({ device, available, onClose, command, updateCom
   const sensors = (app.diagnostics?.devices ?? []).filter((item) => sensorTypes.has(item.deviceType));
   const supportsCommands = remoteTypes.has(device.deviceType) || ['IrAirconditioner', 'Airpurifier'].includes(device.deviceType);
   const supportsFreshness = sensorTypes.has(device.deviceType) || device.meterProfileApplied || device.deviceType === 'Airpurifier';
-  const freshnessDisabled = device.deviceType === 'Airpurifier' && !device.meterProfileApplied && !(Number(value.pm25Multiplier) > 0);
+  const freshnessActive = sensorTypes.has(device.deviceType) || device.meterProfileApplied
+    || device.deviceType === 'Airpurifier' && Number(value.pm25Multiplier) > 0;
+  const inactiveFreshness = !freshnessActive && Boolean(value.freshnessMinutes.trim());
   const changedIdentity = value.visibility !== (device.preference?.visibility ?? 'both') || value.role !== (device.preference?.role ?? 'original');
   const update = (patch: Partial<DeviceEditorValue>) => {
+    if (!available) {
+      return;
+    }
     setValidation('');
     const next = { ...value, ...patch };
     if (['matter', 'hidden'].includes(next.visibility)) {
       next.remoteButtons = false;
     }
-    if (device.deviceType === 'Airpurifier' && !device.meterProfileApplied && !(Number(next.pm25Multiplier) > 0)) {
+    if (device.deviceType === 'Airpurifier' && !device.meterProfileApplied && patch.pm25Multiplier?.trim() === '') {
       next.freshnessMinutes = '';
     }
     draft.setValue(next);
@@ -80,34 +85,42 @@ export function DeviceInspector({ device, available, onClose, command, updateCom
         }} noValidate>
           <div className="device-settings-grid" id="deviceSettingsList">
             <Field id={id('name')} label={t('표시 이름', 'Display name')} help={t('비워 두면 원래 이름을 사용합니다.', 'Leave blank to use the original name.')}>
-              <TextField.Root id={id('name')} size="3" data-device-control="name" maxLength={64} value={value.name} placeholder={device.name}
+              <TextField.Root id={id('name')} size="3" data-device-control="name" maxLength={64} value={value.name}
+                placeholder={device.name} disabled={!available}
                 onChange={(event) => update({ name: event.target.value })} aria-describedby={`${id('name')}-help`} />
             </Field>
             <Field id={id('visibility')} label={t('연결 방식', 'Connections')}>
-              <Choice id={id('visibility')} control="visibility" value={value.visibility}
+              <Choice id={id('visibility')} control="visibility" value={value.visibility} disabled={!available}
                 onChange={(next) => update({ visibility: next as DeviceEditorValue['visibility'] })}
                 options={[['both', t('Apple Home와 Matter', 'Apple Home and Matter')], ['homekit', t('Apple Home만', 'Apple Home only')],
                   ['matter', t('Matter만', 'Matter only')], ['hidden', t('표시하지 않음', 'Do not show')]]} />
             </Field>
             {device.roleChangeSupported && <Field id={id('role')} label={t('Home 앱에서 보이는 형태', 'Appearance in Home')}>
-              <Choice id={id('role')} control="role" value={value.role} onChange={(next) => update({ role: next as DeviceEditorValue['role'] })}
+              <Choice id={id('role')} control="role" value={value.role} disabled={!available}
+                onChange={(next) => update({ role: next as DeviceEditorValue['role'] })}
                 options={[['original', t('원래 장치 형태', 'Original device type')], ['light', t('조명', 'Light')],
                   ['outlet', t('콘센트', 'Outlet')], ['switch', t('스위치', 'Switch')]]} />
             </Field>}
             {device.deviceType === 'IrAirconditioner' && <Field id={id('sensor')} label={t('현재 온도를 확인할 온도계', 'Thermometer for current temperature')}
               help={t('설정 온도와 별개인 실제 측정값을 사용합니다.', 'Uses measured temperature, separate from the target temperature.')}>
-              <Choice id={id('sensor')} control="temperatureSensor" value={value.temperatureSensorId} onChange={(next) => update({ temperatureSensorId: next })}
+              <Choice id={id('sensor')} control="temperatureSensor" value={value.temperatureSensorId} disabled={!available}
+                onChange={(next) => update({ temperatureSensorId: next })}
                 options={[['', t('선택하지 않음', 'None')], ...sensors.map((sensor): [string, string] => [sensor.id, sensor.name]),
                   ...(value.temperatureSensorId && !sensors.some((sensor) => sensor.id === value.temperatureSensorId)
                     ? [[value.temperatureSensorId, t('사용할 수 없는 온도계', 'Unavailable thermometer')] as [string, string]] : [])]} />
             </Field>}
-            {supportsFreshness && <Field id={id('freshness')} label={t('측정값 유효 시간(분)', 'Measurement validity (minutes)')}
-              help={t('자동: 센서·PM2.5 90분, 전력 측정 5분. 직접 설정은 5–1440분입니다.',
-                'Automatic: sensors and PM2.5 90 min; power 5 min. Custom: 5–1440 min.')}>
+            {(supportsFreshness || inactiveFreshness) && <Field id={id('freshness')} label={t('측정값 유효 시간(분)', 'Measurement validity (minutes)')}
+              help={inactiveFreshness
+                ? t('측정 기능이 꺼져 있어 기존 값의 삭제만 가능합니다. 값을 지운 뒤 저장해 주세요.',
+                  'Measurement is disabled, so this existing value can only be cleared. Clear it before saving.')
+                : t('자동: 센서·PM2.5 90분, 전력 측정 5분. 직접 설정은 5–1440분입니다.',
+                  'Automatic: sensors and PM2.5 90 min; power 5 min. Custom: 5–1440 min.')}>
               <TextField.Root id={id('freshness')} size="3" type="number" min="5" max="1440" step="1"
-                data-device-control="freshness" disabled={freshnessDisabled}
+                data-device-control="freshness" disabled={!available || !freshnessActive}
                 value={value.freshnessMinutes} placeholder={t('자동', 'Automatic')} onChange={(event) => update({ freshnessMinutes: event.target.value })}
                 aria-describedby={`${id('freshness')}-help`} />
+              {inactiveFreshness && <Button type="button" size="2" variant="soft" highContrast disabled={!available}
+                onClick={() => update({ freshnessMinutes: '' })}>{t('유효 시간 지우기', 'Clear validity time')}</Button>}
             </Field>}
           </div>
           {remoteTypes.has(device.deviceType) && <label className="device-switch-row" htmlFor={id('remote')}>
@@ -117,14 +130,20 @@ export function DeviceInspector({ device, available, onClose, command, updateCom
               'Each button sends one command without showing physical device state.')}</Text></div>
             <Switch id={id('remote')} size="3" data-device-control="remoteButtons" checked={value.remoteButtons}
               aria-labelledby={id('remote-label')}
-              disabled={['matter', 'hidden'].includes(value.visibility)}
+              disabled={!available || ['matter', 'hidden'].includes(value.visibility)}
               onCheckedChange={(checked) => update({ remoteButtons: checked })} />
           </label>}
           {device.deviceType === 'Airpurifier' && <details className="device-advanced-settings">
             <summary>{t('고급: PM2.5 측정값 보정', 'Advanced: PM2.5 measurement correction')}</summary>
             <Field id={id('pm25')} label={t('보정 배율', 'Correction factor')} help={t('기기 원본 값 × 배율 = µg/m³. 모델의 원본 단위를 확인한 경우에만 설정하세요.',
-              'Raw device value × factor = µg/m³. Set this only when the model’s original unit is known.')}>
-              <TextField.Root id={id('pm25')} size="3" type="number" step="any" data-device-control="pm25Multiplier" value={value.pm25Multiplier}
+              'Raw device value × factor = µg/m³. Set this only when the model’s original unit is known.') + ' '
+              + (device.meterProfileApplied
+                ? t('비우면 PM2.5 보정을 해제하고 전력 측정 유효 시간은 유지합니다.',
+                  'Clearing disables PM2.5 correction and keeps power measurement validity.')
+                : t('비우면 PM2.5 보정과 측정값 유효 시간 설정을 함께 해제합니다.',
+                  'Clearing disables PM2.5 correction and removes the measurement validity setting.'))}>
+              <TextField.Root id={id('pm25')} size="3" type="number" step="any" data-device-control="pm25Multiplier"
+                value={value.pm25Multiplier} disabled={!available}
                 placeholder={t('사용 안 함', 'Not used')} onChange={(event) => update({ pm25Multiplier: event.target.value })}
                 aria-describedby={`${id('pm25')}-help`} />
             </Field>

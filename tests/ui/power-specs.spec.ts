@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { installUiHost, mountUi, openAccountActions, publishStatus, requestCalls, respondToConfirmation, type UiDevice } from './host-fixture.js';
+import { installUiHost, mountUi, openAccountActions, openDevice, publishStatus,
+  requestCalls, respondToConfirmation, type UiDevice } from './host-fixture.js';
 
 const source = () => fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8');
 const devices: UiDevice[] = [
@@ -21,6 +22,37 @@ async function save(page: Page) {
 }
 async function savedCalls(page: Page) {
   return (await requestCalls(page, '/save-power-specs')).map((call) => call.payload);
+}
+
+for (const renamedId of ['plug-1', 'plug-2']) {
+  test(`power ACK survives a ${renamedId} preference save while diagnostics is delayed`, async ({ page }) => {
+    await mountUi(page, { devices: [
+      { ...devices[0]!, preference: { powerSpec: { activeWatts: 5 } } }, devices[1]!,
+    ] });
+    await openPower(page);
+    await expect(active(page)).toHaveValue('5');
+    await active(page).fill('10');
+    await page.evaluate(() => {
+      window.__hejHost.holdNext['/diagnostics'] = 5;
+    });
+    await save(page);
+    await expect(page.locator('#powerSpecsFeedback')).toContainText('저장했습니다');
+    await expect(active(page)).toHaveValue('10');
+    await page.getByRole('button', { name: '장치', exact: true }).click();
+    await openDevice(page, renamedId);
+    await page.getByLabel('표시 이름').fill('Renamed device');
+    await page.getByRole('button', { name: '이 장치 저장', exact: true }).click();
+    await expect.poll(async () => (await requestCalls(page, '/save-device-settings')).length).toBe(1);
+    await openPower(page);
+    await expect(active(page)).toHaveValue('10');
+    await active(page).fill('15');
+    await save(page);
+    await expect(page.locator('#powerSpecsFeedback')).toContainText('저장했습니다');
+    expect((await savedCalls(page)).at(-1)).toEqual({ uiSessionRevision: 'account-revision-1', updates: [
+      { deviceId: 'plug-1', activeWatts: 15, standbyWatts: null, expected: { activeWatts: 10, standbyWatts: null } },
+    ] });
+    expect(await page.evaluate(() => window.__hejHost.config.devicePreferences['plug-1']?.powerSpec)).toEqual({ activeWatts: 15 });
+  });
 }
 
 test('registered devices have readonly identity and exactly two blank watt inputs', async ({ page }) => {
@@ -186,16 +218,16 @@ test('a newer edit typed while save is pending survives ACK and uses the acknowl
   await expect(page.locator('#powerSpecsFeedback')).toContainText(/저장/);
 });
 
-test('two older diagnostics settling after save cannot roll back acknowledged values or expected baseline', async ({ page }) => {
+test('coalesced older diagnostics settling after save cannot roll back acknowledged values or expected baseline', async ({ page }) => {
   await mountUi(page, { devices });
   await openPower(page);
   const oldDiagnostics = await page.evaluate(() => {
-    window.__hejHost.holdNext['/diagnostics'] = 2;
+    window.__hejHost.holdNext['/diagnostics'] = 1;
     return structuredClone(window.__hejHost.diagnostics);
   });
   await publishStatus(page);
   await publishStatus(page);
-  await expect.poll(() => page.evaluate(() => window.__hejHost.pending.filter((entry) => entry.route === '/diagnostics').length)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.__hejHost.pending.filter((entry) => entry.route === '/diagnostics').length)).toBe(1);
   await active(page).fill('18');
   await save(page);
   await expect(page.locator('#powerSpecsFeedback')).toContainText(/저장/);
@@ -406,13 +438,17 @@ test('a dirty account switch requires discard and a late save ACK cannot restore
 });
 
 test('late B status and old A diagnostics cannot overwrite account C with the same device ID', async ({ page }) => {
+  await page.clock.install();
   await installUiHost(page, { devices });
   await page.evaluate(() => {
     window.__hejHost.holdNext['/diagnostics'] = 2;
   });
   await page.setContent(source());
   await openPower(page);
-  // Create the second overlapping request explicitly instead of requiring duplicate startup polling.
+  await expect.poll(() => page.evaluate(() => window.__hejHost.pending.filter((entry) => entry.route === '/diagnostics').length)).toBe(1);
+  // A timed-out raw request remains pending while a later flight may start after backoff.
+  await page.clock.fastForward(10001);
+  await page.clock.fastForward(30001);
   await publishStatus(page);
   await expect.poll(() => page.evaluate(() => window.__hejHost.pending.filter((entry) => entry.route === '/diagnostics').length)).toBe(2);
   const oldA = await page.evaluate(() => structuredClone(window.__hejHost.diagnostics));
@@ -432,7 +468,7 @@ test('late B status and old A diagnostics cannot overwrite account C with the sa
     const host = window.__hejHost;
     host.status.uiSessionRevision = 'account-C';
     host.status.features = { devices: { 'plug-1': { powerSpec: { activeWatts: 3 } } } };
-    host.diagnostics = { ...host.diagnostics, uiSessionRevision: 'account-C', devices: [
+    host.diagnostics = { ...host.diagnostics, uiSessionRevision: 'account-C', updatedAt: new Date().toISOString(), devices: [
       { id: 'plug-1', name: 'Account C lamp', deviceType: 'Plug', inScope: true, preference: { powerSpec: { activeWatts: 3 } } },
     ] };
     host.config.devicePreferences = { 'plug-1': { powerSpec: { activeWatts: 3 } } };

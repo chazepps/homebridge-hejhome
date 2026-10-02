@@ -34,6 +34,21 @@ describe('Radix device preferences', () => {
     expect(() => serializePreference({ ...editorValue({}), pm25Multiplier: '1' }, device('Plug'), [])).toThrow();
   });
 
+  it('allows explicit clearing of an inactive saved freshness value without losing unrelated preferences', () => {
+    for (const deviceType of ['Plug', 'Airpurifier']) {
+      const current = device(deviceType, { meterProfileApplied: false, preference: { name: 'Saved name', freshnessMinutes: 30 } });
+      const draft = { ...editorValue(current.preference), name: 'New name' };
+      expect(() => serializePreference(draft, current, [])).toThrow();
+      expect(serializePreference({ ...draft, freshnessMinutes: '' }, current, [])).toEqual({ name: 'New name' });
+    }
+  });
+
+  it('keeps power measurement freshness valid when PM2.5 correction is disabled', () => {
+    const current = device('Airpurifier', { meterProfileApplied: true, preference: { pm25Multiplier: 0.5, freshnessMinutes: 30 } });
+    expect(serializePreference({ ...editorValue(current.preference), pm25Multiplier: '' }, current, []))
+      .toEqual({ freshnessMinutes: 30 });
+  });
+
   it('trims names, accepts known linked sensors and never submits power settings through this endpoint', () => {
     const sensor = device('SensorTh2', { id: 'sensor' });
     expect(serializePreference({ ...editorValue({ powerSpec: { activeWatts: 12 } }), name: ' Desk ', temperatureSensorId: 'sensor' },

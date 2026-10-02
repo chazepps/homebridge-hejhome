@@ -34,10 +34,11 @@ export class DraftStore<T> {
       return;
     }
     this.external = value;
+    // Keep the reset target current without replacing the user's active edit.
+    this.baseline = value;
     if (this.snapshot.dirty || this.snapshot.pending) {
       return;
     }
-    this.baseline = value;
     this.publish({ value });
   }
   reset = () => {

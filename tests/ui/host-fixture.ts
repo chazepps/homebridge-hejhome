@@ -56,16 +56,17 @@ export async function installUiHost(page: Page | Frame, options: Options = {}): 
     }
     (state.status.features as Record<string, unknown>).devices = structuredClone(state.config.devicePreferences);
     const copy = (value: unknown) => structuredClone(value);
+    const settingsRevision = () => JSON.stringify([state.status.scope, state.status.features]);
     const powerSpec = (preference: Record<string, unknown> | undefined) => {
       const value = preference?.powerSpec as Record<string, unknown> | undefined;
       return { activeWatts: value?.activeWatts ?? null, standbyWatts: value?.standbyWatts ?? null };
     };
     const reply = (route: string, payload: unknown): unknown => {
       if (route === '/session-status') {
-        return copy(state.status);
+        return copy({ ...state.status, settingsRevision: settingsRevision() });
       }
       if (route === '/diagnostics') {
-        return copy(state.diagnostics);
+        return copy({ ...state.diagnostics, settingsRevision: settingsRevision() });
       }
       if (route === '/save-power-specs') {
         const body = payload as { uiSessionRevision: string; updates: Array<{ deviceId: string;
@@ -117,7 +118,7 @@ export async function installUiHost(page: Page | Frame, options: Options = {}): 
           state.config.devicePreferences[device.id] = copy(device.preference) as Record<string, unknown>;
           (state.status.features as Record<string, unknown>).devices = copy(state.config.devicePreferences);
         }
-        return { ok: true, preference: copy(body.preference) };
+        return { ok: true, deviceId: body.deviceId, preference: copy(device?.preference ?? body.preference) };
       }
       if (route === '/save-features') {
         const features = (payload as { features: Record<string, unknown> }).features;
@@ -145,6 +146,7 @@ export async function installUiHost(page: Page | Frame, options: Options = {}): 
         }
         Object.assign(state.status, { configured: true, sessionValid: true, sessionCheckStatus: 'valid' });
         state.diagnostics.connection = { session: 'valid', realtime: 'connected' };
+        return { ok: true, uiSessionRevision: state.status.uiSessionRevision };
       }
       if (route === '/logout') {
         Object.assign(state.status, { configured: false, sessionValid: false, uiSessionRevision: `logout-${state.calls.length}` });

@@ -106,6 +106,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── power.ts
 │   │   └── purifier.ts
 │   ├── discovery
+│   │   ├── realtimeHints.ts
 │   │   └── scope.ts
 │   ├── features.ts
 │   ├── hej
@@ -207,6 +208,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── ui
 │   │   ├── accessibility.spec.ts
 │   │   ├── appearance.spec.ts
+│   │   ├── auth-races.spec.ts
 │   │   ├── beta-features.spec.ts
 │   │   ├── catalog-services.spec.ts
 │   │   ├── device-features.spec.ts
@@ -220,6 +222,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── ui-diagnostics-server.test.ts
 │   ├── ui-features-server.test.ts
 │   ├── ui-live-diagnostics-server.test.ts
+│   ├── ui-login-server.test.ts
 │   ├── ui-power-specs-server.test.ts
 │   ├── ui-scope-server.test.ts
 │   └── ui-server-source.test.ts

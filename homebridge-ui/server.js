@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import { watchFile, unwatchFile } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { normalizeFeatures } from '../dist/features.js';
 
@@ -125,14 +125,18 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       const saveStartedAt = performance.now();
       await this.sessionStore.save(session);
       this.scopeEdits.clear();
-      this.revisionForAccount(session.identifier);
+      const uiSessionRevision = this.revisionForAccount(session.identifier);
       this.pushEvent('hejhome-status-changed', { updated: true });
       this.log('login.session-saved', {
         durationMs: elapsed(saveStartedAt),
         storageScope: 'homebridge-storage/hejhome/session.json',
       });
+      if (!await this.isCurrentOwner(sessionFingerprint(session)) || this.uiSessionRevision !== uiSessionRevision) {
+        throw new Error('로그인 정보가 변경되었습니다. 다시 확인해 주세요.');
+      }
       return {
         ok: true,
+        uiSessionRevision,
         expiresAt: session.expiresAt,
         expiresAtIso: new Date(session.expiresAt).toISOString(),
         refreshRecommendedAtIso: createSessionLogContext(session).refreshRecommendedAtIso,
@@ -160,9 +164,11 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       const { session, snapshot, owner } = await this.loadOwnedState();
       const platformConfig = await this.loadPlatformConfig();
       const scope = platformConfig.scope ?? { mode: 'first-family' };
+      const features = normalizeFeatures(platformConfig.features);
       const deviceSummary = createDeviceSupportSummary(snapshot, scope);
       const baseStatus = {
-        features: normalizeFeatures(platformConfig.features),
+        features,
+        settingsRevision: configurationRevision(scope, features),
         scope,
         scopeEditToken: null,
         uiSessionRevision: null,
@@ -412,6 +418,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
         generatedAt: snapshot?.generatedAt ?? null,
         updatedAt: runtime?.updatedAt ?? null,
         uiSessionRevision: this.revisionForAccount(session?.identifier),
+        settingsRevision: configurationRevision(scope, features),
         deviceListAvailable: snapshotMatchesScope(snapshot, scope),
         controlsAvailable: runtime?.controlsAvailable === true,
         connection: runtime?.connection ?? { session: 'unknown', realtime: 'unknown' },
@@ -801,6 +808,10 @@ function scopeRevision(scope) {
   return JSON.stringify(normalizeScope(scope ?? { mode: 'first-family' }));
 }
 
+function configurationRevision(scope, features) {
+  return createHash('sha256').update(JSON.stringify([scopeRevision(scope), features])).digest('hex');
+}
+
 function validateScopeSelection(value, ticket) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new ScopeEditError('scope-edit-stale');
@@ -917,7 +928,7 @@ function withoutUiRevisions(value) {
   }
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value)
-      .filter(([key]) => key !== 'scopeEditToken' && key !== 'uiSessionRevision')
+      .filter(([key]) => !['scopeEditToken', 'uiSessionRevision', 'settingsRevision'].includes(key))
       .map(([key, nested]) => [key, withoutUiRevisions(nested)]));
   }
   return value;
