@@ -13,7 +13,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['**/*.js', '**/*.mjs', '**/*.ts'],
+    files: ['**/*.js', '**/*.mjs', '**/*.ts', '**/*.tsx'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -46,6 +46,33 @@ export default tseslint.config(
         typedefs: false,
       }],
       '@typescript-eslint/no-unused-vars': ['error', { caughtErrors: 'none' }],
+    },
+  },
+  {
+    files: ['homebridge-ui/src/**/*.{ts,tsx}', 'tools/ui/preview-host.ts'],
+    languageOptions: {
+      globals: {
+        AbortController: 'readonly',
+        Blob: 'readonly',
+        clearInterval: 'readonly',
+        CustomEvent: 'readonly',
+        document: 'readonly',
+        Event: 'readonly',
+        EventTarget: 'readonly',
+        HTMLElement: 'readonly',
+        HTMLInputElement: 'readonly',
+        IntersectionObserver: 'readonly',
+        localStorage: 'readonly',
+        navigator: 'readonly',
+        requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
+        ResizeObserver: 'readonly',
+        setInterval: 'readonly',
+        structuredClone: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        window: 'readonly',
+      },
     },
   },
 );

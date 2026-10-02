@@ -1,17 +1,17 @@
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
-import { installUiHost, mountUi, openDevice, publishStatus, requestCalls } from './host-fixture.js';
+import { installUiHost, mountUi, openAccountActions, openDevice, publishStatus, requestCalls, respondToConfirmation } from './host-fixture.js';
 
 const devices = [
   { id: 'plug-1', name: '책상 콘센트', deviceType: 'Plug' },
   { id: 'tv-1', name: '거실 TV', deviceType: 'IrTv' },
 ];
 
-test('three screens start at devices and expose editing only after opening a device', async ({ page }) => {
+test('four destinations start at devices and expose editing only after opening a device', async ({ page }) => {
   await mountUi(page, { devices });
-  const tabs = page.getByRole('tablist');
-  await expect(tabs.getByRole('tab')).toHaveCount(3);
-  await expect(tabs.getByRole('tab', { name: '내 장치' })).toHaveAttribute('aria-selected', 'true');
+  const tabs = page.getByRole('navigation', { name: /설정 탐색|Settings navigation/ });
+  await expect(tabs.getByRole('button')).toHaveCount(4);
+  await expect(tabs.getByRole('button', { name: '장치' })).toHaveAttribute('aria-current', 'page');
   const row = page.locator('[data-testid="device-row"][data-device-id="plug-1"]');
   await expect(row).toContainText('책상 콘센트');
   await expect(row.locator('input, select')).toHaveCount(0);
@@ -20,13 +20,14 @@ test('three screens start at devices and expose editing only after opening a dev
   const detail = page.getByTestId('device-detail');
   await expect(detail).toHaveAttribute('data-device-id', 'plug-1');
   await expect(detail.getByLabel('표시 이름')).toBeVisible();
-  await expect(detail.getByLabel('연결 방식')).toHaveValue('both');
+  await expect(detail.getByLabel('연결 방식')).toContainText('Apple Home와 Matter');
   await expect(detail).not.toContainText('Matter 연결 완료');
-  await page.getByRole('tab', { name: '연결 설정' }).click();
+  await page.getByRole('button', { name: '연결' }).click();
+  await openAccountActions(page);
   await expect(page.getByRole('button', { name: '로그아웃', exact: true })).toBeVisible();
-  await expect(page.getByLabel('다른 스마트홈 앱에 연결(Matter)')).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Matter 연결', exact: true })).not.toBeChecked();
   await expect(page.getByRole('button', { name: '소리 크게' })).toBeHidden();
-  await page.getByRole('tab', { name: '도움말' }).click();
+  await page.getByRole('button', { name: '전력' }).click();
   await expect(page.getByText('고급: 전력 측정 모델 설정', { exact: true })).toBeVisible();
 });
 
@@ -45,20 +46,20 @@ test('drafts and text selection survive status changes and tab round trips', asy
   await expect(name).toHaveValue('작업 조명');
   await expect(name).toBeFocused();
   expect(await name.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])).toEqual([1, 3]);
-  await page.getByRole('tab', { name: '연결 설정' }).click();
-  await page.getByLabel('다른 스마트홈 앱에 연결(Matter)').check();
-  await page.getByRole('tab', { name: '도움말' }).click();
-  await page.getByRole('tab', { name: '내 장치' }).click();
+  await page.getByRole('button', { name: '연결' }).click();
+  await page.getByRole('switch', { name: 'Matter 연결', exact: true }).check();
+  await page.getByRole('button', { name: '도움말' }).click();
+  await page.getByRole('button', { name: '장치' }).click();
   await expect(detail).toBeVisible();
   await expect(name).toHaveValue('작업 조명');
   await expect(detail.getByText('저장하지 않은 변경사항', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
-  const trigger = page.locator('[data-testid="device-row"][data-device-id="plug-1"]').getByRole('button', { name: '상세 보기' });
+  const trigger = page.locator('[data-testid="device-row"][data-device-id="plug-1"]').getByRole('button', { name: /상세 보기$/ });
   await expect(trigger).toBeFocused();
   await trigger.click();
   await expect(name).toHaveValue('작업 조명');
-  await page.getByRole('tab', { name: '연결 설정' }).click();
-  await expect(page.getByLabel('다른 스마트홈 앱에 연결(Matter)')).toBeChecked();
+  await page.getByRole('button', { name: '연결' }).click();
+  await expect(page.getByRole('switch', { name: 'Matter 연결', exact: true })).toBeChecked();
   expect(await requestCalls(page, '/save-device-settings')).toHaveLength(0);
   expect(await requestCalls(page, '/save-features')).toHaveLength(0);
 });
@@ -68,7 +69,7 @@ test('returning from detail restores search, the list position and the original 
   const longList = Array.from({ length: 30 }, (_, index) => ({ id: `plug-${index}`, name: `콘센트 ${index}`, deviceType: 'Plug' }));
   await mountUi(page, { devices: longList });
   await page.getByLabel('장치 검색', { exact: true }).fill('콘센트');
-  const trigger = page.locator('[data-testid="device-row"][data-device-id="plug-20"]').getByRole('button', { name: '상세 보기' });
+  const trigger = page.locator('[data-testid="device-row"][data-device-id="plug-20"]').getByRole('button', { name: /상세 보기$/ });
   await trigger.scrollIntoViewIfNeeded();
   await trigger.focus();
   const position = await page.evaluate(() => window.scrollY);
@@ -92,9 +93,8 @@ test('failed device save keeps the draft and retry sends only that device prefer
   });
   const save = detail.getByRole('button', { name: '이 장치 저장' });
   await save.click();
-  await expect.poll(() => page.evaluate(() => window.__hejHost.toasts)).toEqual(expect.arrayContaining([
-    expect.objectContaining({ kind: 'error', message: expect.stringContaining('저장 공간') }),
-  ]));
+  await expect(detail.locator('#deviceSettingsStatus')).toBeVisible();
+  await expect(detail.locator('#deviceSettingsStatus')).toContainText('저장 공간');
   await expect(name).toHaveValue('저장할 조명');
   await expect(detail.getByText('저장하지 않은 변경사항', { exact: true })).toBeVisible();
   await expect(save).toBeEnabled();
@@ -135,7 +135,7 @@ test('late diagnostics cannot roll back a newly saved preference', async ({ page
 test('a remote timeout is an unconfirmed result with no duplicate or automatic retry', async ({ page }) => {
   await page.clock.install();
   await mountUi(page, { devices });
-  await openDevice(page, 'tv-1');
+  await openDevice(page, 'tv-1', 'controls');
   await page.evaluate(() => {
     window.__hejHost.holdNext['/remote-command'] = 1;
   });
@@ -157,11 +157,14 @@ test('expired login keeps existing devices and a draft through reauthentication'
   await mountUi(page, { devices, status: { configured: true, sessionValid: false, sessionCheckStatus: 'invalid' },
     diagnostics: { connection: { session: 'expired', realtime: 'connected' }, controlsAvailable: false } });
   await expect(page.getByTestId('device-row')).toHaveCount(2);
-  await expect(page.locator('#settingsView')).toContainText('로그인이 만료');
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  await expect(page.locator('#sessionBadge')).toContainText('다시 로그인 필요');
+  await page.getByRole('button', { name: '장치', exact: true }).click();
   await openDevice(page, 'plug-1');
   await page.getByTestId('device-detail').getByLabel('표시 이름').fill('다시 로그인해도 유지');
   await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  await openAccountActions(page);
   await page.getByRole('button', { name: '다시 로그인', exact: true }).click();
   await page.getByLabel('이메일').fill('user@example.test');
   await page.getByRole('button', { name: '인증번호 전송' }).click();
@@ -169,6 +172,7 @@ test('expired login keeps existing devices and a draft through reauthentication'
   await page.getByRole('button', { name: '확인', exact: true }).click();
   await page.getByLabel('비밀번호').fill('not-persisted-secret');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
+  await page.getByRole('button', { name: '장치', exact: true }).click();
   await expect(page.getByTestId('device-row')).toHaveCount(2);
   await openDevice(page, 'plug-1');
   await expect(page.getByTestId('device-detail').getByLabel('표시 이름')).toHaveValue('다시 로그인해도 유지');
@@ -201,7 +205,7 @@ test('a different account cannot reuse the previous account device draft even fo
   await mountUi(page, { devices });
   await openDevice(page, 'plug-1');
   await page.getByTestId('device-detail').getByLabel('표시 이름').fill('이전 계정 초안');
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await page.getByRole('button', { name: '연결', exact: true }).click();
   await page.evaluate(() => {
     window.__hejHost.status.sessionValid = false;
     window.__hejHost.status.sessionCheckStatus = 'invalid';
@@ -210,6 +214,7 @@ test('a different account cannot reuse the previous account device draft even fo
       online: true, homekit: true, roleChangeSupported: true, preference: { name: '새 계정 이름' } }];
   });
   await publishStatus(page);
+  await openAccountActions(page);
   await page.getByRole('button', { name: '다시 로그인', exact: true }).click();
   await page.getByLabel('이메일').fill('other@example.test');
   await page.getByRole('button', { name: '인증번호 전송' }).click();
@@ -217,14 +222,14 @@ test('a different account cannot reuse the previous account device draft even fo
   await page.getByRole('button', { name: '확인', exact: true }).click();
   await page.getByLabel('비밀번호').fill('another-password');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
-  await expect(page.locator('#globalStatus')).toContainText('계정이 바뀌었어요');
+  await expect(page.locator('#accountChangeAction')).toBeVisible();
   expect(await requestCalls(page, '/save-device-settings')).toHaveLength(0);
-  page.once('dialog', (dialog) => dialog.dismiss());
-  await page.getByRole('button', { name: '이전 변경사항 버리고 새 계정 보기', exact: true }).click();
-  await expect(page.getByRole('button', { name: '이전 변경사항 버리고 새 계정 보기', exact: true })).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: '이전 변경사항 버리고 새 계정 보기', exact: true }).click();
-  await page.getByRole('tab', { name: '내 장치', exact: true }).click();
+  await page.getByRole('button', { name: '새 계정 확인', exact: true }).click();
+  await respondToConfirmation(page, 'cancel');
+  await expect(page.getByRole('button', { name: '새 계정 확인', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '새 계정 확인', exact: true }).click();
+  await respondToConfirmation(page, 'discard');
+  await page.getByRole('button', { name: '장치', exact: true }).click();
   await openDevice(page, 'plug-1');
   await expect(page.getByTestId('device-detail').getByLabel('표시 이름')).toHaveValue('새 계정 이름');
 });
@@ -246,7 +251,7 @@ test('iframe detail return makes the original device button visible when its par
     };
   });
   await frame.setContent(fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8'));
-  const trigger = frame.locator('[data-testid="device-row"][data-device-id="iframe-20"]').getByRole('button', { name: '상세 보기' });
+  const trigger = frame.locator('[data-testid="device-row"][data-device-id="iframe-20"]').getByRole('button', { name: /상세 보기$/ });
   await trigger.scrollIntoViewIfNeeded();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
   expect(await frame.evaluate(() => window.scrollY)).toBe(0);
@@ -291,7 +296,7 @@ test('a delayed device save cannot discard a newer edit typed while it was pendi
 for (const target of ['matter', 'adaptive', 'meters'] as const) {
   test(`delayed ${target} settings save preserves a newer unsaved edit`, async ({ page }) => {
     await mountUi(page);
-    await page.getByRole('tab', { name: target === 'meters' ? '도움말' : '연결 설정', exact: true }).click();
+    await page.getByRole('button', { name: target === 'meters' ? '전력' : '연결', exact: true }).click();
     if (target === 'meters') {
       await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
     }
@@ -335,7 +340,7 @@ for (const target of ['matter', 'adaptive', 'meters'] as const) {
 
 test('status refresh and detail reopening cannot send a second copy of an in-flight remote command', async ({ page }) => {
   await mountUi(page, { devices });
-  await openDevice(page, 'tv-1');
+  await openDevice(page, 'tv-1', 'controls');
   await page.evaluate(() => {
     window.__hejHost.holdNext['/remote-command'] = 1;
   });
@@ -344,7 +349,7 @@ test('status refresh and detail reopening cannot send a second copy of an in-fli
   await publishStatus(page);
   await expect(detail.getByRole('button', { name: '소리 크게', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
-  await openDevice(page, 'tv-1');
+  await openDevice(page, 'tv-1', 'controls');
   await expect(detail.getByRole('button', { name: '소리 크게', exact: true })).toBeDisabled();
   expect(await requestCalls(page, '/remote-command')).toHaveLength(1);
   await page.evaluate(() => window.__hejHost.pending.find((request) => request.route === '/remote-command')!.resolve());
@@ -366,12 +371,12 @@ test('unsupported devices retain settings without invented control buttons', asy
 test('elapsed freshness alone disables remote actions without waiting for a changed device value', async ({ page }) => {
   await page.clock.install();
   await mountUi(page, { devices });
-  await openDevice(page, 'tv-1');
+  await openDevice(page, 'tv-1', 'controls');
   const volume = page.getByTestId('device-detail').getByRole('button', { name: '소리 크게', exact: true });
   await expect(volume).toBeEnabled();
   await page.clock.fastForward(41000);
   await expect(volume).toBeDisabled();
-  await expect(page.locator('#globalStatus')).toContainText(/최근 상태.*확인/);
+  await expect(page.locator('#account-summary')).toContainText('최신 상태 확인 필요');
   expect(await requestCalls(page, '/remote-command')).toHaveLength(0);
 });
 
@@ -379,10 +384,10 @@ test('failed diagnostics stop stale HVAC values being presented as current and p
   await page.clock.install();
   await mountUi(page, { devices: [{ id: 'ac-1', name: '침실 에어컨', deviceType: 'IrAirconditioner',
     temperatureCelsius: 22, hvacSettings: { power: true, targetTemperature: 23, mode: 'cool', fanSpeed: 'low' } }] });
-  await openDevice(page, 'ac-1');
+  await openDevice(page, 'ac-1', 'controls');
   const detail = page.getByTestId('device-detail');
-  await expect(detail).toContainText('현재 온도: 22°C');
-  const target = detail.getByLabel('설정 온도', { exact: true });
+  await expect(detail).toContainText(/현재 온도:\s*22\s*°C/);
+  const target = detail.getByLabel('바꿀 설정 온도(°C)', { exact: true });
   await target.fill('26');
   await target.focus();
   await page.evaluate(() => {
@@ -391,7 +396,7 @@ test('failed diagnostics stop stale HVAC values being presented as current and p
   await publishStatus(page);
   await expect(page.locator('#globalStatus')).toContainText(/확인하지 못|확인 실패|확인할 수 없/);
   await page.clock.fastForward(41000);
-  await expect(detail).not.toContainText('현재 온도: 22°C');
+  await expect(detail).not.toContainText(/현재 온도:\s*22\s*°C/);
   await expect(detail.getByRole('button', { name: '온도 설정', exact: true })).toBeDisabled();
   await expect(target).toHaveValue('26');
   await expect(target).toBeFocused();
@@ -399,8 +404,8 @@ test('failed diagnostics stop stale HVAC values being presented as current and p
 
 test('help displays only the server redacted diagnostic export without adding device or account details', async ({ page }) => {
   await mountUi(page, { devices: [{ id: 'private-device-id', name: '내 방의 개인 장치명', deviceType: 'Plug' }] });
-  await page.getByRole('tab', { name: '도움말', exact: true }).click();
-  await page.getByRole('button', { name: '개인 정보 없는 진단 내용 보기', exact: true }).click();
+  await page.getByRole('button', { name: '도움말', exact: true }).click();
+  await page.getByRole('button', { name: '진단 내용 보기', exact: true }).click();
   const output = page.locator('#diagnosticsExport');
   await expect(output).toBeVisible();
   expect(JSON.parse((await output.textContent())!)).toEqual({ formatVersion: 1, summary: { deviceCount: 1 } });
@@ -464,27 +469,26 @@ test('two unsettled diagnostics requests stay capped after UI timeouts and resum
   await publishStatus(page);
   await expect.poll(() => requestCalls(page, '/diagnostics')).toHaveLength(initial + 3);
   await expect(page.getByTestId('device-row')).toHaveCount(2);
-  await expect(page.locator('#closeStalledSettings')).toBeHidden();
+  await expect(page.getByText('연결 응답이 멈췄어요. 설정 창을 닫았다 다시 열어 주세요.', { exact: true })).toBeHidden();
 });
 
 const packetFamilies = [{ familyId: 101, name: '첫 번째 집', selected: true,
   rooms: [{ roomId: 1, name: '거실', selected: true }, { roomId: 2, name: '주방', selected: true }] }];
 
 async function cancelLogout(page: import('@playwright/test').Page) {
-  let confirmations = 0;
-  page.once('dialog', async (dialog) => {
-    confirmations++; await dialog.dismiss();
-  });
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
-  await page.getByRole('button', { name: '로그아웃', exact: true }).click();
-  expect(confirmations).toBe(1);
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  await openAccountActions(page);
+  const logout = page.getByRole('button', { name: '로그아웃', exact: true });
+  await logout.click();
+  await respondToConfirmation(page, 'cancel');
+  await expect(logout).toBeFocused();
   expect(await requestCalls(page, '/logout')).toHaveLength(0);
 }
 
 for (const section of ['matter', 'lighting', 'meters', 'scope'] as const) {
   test(`${section} dirty logout cancellation preserves edits and a clean save needs no discard confirmation`, async ({ page }) => {
     await mountUi(page, { status: { scopeOptions: { complete: true, families: packetFamilies } } });
-    await page.getByRole('tab', { name: section === 'meters' ? '도움말' : '연결 설정', exact: true }).click();
+    await page.getByRole('button', { name: section === 'meters' ? '전력' : '연결', exact: true }).click();
     if (section === 'meters') {
       await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
     }
@@ -499,7 +503,7 @@ for (const section of ['matter', 'lighting', 'meters', 'scope'] as const) {
       await control.check();
     }
     await cancelLogout(page);
-    await page.getByRole('tab', { name: section === 'meters' ? '도움말' : '연결 설정', exact: true }).click();
+    await page.getByRole('button', { name: section === 'meters' ? '전력' : '연결', exact: true }).click();
     if (section === 'meters') {
       await expect.poll(async () => JSON.parse(await control.inputValue())).toEqual(profile);
     } else if (section === 'scope') {
@@ -511,14 +515,11 @@ for (const section of ['matter', 'lighting', 'meters', 'scope'] as const) {
       : section === 'meters' ? '#saveMeters' : '#saveScope').click();
     await expect(page.locator(section === 'matter' ? '#featuresStatus' : section === 'lighting' ? '#lightingStatus'
       : section === 'meters' ? '#meterStatus' : '#scopeStatus')).toContainText('저장');
-    let confirmationAfterSave = 0;
-    page.once('dialog', async (dialog) => {
-      confirmationAfterSave++; await dialog.dismiss();
-    });
-    await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+    await page.getByRole('button', { name: '연결', exact: true }).click();
+    await openAccountActions(page);
     await page.getByRole('button', { name: '로그아웃', exact: true }).click();
     await expect.poll(() => requestCalls(page, '/logout')).toHaveLength(1);
-    expect(confirmationAfterSave).toBe(0);
+    await expect(page.getByRole('alertdialog')).toBeHidden();
   });
 }
 
@@ -526,21 +527,21 @@ for (const operation of ['add', 'remove'] as const) {
   test(`actual-meter JSON ${operation} is still an unsaved change at logout`, async ({ page }) => {
     await mountUi(page, { status: { features: { matter: false, adaptiveLighting: false,
       meters: operation === 'remove' ? [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] : [] } } });
-    await page.getByRole('tab', { name: '도움말', exact: true }).click();
+    await page.getByRole('button', { name: '전력', exact: true }).click();
     await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
     const draft = operation === 'add' ? '[{"model":"NEW","power":{"field":"curPower","multiplier":1}}]' : '[]';
     await page.locator('#meterProfiles').fill(draft);
     await cancelLogout(page);
-    await page.getByRole('tab', { name: '도움말', exact: true }).click();
+    await page.getByRole('button', { name: '전력', exact: true }).click();
     await expect(page.locator('#meterProfiles')).toHaveValue(draft);
   });
 }
 
 test('saving meters does not clear an unrelated unsaved Matter change', async ({ page }) => {
   await mountUi(page);
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await page.getByRole('button', { name: '연결', exact: true }).click();
   await page.locator('#matterFeature').check();
-  await page.getByRole('tab', { name: '도움말', exact: true }).click();
+  await page.getByRole('button', { name: '전력', exact: true }).click();
   await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
   await page.locator('#meterProfiles').fill(JSON.stringify([{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }]));
   await page.locator('#saveMeters').click();
@@ -554,7 +555,7 @@ test('saving meters does not clear an unrelated unsaved Matter change', async ({
 
 test('scope save acknowledgement preserves a checkbox edited during the pending save and remains dirty', async ({ page }) => {
   await mountUi(page, { status: { scopeOptions: { complete: true, families: packetFamilies } } });
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await page.getByRole('button', { name: '연결', exact: true }).click();
   await page.getByLabel('주방', { exact: true }).uncheck();
   await page.evaluate(() => {
     window.__hejHost.holdNext['/save-scope'] = 1;
@@ -572,7 +573,7 @@ test('scope save acknowledgement preserves a checkbox edited during the pending 
 for (const action of ['command', 'save'] as const) {
   test(`account A late ${action} completion cannot write into account B with the same device ID`, async ({ page }) => {
     await mountUi(page, { devices: [{ id: 'same-id', name: '계정 A TV', deviceType: 'IrTv' }] });
-    await openDevice(page, 'same-id');
+    await openDevice(page, 'same-id', action === 'command' ? 'controls' : 'settings');
     const detail = page.getByTestId('device-detail');
     const route = action === 'command' ? '/remote-command' : '/save-device-settings';
     await page.evaluate((route) => {
@@ -593,8 +594,8 @@ for (const action of ['command', 'save'] as const) {
     });
     await publishStatus(page);
     if (action === 'save') {
-      page.once('dialog', (dialog) => dialog.accept());
-      await page.getByRole('button', { name: '이전 변경사항 버리고 새 계정 보기', exact: true }).click();
+      await page.getByRole('button', { name: '새 계정 확인', exact: true }).click();
+      await respondToConfirmation(page, 'discard');
     }
     await openDevice(page, 'same-id');
     await expect(detail.getByLabel('표시 이름')).toHaveValue('계정 B 이름');
@@ -603,6 +604,7 @@ for (const action of ['command', 'save'] as const) {
     await expect(detail.getByLabel('표시 이름')).toHaveValue('계정 B 이름');
     await expect(detail).not.toContainText('명령 전송 완료');
     await expect(detail).not.toContainText('계정 A 저장 이름');
+    await detail.getByRole('tab', { name: '조작', exact: true }).click();
     await expect(detail.getByRole('button', { name: '소리 크게', exact: true })).toBeEnabled();
   });
 }

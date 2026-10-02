@@ -1,15 +1,58 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { mountUi, openDevice } from './host-fixture.js';
 
-const screenshotDirectory = path.resolve('.superpowers/sdd/2026-09-30-ui-redesign/screenshots');
+const screenshotDirectory = path.resolve('.superpowers/sdd/2026-10-02-radix-settings/screenshots');
 fs.mkdirSync(screenshotDirectory, { recursive: true });
 
 const devices = [
   { id: 'tv-living', name: '거실 TV', deviceType: 'IrTv', lastControl: 'unknown' },
   { id: 'sensor-living', name: '거실 온습도', deviceType: 'SensorTh', online: false, lastControl: 'unknown' },
 ];
+
+async function expectReadableText(root: Locator, context: string) {
+  const samples = await root.evaluate((element) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const drawing = canvas.getContext('2d', { willReadFrequently: true })!;
+    const rgba = (value: string) => {
+      drawing.clearRect(0, 0, 1, 1);
+      drawing.fillStyle = value;
+      drawing.fillRect(0, 0, 1, 1);
+      const channels = [...drawing.getImageData(0, 0, 1, 1).data];
+      return [channels[0], channels[1], channels[2], channels[3] / 255];
+    };
+    const over = (foreground: number[], background: number[]) => foreground.slice(0, 3)
+      .map((channel, index) => channel * foreground[3] + background[index] * (1 - foreground[3]));
+    const luminance = (color: number[]) => color.slice(0, 3).map((channel) => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+    const textElements = [...element.querySelectorAll<HTMLElement>('*')].filter((node) =>
+      node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && !node.closest('[disabled], [aria-disabled="true"], svg, script, style')
+      && [...node.childNodes].some((child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim()));
+    return textElements.map((node) => {
+      const chain: HTMLElement[] = [];
+      for (let current: HTMLElement | null = node; current; current = current.parentElement) {
+        chain.unshift(current);
+      }
+      let background: number[] = [255, 255, 255];
+      for (const current of chain) {
+        background = over(rgba(getComputedStyle(current).backgroundColor), background);
+      }
+      const style = getComputedStyle(node);
+      const foreground = luminance(over(rgba(style.color), background));
+      const backdrop = luminance(background);
+      const size = parseFloat(style.fontSize);
+      const largeText = size >= 24 || size >= 18.66 && parseInt(style.fontWeight, 10) >= 700;
+      return { text: node.textContent?.trim().slice(0, 60), minimum: largeText ? 3 : 4.5,
+        ratio: (Math.max(foreground, backdrop) + 0.05) / (Math.min(foreground, backdrop) + 0.05) };
+    });
+  });
+  expect(samples.length, `${context} visible text samples`).toBeGreaterThan(0);
+  expect(samples.filter(sample => sample.ratio < sample.minimum), `${context} text below WCAG AA contrast`).toEqual([]);
+}
 
 for (const language of ['ko', 'en'] as const) {
   for (const theme of ['light', 'dark'] as const) {
@@ -18,87 +61,32 @@ for (const language of ['ko', 'en'] as const) {
         await page.setViewportSize({ width, height: 800 });
         await mountUi(page, { language, theme, devices });
         await expect(page.locator('html')).toHaveAttribute('data-hej-theme', theme);
-        await expect(page.getByRole('tablist').getByRole('tab')).toHaveCount(3);
-        await expect(page.getByRole('tab', { name: language === 'en' ? 'My devices' : '내 장치' })).toHaveAttribute('aria-selected', 'true');
-        await expect(page.locator('[data-testid="device-row"]')).toHaveCount(2);
+        const navigation = page.getByRole('navigation', { name: /설정 탐색|Settings navigation/ });
+        await expect(navigation.getByRole('button')).toHaveCount(4);
+        await expect(navigation.getByRole('button', { name: language === 'en' ? 'Devices' : '장치', exact: true }))
+          .toHaveAttribute('aria-current', 'page');
+        await expect(page.getByTestId('device-row')).toHaveCount(2);
+        await page.screenshot({ animations: 'disabled', path: path.join(screenshotDirectory, `${language}-${theme}-${width}.png`), fullPage: true });
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        await expectReadableText(page.locator('#settingsView'), `${language}/${theme}/${width} Devices`);
 
-        const contrast = await page.locator('#settingsView').evaluate((root) => {
-          const parse = (value: string): [number, number, number, number] | null => {
-            const match = value.match(/rgba?\(([^)]+)\)/);
-            if (!match?.[1]) {
-              return null;
-            }
-            const parts = match[1].split(/[,\s/]+/).filter(Boolean).map(Number);
-            return [parts[0], parts[1], parts[2], parts[3] ?? 1];
-          };
-          const over = (foreground: number[], background: number[]) => foreground.slice(0, 3)
-            .map((channel, index) => channel * (foreground[3] ?? 1) + background[index] * (1 - (foreground[3] ?? 1)));
-          const luminance = (color: number[]) => color.slice(0, 3).map((channel) => {
-            const unit = channel / 255;
-            return unit <= 0.04045 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
-          }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
-          return [...root.querySelectorAll('.hej-muted, .hej-badge, .hej-meta, [role="tab"], .hej-device-card p')]
-            .filter((node) => node instanceof HTMLElement && node.getClientRects().length > 0 && node.textContent?.trim())
-            .map((node) => {
-              const element = node as HTMLElement;
-              const chain: HTMLElement[] = [];
-              for (let current: HTMLElement | null = element; current; current = current.parentElement) {
-                chain.unshift(current);
-              }
-              let background: number[] = [255, 255, 255];
-              for (const current of chain) {
-                const color = parse(getComputedStyle(current).backgroundColor);
-                if (color) {
-                  background = over(color, background);
-                }
-              }
-              const textColor = parse(getComputedStyle(element).color) ?? [0, 0, 0, 1];
-              const foreground = over(textColor, background);
-              const light = luminance(foreground);
-              const dark = luminance(background);
-              return { text: element.textContent?.trim().slice(0, 45), ratio: (Math.max(light, dark) + 0.05)
-                / (Math.min(light, dark) + 0.05) };
-            });
-        });
-        expect(contrast.length).toBeGreaterThan(0);
-        for (const sample of contrast) {
-          expect(sample.ratio, `${language}/${theme}/${width}: ${sample.text}`).toBeGreaterThanOrEqual(4.5);
-        }
-        await page.screenshot({ path: path.join(screenshotDirectory, `${language}-${theme}-${width}.png`), fullPage: true });
-
-        for (const name of [language === 'en' ? 'Connection settings' : '연결 설정', language === 'en' ? 'Help' : '도움말']) {
-          await page.getByRole('tab', { name }).click();
+        for (const name of language === 'en' ? ['Connections', 'Power', 'Help'] : ['연결', '전력', '도움말']) {
+          await navigation.getByRole('button', { name, exact: true }).click();
           expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-          const lowContrast = await page.getByRole('tabpanel', { name }).evaluate((panel) => {
-            const rgb = (value: string) => value.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? [0, 0, 0];
-            const linear = (value: number) => {
-              const unit = value / 255;
-              return unit <= 0.04045 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
-            };
-            const luminance = (color: number[]) => color.map(linear)
-              .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
-            return [...panel.querySelectorAll('.hej-muted, .hej-badge, .hej-meta')]
-              .filter((element) => element instanceof HTMLElement && element.getClientRects().length > 0 && element.textContent?.trim())
-              .flatMap((element) => {
-                const node = element as HTMLElement;
-                const foreground = luminance(rgb(getComputedStyle(node).color));
-                let ancestor: HTMLElement | null = node;
-                let background = [255, 255, 255];
-                while (ancestor) {
-                  const style = getComputedStyle(ancestor).backgroundColor;
-                  if (style.startsWith('rgb(')) {
-                    background = rgb(style);
-                    break;
-                  }
-                  ancestor = ancestor.parentElement;
-                }
-                const light = luminance(background);
-                const ratio = (Math.max(foreground, light) + 0.05) / (Math.min(foreground, light) + 0.05);
-                return ratio < 4.5 ? [{ text: node.textContent?.trim().slice(0, 40), ratio }] : [];
-              });
-          });
-          expect(lowContrast, `${language}/${theme}/${width} ${name}`).toEqual([]);
+          const panel = page.getByRole('region', { name, exact: true });
+          await expect(panel).toBeVisible();
+          await page.screenshot({ animations: 'disabled', path: path.join(screenshotDirectory, `${language}-${theme}-${width}-${name}.png`), fullPage: true });
+          await expectReadableText(panel, `${language}/${theme}/${width} ${name}`);
+          // Keep indexes stable as each disclosure changes its open attribute.
+          for (const disclosure of await panel.locator('details').all()) {
+            const summary = disclosure.locator(':scope > summary');
+            if (await summary.isVisible() && await disclosure.getAttribute('open') === null) {
+              await summary.click();
+            }
+          }
+          await page.screenshot({ animations: 'disabled',
+            path: path.join(screenshotDirectory, `${language}-${theme}-${width}-${name}-expanded.png`), fullPage: true });
+          await expectReadableText(panel, `${language}/${theme}/${width} ${name} expanded`);
         }
       });
     }
@@ -126,87 +114,45 @@ test('key mobile and desktop flows render as usable pages', async ({ page }) => 
   await page.setViewportSize({ width: 375, height: 800 });
   await mountUi(page, { language: 'ko', theme: 'light', devices });
   await openDevice(page, 'tv-living');
-  await expect(page.locator('[data-testid="device-detail"]')).toBeVisible();
+  await expect(page.getByTestId('device-detail')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
-  await page.screenshot({ path: path.join(screenshotDirectory, 'ko-light-375-detail.png'), fullPage: true });
+  await page.screenshot({ animations: 'disabled', path: path.join(screenshotDirectory, 'ko-light-375-detail.png'), fullPage: true });
 
   await page.setViewportSize({ width: 1200, height: 800 });
   await mountUi(page, { language: 'ko', theme: 'light', devices });
-  await page.getByRole('tab', { name: '연결 설정' }).click();
-  await expect(page.getByRole('tabpanel', { name: '연결 설정' })).toBeVisible();
-  await page.screenshot({ path: path.join(screenshotDirectory, 'ko-light-1200-connections.png'), fullPage: true });
-  await page.getByRole('tab', { name: '도움말' }).click();
-  await expect(page.getByRole('tabpanel', { name: '도움말' })).toBeVisible();
-  await page.screenshot({ path: path.join(screenshotDirectory, 'ko-light-1200-help.png'), fullPage: true });
-
+  for (const [name, file] of [['연결', 'connections'], ['전력', 'power'], ['도움말', 'help']]) {
+    await page.getByRole('navigation', { name: '설정 탐색' }).getByRole('button', { name, exact: true }).click();
+    await expect(page.getByRole('region', { name, exact: true })).toBeVisible();
+    await page.screenshot({ animations: 'disabled', path: path.join(screenshotDirectory, `ko-light-1200-${file}.png`), fullPage: true });
+  }
   await page.setViewportSize({ width: 375, height: 800 });
   await mountUi(page, { language: 'en', theme: 'dark', status: { configured: false, sessionValid: false } });
-  await expect(page.getByRole('tablist')).toBeHidden();
+  for (const destination of await page.getByRole('navigation', { name: 'Settings navigation' }).getByRole('button').all()) {
+    await expect(destination).toBeDisabled();
+  }
   await expect(page.locator('#loginView')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
-  await page.screenshot({ path: path.join(screenshotDirectory, 'en-dark-375-login.png'), fullPage: true });
+  await page.screenshot({ animations: 'disabled', path: path.join(screenshotDirectory, 'en-dark-375-login.png'), fullPage: true });
 });
 
-test('mobile sign-in starts at the email step with a compact header', async ({ page }) => {
+test('mobile sign-in starts at an immediately usable email step with readable text', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 800 });
   for (const [language, theme] of [['en', 'dark'], ['ko', 'light']] as const) {
     await mountUi(page, { language, theme, status: { configured: false, sessionValid: false } });
     const login = page.locator('#loginView');
     await expect(login).toBeVisible();
-    const brand = await login.locator('.hej-brand').boundingBox();
-    expect(brand?.height, `${language} brand height`).toBeGreaterThanOrEqual(160);
-    expect(brand?.height, `${language} brand height`).toBeLessThanOrEqual(220);
-    const email = page.getByRole('textbox', { name: language === 'en' ? '1. Email' : '1. 이메일' });
-    await expect(email).toBeVisible();
+    const email = page.getByRole('textbox', { name: language === 'en' ? /Email/ : /이메일/ });
+    await expect(email).toBeInViewport();
     if (language === 'en') {
-      await expect(login.locator('.hej-copy')).not.toContainText(/[가-힣]/);
+      await expect(login).not.toContainText(/[가-힣]/);
     }
-    const send = page.getByRole('button', { name: language === 'en' ? 'Send code' : '인증번호 전송' });
-    await expect(send).toBeVisible();
+    const send = page.getByRole('button', { name: language === 'en' ? 'Send code' : '인증번호 전송', exact: true });
+    await expect(send).toBeInViewport();
     const touch = await send.boundingBox();
-    expect(touch?.height, `${language} send button height`).toBeGreaterThanOrEqual(44);
-    expect(touch?.width, `${language} send button width`).toBeGreaterThanOrEqual(44);
-    const loginContrast = await login.evaluate((root) => {
-      const parse = (value: string): number[] | null => {
-        const match = value.match(/rgba?\(([^)]+)\)/);
-        if (!match?.[1]) {
-          return null;
-        }
-        const channels = match[1].split(/[,\s/]+/).filter(Boolean).map(Number);
-        return [channels[0], channels[1], channels[2], channels[3] ?? 1];
-      };
-      const compose = (foreground: number[], background: number[]) => foreground.slice(0, 3)
-        .map((channel, index) => channel * (foreground[3] ?? 1) + background[index] * (1 - (foreground[3] ?? 1)));
-      const luminance = (color: number[]) => color.slice(0, 3).map((channel) => {
-        const value = channel / 255;
-        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-      }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
-      return ['.hej-note', '.hej-copy', '.hej-pill'].map((selector) => {
-        const element = root.querySelector(selector) as HTMLElement;
-        const chain: HTMLElement[] = [];
-        for (let current: HTMLElement | null = element; current; current = current.parentElement) {
-          chain.unshift(current);
-        }
-        let background: number[] = [255, 255, 255];
-        for (const current of chain) {
-          const color = parse(getComputedStyle(current).backgroundColor);
-          if (color) {
-            background = compose(color, background);
-          }
-        }
-        const foregroundCss = getComputedStyle(element).color;
-        const foreground = compose(parse(foregroundCss) ?? [0, 0, 0, 1], background);
-        const light = luminance(foreground);
-        const dark = luminance(background);
-        return { selector, foreground: foregroundCss, background: background.map(Math.round).join(','),
-          ratio: (Math.max(light, dark) + 0.05) / (Math.min(light, dark) + 0.05) };
-      });
-    });
-    for (const sample of loginContrast) {
-      expect(sample.ratio, `${language}/${theme} ${sample.selector} foreground=${sample.foreground} background=${sample.background}`)
-        .toBeGreaterThanOrEqual(4.5);
-    }
+    expect(touch?.height).toBeGreaterThanOrEqual(44);
+    expect(touch?.width).toBeGreaterThanOrEqual(44);
+    await expectReadableText(login, `${language}/${theme} login`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
-    await page.screenshot({ path: path.join(screenshotDirectory, `${language}-${theme}-375-login.png`), fullPage: true });
+    await page.screenshot({ animations: 'disabled', path: path.join(screenshotDirectory, `${language}-${theme}-375-login.png`), fullPage: true });
   }
 });

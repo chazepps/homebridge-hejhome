@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { openDevice } from './host-fixture.js';
+import { chooseOption, openDevice } from './host-fixture.js';
 
 const source = fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8');
 
@@ -9,7 +9,8 @@ test('live HVAC and purifier settings update without changing an in-progress tar
   await page.evaluate(() => {
     const host = new EventTarget();
     const state = { commands: [] as Array<{ route: string, payload: unknown }>, diagnostics: {
-      generatedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), controlsAvailable: true,
+      uiSessionRevision: 'account-revision-1',
+      deviceListAvailable: true, generatedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), controlsAvailable: true,
       connection: { session: 'valid', realtime: 'connected' },
       devices: [
         { id: 'ac-1', name: 'Bedroom AC', deviceType: 'IrAirconditioner', inScope: true,
@@ -28,7 +29,8 @@ test('live HVAC and purifier settings update without changing an in-progress tar
     Object.assign(host, {
       request: async (route: string, payload: unknown) => {
         if (route === '/session-status') {
-          return { configured: true, sessionValid: true, features: { matter: false, adaptiveLighting: false, meters: [] },
+          return { configured: true, sessionValid: true, uiSessionRevision: 'account-revision-1',
+            features: { matter: false, adaptiveLighting: false, meters: [] },
             scope: { mode: 'first-family' }, supportedModels: [] };
         }
         if (route === '/diagnostics') {
@@ -47,32 +49,32 @@ test('live HVAC and purifier settings update without changing an in-progress tar
   });
   await page.setContent(source);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
-  await openDevice(page, 'ac-1');
+  await openDevice(page, 'ac-1', 'controls');
   const ac = page.locator('[data-testid="device-detail"][data-device-id="ac-1"]');
-  await expect(ac.getByLabel('설정 온도', { exact: true })).toBeVisible();
-  await expect(ac.getByLabel('운전 방식', { exact: true })).toBeVisible();
-  await expect(ac.getByLabel('바람 세기', { exact: true })).toBeVisible();
-  await expect(ac).toContainText('설정 온도 23°C');
-  await expect(ac).toContainText('현재 온도: 22°C');
-  const target = ac.getByLabel('설정 온도');
+  await expect(ac.getByLabel('바꿀 설정 온도(°C)', { exact: true })).toBeVisible();
+  await expect(ac.getByLabel('바꿀 운전 방식', { exact: true })).toBeVisible();
+  await expect(ac.getByLabel('바꿀 바람 세기', { exact: true })).toBeVisible();
+  await expect(ac).toContainText(/설정 온도\s*23\s*°C/);
+  await expect(ac).toContainText(/현재 온도:\s*22\s*°C/);
+  const target = ac.getByLabel('바꿀 설정 온도(°C)');
   await target.fill('25');
   await page.evaluate(() => {
     const fixture = (window as unknown as { __hejFixture: { diagnostics: { devices: Array<{ hvacSettings?: { targetTemperature: number } }> } } }).__hejFixture;
     fixture.diagnostics.devices[0].hvacSettings!.targetTemperature = 24;
     window.homebridge.dispatchEvent(new Event('hejhome-status-changed'));
   });
-  await expect(ac).toContainText('설정 온도 24°C');
+  await expect(ac).toContainText(/설정 온도\s*24\s*°C/);
   await expect(target).toHaveValue('25');
   await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
-  await openDevice(page, 'purifier-1');
+  await openDevice(page, 'purifier-1', 'controls');
   const purifier = page.locator('[data-testid="device-detail"][data-device-id="purifier-1"]');
   await expect(purifier.getByRole('button', { name: '공기청정기 켜기', exact: true })).toBeVisible();
   await expect(purifier.getByRole('button', { name: '공기청정기 끄기', exact: true })).toBeVisible();
-  await expect(purifier).toContainText('운전 방식 취침');
-  await purifier.getByLabel('공기청정기 운전 방식').selectOption('manual');
+  await expect(purifier).toContainText(/운전 방식\s*취침/);
+  await chooseOption(page, purifier.getByLabel('바꿀 운전 방식'), '수동');
   await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
-  await openDevice(page, 'ac-1');
-  await ac.getByLabel('운전 방식').selectOption('heat');
+  await openDevice(page, 'ac-1', 'controls');
+  await chooseOption(page, ac.getByLabel('바꿀 운전 방식'), '난방');
   await target.focus();
   await page.evaluate(() => {
     const fixture = (window as unknown as { __hejFixture: { diagnostics: { controlsAvailable: boolean,
@@ -83,7 +85,7 @@ test('live HVAC and purifier settings update without changing an in-progress tar
   });
   await expect(target).toHaveValue('25');
   await expect(target).toBeFocused();
-  await expect(ac.getByLabel('운전 방식')).toHaveValue('heat');
+  await expect(ac.getByLabel('바꿀 운전 방식')).toContainText('난방');
   await expect(ac).toContainText('마지막으로 읽은 설정');
   await page.evaluate(() => {
     const fixture = (window as unknown as { __hejFixture: { diagnostics: { controlsAvailable: boolean,
@@ -93,8 +95,8 @@ test('live HVAC and purifier settings update without changing an in-progress tar
     window.homebridge.dispatchEvent(new Event('hejhome-status-changed'));
   });
   await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();
-  await openDevice(page, 'purifier-1');
-  await expect(purifier.getByLabel('공기청정기 운전 방식')).toHaveValue('manual');
+  await openDevice(page, 'purifier-1', 'controls');
+  await expect(purifier.getByLabel('바꿀 운전 방식')).toContainText('수동');
   await expect(purifier.getByRole('button', { name: '운전 방식 설정' })).toBeEnabled();
   await purifier.getByRole('button', { name: '운전 방식 설정' }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __hejFixture: { commands: unknown[] } }).__hejFixture.commands))
@@ -110,11 +112,13 @@ test('eligible devices save freshness, remote buttons and optional PM2.5 calibra
     window.homebridge = {
       request: async (route, payload) => {
         if (route === '/session-status') {
-          return { configured: true, sessionValid: true, features: { matter: true, adaptiveLighting: false, meters: [] },
+          return { configured: true, sessionValid: true, uiSessionRevision: 'account-revision-1',
+            features: { matter: true, adaptiveLighting: false, meters: [] },
             scope: { mode: 'first-family' }, supportedModels: [] };
         }
         if (route === '/diagnostics') {
-          return { generatedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), controlsAvailable: false,
+          return { uiSessionRevision: 'account-revision-1',
+            deviceListAvailable: true, generatedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), controlsAvailable: false,
             connection: { session: 'valid', realtime: 'disconnected' }, devices: [
               { id: 'sensor-1', name: 'Thermometer', deviceType: 'SensorTh', inScope: true,
                 roleChangeSupported: false, preference: {}, meterProfileApplied: false },
@@ -144,9 +148,9 @@ test('eligible devices save freshness, remote buttons and optional PM2.5 calibra
   await openDevice(page, 'tv-1');
   const tv = page.locator('[data-testid="device-detail"][data-device-id="tv-1"]');
   const remote = tv.getByLabel('리모컨 버튼을 Apple Home에 표시');
-  await tv.getByLabel('연결 방식').selectOption('matter');
+  await chooseOption(page, tv.getByLabel('연결 방식'), 'Matter만');
   await expect(remote).toBeDisabled();
-  await tv.getByLabel('연결 방식').selectOption('homekit');
+  await chooseOption(page, tv.getByLabel('연결 방식'), 'Apple Home만');
   await remote.check();
   await tv.getByRole('button', { name: '이 장치 저장' }).click();
   await page.getByRole('button', { name: '장치 목록으로', exact: true }).click();

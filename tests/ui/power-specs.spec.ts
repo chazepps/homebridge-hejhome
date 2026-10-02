@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { installUiHost, mountUi, publishStatus, requestCalls, type UiDevice } from './host-fixture.js';
+import { installUiHost, mountUi, openAccountActions, publishStatus, requestCalls, respondToConfirmation, type UiDevice } from './host-fixture.js';
 
 const source = () => fs.readFileSync(new URL('../../homebridge-ui/public/index.html', import.meta.url), 'utf8');
 const devices: UiDevice[] = [
@@ -13,8 +13,8 @@ const row = (page: Page, id = 'plug-1') => page.locator(`#powerSpecTableBody [da
 const active = (page: Page, id = 'plug-1') => row(page, id).locator('[data-power-field="activeWatts"]');
 const standby = (page: Page, id = 'plug-1') => row(page, id).locator('[data-power-field="standbyWatts"]');
 async function openPower(page: Page, language: 'ko' | 'en' = 'ko') {
-  await page.getByRole('tab', { name: language === 'ko' ? '도움말' : 'Help', exact: true }).click();
-  await expect(page.locator('#panel-meter')).toBeVisible();
+  await page.getByRole('button', { name: language === 'ko' ? '전력' : 'Power', exact: true }).click();
+  await expect(page.getByRole('region', { name: /^(전력|Power)$/ })).toBeVisible();
 }
 async function save(page: Page) {
   await page.locator('#powerSpecsSave').click();
@@ -39,8 +39,8 @@ test('registered devices have readonly identity and exactly two blank watt input
     await expect(input).toHaveValue('');
     expect(await input.getAttribute('placeholder') ?? '').not.toMatch(/\d/);
   }
-  await expect(page.locator('#panel-meter select,#panel-meter input[type="checkbox"],#panel-meter datalist')).toHaveCount(0);
-  await expect(page.locator('#panel-meter')).not.toContainText(/fictional|example|가상|예시|계산기/i);
+  await expect(page.locator('#powerSpecTable select,#powerSpecTable input[type="checkbox"],#powerSpecTable datalist')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: /^(전력|Power)$/ })).not.toContainText(/fictional|example|가상|예시|계산기/i);
   await expect(page.locator('#powerSpecsSave')).toBeDisabled();
   expect(await savedCalls(page)).toEqual([]);
 });
@@ -113,13 +113,13 @@ for (const language of ['ko', 'en'] as const) {
       { id: 'unknown', name: 'Old diagnostics', deviceType: 'Plug' },
     ] });
     await openPower(page, language);
-    await expect(row(page).locator('.hej-power-support')).toContainText(language === 'ko' ? /추정 지원/ : /Estimate supported/);
-    await expect(row(page, 'multi').locator('.hej-power-support')).toContainText(language === 'ko' ? /미지원.*여러 부하/ : /Unsupported.*multiple loads/);
-    await expect(row(page, 'metered').locator('.hej-power-support')).toContainText(language === 'ko' ? /실측.*우선/ : /Measured.*priority/);
-    await expect(row(page, 'unknown').locator('.hej-power-support')).toContainText(language === 'ko' ? /확인 필요/ : /unconfirmed/);
+    await expect(row(page)).toContainText(language === 'ko' ? /추정 지원/ : /Estimate supported/);
+    await expect(row(page, 'multi')).toContainText(language === 'ko' ? /미지원.*여러 부하/ : /Unsupported.*multiple loads/);
+    await expect(row(page, 'metered')).toContainText(language === 'ko' ? /실측.*우선/ : /Measured.*(?:priority|first)/);
+    await expect(row(page, 'unknown')).toContainText(language === 'ko' ? /확인 필요/ : /unconfirmed/);
     await expect(page.locator('#powerSpecsMatterState')).toContainText(language === 'ko' ? /꺼져/ : /Matter is off/);
     await active(page).fill('12.5');
-    await page.getByRole('tab', { name: language === 'ko' ? '연결 설정' : 'Connection settings', exact: true }).click();
+    await page.getByRole('button', { name: language === 'ko' ? '연결' : 'Connections', exact: true }).click();
     await page.locator('#matterFeature').check();
     await page.locator('#saveFeatures').click();
     await expect(page.locator('#featuresStatus')).toContainText(language === 'ko' ? /저장/ : /Saved/);
@@ -136,6 +136,8 @@ for (const language of ['ko', 'en'] as const) {
       { deviceId: 'multi', activeWatts: null, standbyWatts: null, expected: { activeWatts: 20, standbyWatts: 0 } },
     ] }]);
     expect(await page.evaluate(() => window.__hejHost.config.devicePreferences.multi)).toEqual({ name: 'Keep name' });
+    await expect(active(page, 'multi')).toBeDisabled();
+    await expect(standby(page, 'multi')).toBeDisabled();
   });
 }
 
@@ -247,6 +249,7 @@ test('a concurrent saved change rejects the whole batch and preserves both local
 
 for (const condition of ['empty', 'unavailable', 'missing-availability', 'missing-revision'] as const) {
   test(`${condition} registered list cannot send a clear or save and returning devices keep drafts`, async ({ page }) => {
+    await page.clock.install();
     await mountUi(page, { devices });
     await openPower(page);
     await active(page).fill('34');
@@ -269,6 +272,16 @@ for (const condition of ['empty', 'unavailable', 'missing-availability', 'missin
     await page.evaluate((previous) => {
       window.__hejHost.diagnostics = previous;
     }, previous);
+    if (condition === 'missing-revision') {
+      // An ownerless response is a diagnostic failure; retain its 30-second retry backoff.
+      const requests = (await requestCalls(page, '/diagnostics')).length;
+      await publishStatus(page);
+      expect(await requestCalls(page, '/diagnostics')).toHaveLength(requests);
+      await page.clock.runFor(30001);
+      await page.evaluate(() => {
+        window.__hejHost.diagnostics.updatedAt = new Date().toISOString();
+      });
+    }
     await publishStatus(page);
     await expect(active(page)).toHaveValue('34');
     await expect(page.locator('#powerSpecsSave')).toBeEnabled();
@@ -306,15 +319,17 @@ test('dirty logout cancellation preserves input and accepting discards it before
   await mountUi(page, { devices });
   await openPower(page);
   await active(page).fill('73');
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
-  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  await openAccountActions(page);
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+  await respondToConfirmation(page, 'cancel');
   expect(await requestCalls(page, '/logout')).toHaveLength(0);
   await openPower(page);
   await expect(active(page)).toHaveValue('73');
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
-  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  await openAccountActions(page);
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+  await respondToConfirmation(page, 'discard');
   await expect(page.getByLabel('이메일')).toBeVisible();
   await page.evaluate(() => {
     window.__hejHost.nextLoginDevices = [{ id: 'plug-1', name: 'New account lamp', deviceType: 'Plug', preference: { powerSpec: { activeWatts: 8 } } }];
@@ -333,7 +348,7 @@ test('dirty logout cancellation preserves input and accepting discards it before
 test('a first diagnostic from a different account cannot expose status-account preferences or save them', async ({ page }) => {
   await installUiHost(page, { devices: [{ ...devices[0]!, preference: { powerSpec: { activeWatts: 71 } } }] });
   await page.evaluate(() => {
-    window.__hejHost.holdNext['/diagnostics'] = 2;
+    window.__hejHost.holdNext['/diagnostics'] = 1;
   });
   await page.setContent(source());
   await openPower(page);
@@ -375,11 +390,11 @@ test('a dirty account switch requires discard and a late save ACK cannot restore
   await publishStatus(page);
   const review = page.locator('#accountChangeAction');
   await expect(review).toBeVisible();
-  page.once('dialog', (dialog) => dialog.dismiss());
   await review.click();
+  await respondToConfirmation(page, 'cancel');
   await expect(review).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept());
   await review.click();
+  await respondToConfirmation(page, 'discard');
   await openPower(page);
   await expect(active(page)).toHaveValue('8');
   await page.evaluate(() => window.__hejHost.pending.find((entry) => entry.route === '/save-power-specs')!.resolve({
@@ -397,6 +412,8 @@ test('late B status and old A diagnostics cannot overwrite account C with the sa
   });
   await page.setContent(source());
   await openPower(page);
+  // Create the second overlapping request explicitly instead of requiring duplicate startup polling.
+  await publishStatus(page);
   await expect.poll(() => page.evaluate(() => window.__hejHost.pending.filter((entry) => entry.route === '/diagnostics').length)).toBe(2);
   const oldA = await page.evaluate(() => structuredClone(window.__hejHost.diagnostics));
   await page.evaluate(() => {
@@ -443,7 +460,7 @@ for (const { language, theme, width } of renderCases) {
     await page.setViewportSize({ width, height: 900 });
     await mountUi(page, { language, theme, devices });
     await openPower(page, language);
-    const panel = page.locator('#panel-meter');
+    const panel = page.getByRole('region', { name: /^(전력|Power)$/ });
     await expect(page.locator('#powerSpecTable th')).toHaveCount(3);
     await expect(page.locator('#powerSpecTable th').nth(1)).toContainText('W');
     await expect(page.locator('#powerSpecTable th').nth(2)).toContainText('W');
@@ -452,7 +469,7 @@ for (const { language, theme, width } of renderCases) {
       await expect(input).toHaveAccessibleName(/.+/);
       expect(await input.getAttribute('placeholder') ?? '').not.toMatch(/\d/);
     }
-    for (const control of await panel.locator('input,button').all()) {
+    for (const control of await panel.locator('input:visible, button:visible').all()) {
       const box = await control.boundingBox();
       expect(box?.height).toBeGreaterThanOrEqual(44);
       expect(box?.width).toBeGreaterThanOrEqual(44);
@@ -476,7 +493,7 @@ for (const { language, theme, width } of renderCases) {
     }
     const directory = path.resolve('.superpowers/sdd/2026-10-02-power-matter/screenshots');
     fs.mkdirSync(directory, { recursive: true });
-    await panel.screenshot({ path: path.join(directory, `${language}-${theme}-${width}-blank.png`) });
+    await panel.screenshot({ animations: 'disabled', path: path.join(directory, `${language}-${theme}-${width}-blank.png`) });
   });
 }
 
@@ -488,9 +505,10 @@ test('same-account sign-in cannot accept an ACK from a discarded earlier editor 
     window.__hejHost.holdNext['/save-power-specs'] = 1;
   });
   await save(page);
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
-  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  await openAccountActions(page);
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+  await respondToConfirmation(page, 'discard');
   await expect(page.getByLabel('이메일')).toBeVisible();
   await page.evaluate(() => {
     // Account revision is stable for this account; the UI editor lifetime is new.
@@ -559,14 +577,10 @@ test('a pending save reverted to its old baseline survives a missing device and 
 
 test('a pending save reverted to its old baseline still requires logout discard confirmation', async ({ page }) => {
   await submitAndRevertPowerDraft(page);
-  let confirmations = 0;
-  page.on('dialog', async (dialog) => {
-    confirmations++;
-    await dialog.dismiss();
-  });
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  await openAccountActions(page);
   await page.getByRole('button', { name: '로그아웃', exact: true }).click();
-  expect(confirmations).toBe(1);
+  await respondToConfirmation(page, 'cancel');
   expect(await requestCalls(page, '/logout')).toHaveLength(0);
   await openPower(page);
   await expect(active(page)).toHaveValue('5');
@@ -585,8 +599,8 @@ test('a pending save reverted to its old baseline requires account-change discar
   await publishStatus(page);
   const review = page.locator('#accountChangeAction');
   await expect(review).toBeVisible();
-  page.once('dialog', (dialog) => dialog.dismiss());
   await review.click();
+  await respondToConfirmation(page, 'cancel');
   await expect(review).toBeVisible();
   expect(await savedCalls(page)).toHaveLength(1);
 });
@@ -601,7 +615,7 @@ test('a reverted newer draft survives save rejection and subsequent saved-value 
     window.__hejHost.config.devicePreferences['plug-1'] = { powerSpec: { activeWatts: 10 } };
     window.__hejHost.diagnostics.devices[0]!.preference = { powerSpec: { activeWatts: 10 } };
   });
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await page.getByRole('button', { name: '연결', exact: true }).click();
   const before = (await requestCalls(page, '/diagnostics')).length;
   await publishStatus(page);
   await expect.poll(async () => (await requestCalls(page, '/diagnostics')).length).toBeGreaterThan(before);
@@ -609,4 +623,40 @@ test('a reverted newer draft survives save rejection and subsequent saved-value 
   await expect(active(page)).toHaveValue('5');
   await expect(page.locator('#powerSpecsSave')).toBeEnabled();
   expect(await savedCalls(page)).toHaveLength(1);
+});
+
+test('confirmed unsupported blank specifications are read-only while saved zero and an in-progress draft remain clearable', async ({ page }) => {
+  await mountUi(page, { devices: [
+    { ...devices[0]!, powerSpecEligibility: { supported: true, reason: 'supported' } },
+    { id: 'unsupported-empty', name: 'IR remote', deviceType: 'IrTv', powerSpecEligibility: { supported: false, reason: 'device-type' } },
+    { id: 'unsupported-zero', name: 'Previous zero', deviceType: 'Switch2', powerSpecEligibility: { supported: false, reason: 'multiple-loads' },
+      preference: { powerSpec: { activeWatts: 0 } } },
+  ] });
+  await openPower(page);
+  await expect(active(page, 'unsupported-empty')).toHaveValue('');
+  await expect(active(page, 'unsupported-empty')).toBeDisabled();
+  await expect(standby(page, 'unsupported-empty')).toBeDisabled();
+  await expect(active(page, 'unsupported-zero')).toHaveValue('0');
+  await expect(active(page, 'unsupported-zero')).toBeEnabled();
+  await active(page).fill('12');
+  await page.evaluate(() => {
+    window.__hejHost.diagnostics.devices[0]!.powerSpecEligibility = { supported: false, reason: 'device-type' };
+  });
+  await publishStatus(page);
+  await expect(active(page)).toHaveValue('12');
+  await expect(active(page)).toBeEnabled();
+  await active(page, 'unsupported-zero').fill('');
+  await save(page);
+  await expect.poll(() => savedCalls(page)).toEqual([{ uiSessionRevision: 'account-revision-1', updates: [
+    { deviceId: 'plug-1', activeWatts: 12, standbyWatts: null, expected: { activeWatts: null, standbyWatts: null } },
+    { deviceId: 'unsupported-zero', activeWatts: null, standbyWatts: null, expected: { activeWatts: 0, standbyWatts: null } },
+  ] }]);
+  await expect(active(page, 'unsupported-zero')).toBeDisabled();
+  await expect(active(page)).toBeEnabled();
+  await active(page).fill('');
+  await save(page);
+  await expect.poll(async () => (await savedCalls(page)).at(-1)).toEqual({ uiSessionRevision: 'account-revision-1', updates: [
+    { deviceId: 'plug-1', activeWatts: null, standbyWatts: null, expected: { activeWatts: 12, standbyWatts: null } },
+  ] });
+  await expect(active(page)).toBeDisabled();
 });

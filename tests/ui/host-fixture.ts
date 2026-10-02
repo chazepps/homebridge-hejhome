@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { expect, type Page, type Frame } from '@playwright/test';
+import { expect, type Page, type Frame, type Locator } from '@playwright/test';
 
 export interface UiDevice {
   id: string;
@@ -199,12 +199,37 @@ export async function requestCalls(page: Page, route: string) {
   return page.evaluate((route) => window.__hejHost.calls.filter((entry) => entry.route === route), route);
 }
 
-export async function openDevice(page: Page | Frame, id: string): Promise<void> {
+export async function openDevice(page: Page | Frame, id: string, section: 'settings' | 'controls' = 'settings'): Promise<void> {
   const row = page.locator(`[data-testid="device-row"][data-device-id="${id}"]`);
   await expect(row).toBeVisible();
-  await row.getByRole('button', { name: /^(상세 보기|Details)$/ }).click();
+  await row.getByRole('button', { name: /(?:상세 보기|Details)$/ }).click();
+  await page.getByTestId('device-detail').getByRole('tab', { name: section === 'controls' ? /^(조작|Controls)$/ : /^(설정|Settings)$/ }).click();
 }
 
 export async function publishStatus(page: Page): Promise<void> {
   await page.evaluate(() => window.homebridge.dispatchEvent(new Event('hejhome-status-changed')));
+}
+
+/** Select through the visible Radix popup, including its focus restoration. */
+export async function chooseOption(page: Page | Frame, control: Locator, name: string | RegExp): Promise<void> {
+  await expect(control).toHaveAttribute('role', 'combobox');
+  await control.click();
+  await page.getByRole('option', { name, exact: typeof name === 'string' }).click();
+  await expect(control).toBeFocused();
+}
+
+/** Complete an already-open Radix confirmation as a user would. */
+export async function respondToConfirmation(page: Page, action: 'cancel' | 'discard'): Promise<void> {
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAccessibleName(/.+/);
+  await dialog.getByRole('button', { name: action === 'cancel' ? /^(취소|Cancel)$/ : /^(변경사항 버리기|Discard changes)$/ }).click();
+  await expect(dialog).toBeHidden();
+}
+
+export async function openAccountActions(page: Page): Promise<void> {
+  const disclosure = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^(만료 일정 및 계정 관리|Expiry and account management)$/ }) });
+  if (await disclosure.getAttribute('open') === null) {
+    await disclosure.locator('summary').click();
+  }
 }

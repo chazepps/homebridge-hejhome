@@ -6,9 +6,9 @@ const source = fs.readFileSync(new URL('../../homebridge-ui/public/index.html', 
 
 test('connection and lighting options require separate explicit saves and survive reopening', async ({ page }) => {
   await mountUi(page);
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
-  const matter = page.getByLabel('다른 스마트홈 앱에 연결(Matter)');
-  const adaptive = page.getByLabel('적응형 조명');
+  await page.getByRole('button', { name: '연결', exact: true }).click();
+  const matter = page.getByRole('switch', { name: 'Matter 연결', exact: true });
+  const adaptive = page.getByRole('switch', { name: '적응형 조명', exact: true });
   await expect(matter).not.toBeChecked();
   await expect(adaptive).not.toBeChecked();
   await matter.check();
@@ -23,7 +23,7 @@ test('connection and lighting options require separate explicit saves and surviv
   ]);
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
   await page.setContent(source);
-  await page.getByRole('tab', { name: '연결 설정', exact: true }).click();
+  await page.getByRole('button', { name: '연결', exact: true }).click();
   await expect(matter).toBeChecked();
   await expect(adaptive).toBeChecked();
 });
@@ -31,7 +31,7 @@ test('connection and lighting options require separate explicit saves and surviv
 test('actual-meter expert JSON preserves custom fields and saves deletion of the last model', async ({ page }) => {
   await mountUi(page, { status: { features: { matter: true, adaptiveLighting: true,
     meters: [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] } } });
-  await page.getByRole('tab', { name: '도움말', exact: true }).click();
+  await page.getByRole('button', { name: '전력', exact: true }).click();
   await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
   const profiles = [{ model: 'P1', power: { field: 'vendorWatts', multiplier: 0.1 },
     energy: { field: 'historicalWh', multiplier: 1 } }];
@@ -49,7 +49,7 @@ test('actual-meter expert JSON preserves custom fields and saves deletion of the
 
 test('invalid expert JSON is not saved and remains available for correction', async ({ page }) => {
   await mountUi(page);
-  await page.getByRole('tab', { name: '도움말', exact: true }).click();
+  await page.getByRole('button', { name: '전력', exact: true }).click();
   await page.getByText('고급: 전력 측정 모델 설정', { exact: true }).click();
   for (const raw of ['{not json', '[{"model":"P","power":{"field":"curPower","multiplier":1e400}}]']) {
     await page.locator('#meterProfiles').fill(raw);

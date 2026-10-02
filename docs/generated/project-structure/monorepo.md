@@ -64,7 +64,33 @@ Generated from the current repository tree. Generated project-structure snapshot
 ├── homebridge-ui
 │   ├── public
 │   │   └── index.html
-│   └── server.js
+│   ├── server.js
+│   ├── src
+│   │   ├── App.tsx
+│   │   ├── core
+│   │   │   ├── controller.ts
+│   │   │   ├── drafts.ts
+│   │   │   ├── index.tsx
+│   │   │   ├── radix.ts
+│   │   │   └── types.ts
+│   │   ├── env.d.ts
+│   │   ├── Login.tsx
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   │   ├── Connections.tsx
+│   │   │   ├── devices
+│   │   │   │   ├── Commands.tsx
+│   │   │   │   ├── Fields.tsx
+│   │   │   │   ├── Inspector.tsx
+│   │   │   │   ├── model.ts
+│   │   │   │   ├── navigation.ts
+│   │   │   │   └── Status.tsx
+│   │   │   ├── Devices.tsx
+│   │   │   ├── Help.tsx
+│   │   │   ├── Power.tsx
+│   │   │   └── settings-helpers.ts
+│   │   └── styles.css
+│   └── tsconfig.json
 ├── LICENSE
 ├── nodemon.json
 ├── package-lock.json
@@ -161,6 +187,8 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── power-specs.test.ts
 │   ├── public-surface.test.ts
 │   ├── purifier-contract.test.ts
+│   ├── radix-device-editor.test.ts
+│   ├── radix-device-navigation.test.ts
 │   ├── realtime-purifier-door.test.ts
 │   ├── realtime.test.ts
 │   ├── redaction.test.ts
@@ -188,6 +216,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── login-ui.spec.ts
 │   │   ├── navigation-workflow.spec.ts
 │   │   └── power-specs.spec.ts
+│   ├── ui-controller.test.ts
 │   ├── ui-diagnostics-server.test.ts
 │   ├── ui-features-server.test.ts
 │   ├── ui-live-diagnostics-server.test.ts
@@ -217,10 +246,13 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── prepare-dev-plugins.mjs
 │   │   ├── run-dev-ui.mjs
 │   │   └── verify-pi-runtime.mjs
-│   └── release
-│       ├── channel.mjs
-│       ├── host-matrix-smoke.mjs
-│       └── verify-host-matrix.mjs
+│   ├── release
+│   │   ├── channel.mjs
+│   │   ├── host-matrix-smoke.mjs
+│   │   └── verify-host-matrix.mjs
+│   └── ui
+│       ├── build.mjs
+│       └── preview.mjs
 ├── tsconfig.json
 └── vitest.config.ts
 ```
