@@ -21,7 +21,7 @@ Use lights, switches, plugs and sensors registered in the Hejhome app through Ap
 A Hejhome account and an internet connection are required. Device control uses the Hejhome cloud.
 
 > **About the 3.0 beta**
-> This document covers **3.0.0-beta.1**, which is still in development and has not been published to npm. Features and system requirements may differ from the published stable version. Once published, the beta must be selected explicitly.
+> This document covers **3.0.0-beta.1**. **Stable v2 uses `latest`; beta v3 uses `beta`.** Normal installations and updates use the stable version. Select the v3 beta explicitly. Features and system requirements differ between the two versions.
 
 [Getting started](#getting-started) · [Settings](#settings) · [Supported devices](#supported-devices-and-features) · [Upgrading](#upgrading-from-2x) · [Troubleshooting](#troubleshooting)
 
@@ -53,18 +53,25 @@ Remote, air-conditioner and air-purifier controls on the plugin settings page re
 
 Find `@chazepps/homebridge-hejhome` in the **Plugins** section of Homebridge UI. If using the command line, run commands in the environment where Homebridge is installed.
 
+| Choice | Channel | Version | How to install |
+| --- | --- | --- | --- |
+| Stable v2 | `latest` | `2.1.1` | Normal installation or update, or `@latest` |
+| Beta v3 | `beta` | `3.0.0-beta.1` | Select the beta in the version picker, or use `@beta` |
+
+Open **Install Previous Version** (or Install Alternate Version, depending on the UI) from the installed plugin's menu to choose a version. Version 3 requires Homebridge 2.4 or later. Each installation runs one selected version.
+
 ```sh
 # Install the published stable version
 npm install -g @chazepps/homebridge-hejhome@latest
 ```
 
-**Once 3.0.0-beta.1 is published, install that version with:**
+**To explicitly select the v3 beta, use:**
 
 ```sh
 npm install -g @chazepps/homebridge-hejhome@3.0.0-beta.1
 ```
 
-You can also use `@beta` to select the published beta channel. Installation fails if the tag does not exist; if it points to a different beta, that version is installed. Check the channel and version first.
+`@beta` installs the version on the beta channel. Specify the exact version as above to stay on a particular beta. Check the current channel versions with:
 
 ```sh
 npm view @chazepps/homebridge-hejhome dist-tags
@@ -72,7 +79,7 @@ npm install -g @chazepps/homebridge-hejhome@beta
 ```
 
 <details>
-<summary>Test the beta from source before publication</summary>
+<summary>Build and test a package from source</summary>
 
 Back up your test Homebridge configuration, then run these commands from a checkout containing the 3.0 beta source.
 
