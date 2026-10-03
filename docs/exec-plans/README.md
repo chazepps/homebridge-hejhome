@@ -7,7 +7,7 @@ New plans should include scope, official gates, test plan, release impact, and r
 ## Active: Homebridge Organization Transfer
 
 - [Homebridge 조직 스코프 이전 실행 계획](2026-10-03-homebridge-scope-migration.md): 현재 상태, 신청·권한 이전, v2/v3 패키지 변경, GUI 전환·페어링 보존 검증과 복귀 기준.
-- [공식 이전 신청 초안](2026-10-03-homebridge-scope-transfer-request.md): 소유자 확인 후 제출할 영문 양식. 현재 미제출.
+- [공식 이전 신청 기록과 번역](2026-10-03-homebridge-scope-transfer-request.md): 공식 이슈 #1251의 제출 기록, 한국어 검토본과 영문 양식.
 
 ## Feature Expansion
 

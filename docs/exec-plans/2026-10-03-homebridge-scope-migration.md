@@ -10,7 +10,7 @@
 
 **Spec:** 사용자가 요청한 조직 스코프 이전 체크리스트와 [공식 Scoped Plugins 안내](https://github.com/homebridge/plugins/wiki/Scoped-Plugins), [이전 신청 양식](https://github.com/homebridge/plugins/blob/latest/.github/ISSUE_TEMPLATE/3_transfer-request.yml)을 기준으로 한다.
 
-작성일: 2026-10-03. 상태: **사전 점검 및 신청 초안 작성. 외부 제출·소유권 이전·제품 코드 변경은 아직 실행하지 않음.**
+작성일: 2026-10-03. 상태: **[공식 이전 신청 #1251](https://github.com/homebridge/plugins/issues/1251) 제출 확인. Homebridge 팀 답변 대기와 v2·v3 공식 검증 대비 보완을 병행한다. 소유권 이전·새 스코프 게시·운영 설치는 아직 실행하지 않음.**
 
 ## 1. 현재 확인된 기준선
 
@@ -27,7 +27,8 @@
 | 기존 검증 요청 | [homebridge/plugins #750](https://github.com/homebridge/plugins/issues/750), 종료된 Verification Request |
 | 조직 스코프 전환 목록 | `has-scope-plugins.json`에 Hejhome 항목 없음 |
 | 새 패키지 조회 | npm 공개 조회에서 404. 이름 예약·게시 권한이 승인됐다는 뜻은 아님 |
-| 중복 신청 조회 | 기존 패키지명으로 공식 저장소의 열린/닫힌 이슈를 검색했을 때 #750만 확인. 제출 직전에 다시 검색 |
+| 현재 이전 신청 | [#1251](https://github.com/homebridge/plugins/issues/1251), 작성자 `chazepps`, OPEN, `request-transfer`, 2026-10-03T06:40:02Z 기준 댓글 0개; 마지막 댓글 ID 없음 |
+| 답변 추적 | 이 대화의 1시간 간격 추적 활성화. 변화가 없으면 알리지 않고, 답변·승인·추가 요청·종료 시 변경 내용을 알림 |
 
 이 표의 값은 작업 당시 조회 결과다. 실제 이전 직전에 다시 조회하며, 그 사이 새 릴리스가 있으면 이전 기준 버전을 갱신한다. 기존 Verified 등록은 이번 패키지 이전이나 새 베타의 모든 기능에 대한 별도 승인으로 해석하지 않는다.
 
@@ -64,7 +65,7 @@
 
 `platform`에 `@chazepps/homebridge-hejhome.Hejhome`처럼 구 패키지명까지 넣은 설정도 별도 처리 대상이다. 현재 초기화 코드는 `api.registerPlatform(PLATFORM_NAME, HejhomePlatform)`이며 구 이름의 번역 정보를 별도로 등록하지 않는다. 일반적인 `platform: "Hejhome"`만 통과시킨 뒤 모든 기존 설정이 호환된다고 판단하지 않는다.
 
-## A. 사전 점검과 신청 초안 — 현재 단계
+## A. 사전 점검과 신청 — 완료
 
 **담당:** 유지보수자와 작업 에이전트. **산출물:** 이 실행 계획과 [공식 신청 초안](2026-10-03-homebridge-scope-transfer-request.md).
 
@@ -74,14 +75,16 @@
 - [x] 제품 코드와 배포 도구에서 패키지명에 의존하는 지점을 조사한다.
 - [x] Homebridge 2.4.0의 실제 로더 메서드와 메모리 fixture로 정상 3개·위험 3개 시나리오를 확인한다. 6개 assertion 통과는 위험 재현도 포함하며, 실제 페어링 이전 성공을 뜻하지 않는다.
 - [x] 공식 양식에 맞춘 영문 신청 초안을 작성한다.
-- [ ] 소유자가 계속 유지보수하는 선택, 조직 밖 재이전 제한, 신청 내용의 공개 제출을 확인한다.
-- [ ] 중복 신청을 다시 검색한 뒤 `homebridge/plugins`에 **Plugin Transfer Request**를 제출하고 실제 이슈 URL을 기록한다.
+- [x] 소유자가 계속 유지보수하는 선택, 조직 밖 재이전 제한, 신청 내용의 공개 제출을 확인한다. 사용자가 알려준 #1251의 작성자와 실제 제출 본문에서 확인했다.
+- [x] `homebridge/plugins`의 **Plugin Transfer Request** [#1251](https://github.com/homebridge/plugins/issues/1251) 제출을 확인했다. 동일 신청을 새로 만들지 않는다.
 
 **검증:** `npm run docs:check`와 `git diff --check` 통과. 공개 이슈 제출 완료 표시는 실제 URL과 제출 본문 확인 후에만 한다.
 
 ## B. Homebridge 팀과 이전 순서 확정
 
 **입력:** 작업 A의 공개 신청. **산출물:** 이슈에서 확인된 승인 조건과 역할·게시 순서.
+
+현재 댓글은 없다. 자동 추적은 이슈 내용 확인과 변경 알림용이며, 외부 댓글 작성이나 권한 이전·게시를 자동 실행하는 승인이 아니다.
 
 - [ ] 새 npm 이름과 GitHub 대상 조직·저장소 이름을 팀 답변으로 확정한다.
 - [ ] 기존 GitHub 저장소의 이력·이슈·릴리스·브랜치 보존 및 유지보수자 권한을 확인한다.
@@ -91,6 +94,53 @@
 - [ ] GitHub 환경 보호 규칙·워크플로 실행 권한·비밀값 보존 여부를 점검하고 필요한 설정을 재구성한다. 비밀값 자체는 문서에 적지 않는다.
 
 **완료 조건:** 이름·권한·최초 게시·두 채널·기존 사용자 전환 방식에 대한 답변이 모두 있다. 답변이 없는 항목은 완료 표시하거나 임의로 소유권을 변경하지 않는다.
+
+## B1. 공식 검증 사례에서 확인한 보완 — 승인 대기 중 진행
+
+사용자가 [#1250](https://github.com/homebridge/plugins/issues/1250), [#1249](https://github.com/homebridge/plugins/issues/1249), [#1248](https://github.com/homebridge/plugins/issues/1248), [#1246](https://github.com/homebridge/plugins/issues/1246), [#1211](https://github.com/homebridge/plugins/issues/1211)을 비교해 부족한 점을 v2·v3 각각 수정하고 커밋하도록 요청했다. 이는 새 스코프 이름 변경과 분리된 현재 패키지의 검증 대비 작업이다. 이번 보완은 버전 변경·게시를 포함하지 않는다.
+
+| 사례 | 실제 검토 내용 | 우리 프로젝트에서 확인할 항목 |
+| --- | --- | --- |
+| #1250 | transport 키워드와 잘못된 `required` 수정 후 재게시·`/check`로 자동 검사 통과 | v2 `supports-hap` 누락 보완; v3의 HAP/Matter 동시 선언 유지 |
+| #1249 | 필드별 boolean `required` 실패, 보안 스캔의 private-key 접근 표시 수동 검토 | JSON Schema 전체 구조 및 보안 스캔 오탐의 실제 파일·코드 근거 확인 |
+| #1248 | npm 버전과 GitHub 루트 package 버전 불일치 | v2 정식은 기본 브랜치·태그·패키지 일치, v3는 별도 베타 태그/브랜치 기준을 명시 |
+| #1246 | Schema 수정 뒤 환경 파일 접근으로 수동 검토 표시 | 환경변수 사용 목적을 설명하며 안전한 검증 코드를 스캔 회피 목적으로 제거하지 않음 |
+| #1211 | metadata·Schema 이후 최소 설정의 생성자 크래시 수정, 최종 수동 검토에서 debug 인증 코드·토큰 노출 지적 | 최소 설정·네트워크 오류·종료/재시작, 문자열·객체 로그의 인증정보 가림을 검증 |
+
+- [x] 다섯 이슈의 본문·자동 검사·수동 답변을 확인했다. 이들은 Verification Request이며, 우리 #1251은 Transfer Request라는 절차 차이를 유지한다.
+- [x] v2에서 확인된 transport 누락, 태그·패키지 버전 검사 누락, 잘못된 실시간 메시지의 예외 처리를 보완하고 재현 테스트를 통과시킨다.
+- [x] v2·v3 각각 인증 코드·토큰·쿠키의 객체 키와 문자열 표현을 검사하고, 노출이 재현된 항목을 수정한다.
+- [x] v3의 운영 의존성 감사에서 확인된 `ip-address` 경고를 호환 범위 내 최소 변경으로 해소한다. v2는 운영 감사 결과를 별도로 기록한다.
+- [x] 두 계열의 metadata·Schema·최소 설정·종료/재시작·사전 빌드 패키지 계약을 확인한다. 지원 환경을 넓히거나 숨겨서 검사를 통과시키지 않는다.
+- [x] v3 브랜치의 보안 검사 실행 범위가 누락되지 않도록 확인한다.
+- [x] 각 계열의 전체 검증과 독립 리뷰를 마친 뒤 분리 커밋한다. 통과하지 않은 공식 자동 검사나 실기를 완료로 표시하지 않는다.
+
+**작업 경계:** 외부 팀의 승인에 의존하지 않는 기존 코드·테스트·배포 검사만 보완한다. 작업 B의 조직명·권한·이전 방식은 여전히 답변을 기다리며, 작업 C의 실제 패키지 이름 변경은 미착수로 유지한다.
+
+### B1 완료 기록 — 로컬 커밋, 미게시
+
+| 계열 | 코드 커밋·브랜치 | 변경 내용 | 검증 |
+| --- | --- | --- | --- |
+| v2 | `4150a3bd8056a830b17eabc7ff690cf01889aeaa`, `codex/hejhome-v2-verification-readiness` | HAP 선언, 로그 인증정보 가림, 잘못된 MQTT 입력 예외 처리, 종료 뒤 초기화 재개 방지·진행 요청 취소, 릴리스 버전·채널 검사 | Node 24.4.1: 단위 81·UI 8 및 lint/typecheck/build/docs 통과. Homebridge 2.4.0 격리 프로세스 7개 시나리오 정상 종료. 운영 의존성 감사 0건 |
+| v3 | `53ad7e67238073f3933a322f4e5eba6f1f6bdc19`, `codex/hejhome-v3-verification-readiness` | 실제 debug/error 저장 경로의 인증정보 가림, `ip-address` 10.7.0→10.7.3, 공식 metadata·Schema 검사 강화, 베타/보완 브랜치 CI·보안 검사 범위 | Node 24.4.1: 단위 567·UI 123 및 lint/typecheck/build/docs 통과. Homebridge 2.4.0 격리 프로세스 5개 시나리오 정상 종료. 운영 의존성 감사 0건 |
+
+두 코드 커밋은 독립 리뷰에서 조치할 P1/P2가 없음을 확인했다. v2 응답 본문 대기 중 요청 취소와 양쪽의 비밀정보 제거·일반 오류 코드 보존은 추가 독립 검사도 수행했다. v2·v3의 기존 올바른 Schema와 v3의 메시지 검증·종료 guard를 불필요하게 다시 구현하지 않았다.
+
+공개 npm 패키지에는 아직 반영되지 않은 로컬 커밋이다. 기존 버전 번호를 유지했으며 push·새 버전 게시·공식 `/check` 댓글은 실행하지 않았다. 다음 게시 때 패치 버전을 확정하고 공개 파일/채널을 다시 확인해야 한다. 현재 `main`과 npm 정식 버전의 일치 상태를 바꾸지 않았다.
+
+실기 클라우드·장치 제어, 새 scope의 paired 캐시 이전, 새 코드에 대한 Node 22/26 실행과 공식 원격 검사는 이번 검증 완료 범위가 아니다. 개발 의존성까지 포함한 감사에는 기존 high 경고가 남아 있으며(v2 7건, v3 10건; 점검 시점 기준), 운영 패키지 감사 0건과 구분한다. 강제 다운그레이드나 전체 의존성 변경은 하지 않았다.
+
+### 공식 번들·지원 표시에서 추가할 게이트
+
+공식 [README](https://github.com/homebridge/plugins#declaring-supported-transports)와 [번들 생성 소스](https://github.com/homebridge/plugins/blob/06d6ce1fe6ef22f212235d59072833a88bdaffe7/src/plugin-tarballs/index.ts)를 함께 확인했다. 설명 문서와 구현의 경로가 다른 부분은 아래처럼 실제 코드 근거로 구분한다.
+
+- `supports-hap`·`supports-matter` 중 하나를 선언하면 UI는 이를 전체 지원 목록으로 취급한다. v2는 HAP만, v3는 실제 native Matter 등록을 포함하므로 둘 다 선언한다.
+- 검증 플러그인 번들은 현재 `dist-tags.latest`만 생성한다. v3 베타는 요청한 버전에 번들이 없으면 Homebridge GUI의 npm 경로로 설치된다. 이는 사용자에게 터미널 설치를 요구한다는 뜻이 아니다.
+- 번들 생성은 `--omit=dev` 및 설치 스크립트 비활성 상태로 수행된다. 공개 패키지 안에 실행 파일·설정 UI·Schema가 이미 포함되어 있어야 한다. v2 2.1.2와 v3 3.0.1-beta.1의 공개 tarball은 이 파일 구성 검사를 통과했다.
+- 설치 번들 생성은 하루 한 번 예약되어 있지만 공개 시간은 보장되지 않는다. 실제 번들 존재 여부와 SHA256를 확인한다.
+- scoped 번들의 현재 게시 위치는 [release v2.0.0](https://github.com/homebridge/plugins/releases/tag/v2.0.0)이다. README의 legacy 링크만으로 누락 여부를 판단하지 않는다.
+- 새 패키지는 전환 매핑 외에도 `verified-plugins.json`·아이콘 등록이 필요하다. 기존 이름이 검증 목록에서 제거되면 기존 번들도 정리될 수 있으므로 npm에 보존한 버전과 복귀 경로를 확인한다.
+- Verified 등록은 지속적인 품질·유지보수·개인정보 보호 조건을 따른다. 사용자 추적 도입, 반복 크래시, 장기 미유지보수는 재검토 사유가 된다. 아이콘을 다시 신청할 때는 공식 양식의 사용 권한과 정사각형 PNG 조건도 확인한다.
 
 ## C. v2·v3의 이름 변경 패치 준비
 
@@ -167,6 +217,7 @@ export const PLUGIN_NAME = '@homebridge-plugins/homebridge-hejhome';
 - [ ] 팀 담당자가 새 스코프의 최초 정식·베타 패키지를 게시한다. 기존 대응 버전 번호를 유지할지 별도 이전 버전을 사용할지는 B에서 확정한 정책을 따른다.
 - [ ] 새 패키지의 `latest`가 v2, `beta`가 v3인지 직접 조회하고 GitHub Latest도 정식 v2인지 확인한다.
 - [ ] 공개 tarball의 무결성·내용·provenance가 검증한 후보와 일치하는지 확인한다.
+- [ ] 새 이름이 공식 검증 목록과 아이콘 목록에 등록됐는지 확인한다. 정식 버전의 scoped 번들 및 SHA256 생성도 별도로 확인하며, 반영 전·베타 설치는 GUI의 npm 경로로 검증한다.
 - [ ] 초기 릴리스에 조직 이전용 버전임을 표시하고 기존 기능 제한을 유지한다. 기존 패키지의 사용자에게 전환을 권장하는 안내는 작업 F 이후 공개한다.
 
 **완료 조건:** 새 스코프의 두 채널이 공개되고 파일 검증을 통과했다. 아직 기존 사용자 전환 완료나 실제 페어링 보존 완료로 기록하지 않는다.
