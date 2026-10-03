@@ -11,6 +11,22 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
 }
 
 describe('HejAuthClient', () => {
+  test('redacts transport error details before delivering auth diagnostic events', async () => {
+    const events: unknown[] = [];
+    const client = new HejAuthClient({
+      fetch: async () => {
+        throw new Error('failed authCode=654321 access_token=private-access-token');
+      },
+      logger: (event) => events.push(event),
+    });
+
+    await expect(client.verifyCode('user@example.test', '654321')).rejects.toThrow('failed');
+
+    expect(events).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'error' })]));
+    expect(JSON.stringify(events)).not.toContain('654321');
+    expect(JSON.stringify(events)).not.toContain('private-access-token');
+  });
+
   test('sends email verification through the captured 2FA email endpoint', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ ok: true }));
     const client = new HejAuthClient({ fetch: fetchMock });

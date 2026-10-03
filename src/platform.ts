@@ -25,6 +25,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private realtime: HejRealtimeClient | null = null;
   private initialized = false;
   private initializing = false;
+  private shuttingDown = false;
   private sessionWatchTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -45,7 +46,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     });
 
     this.api.on('shutdown', () => {
+      this.shuttingDown = true;
       this.stopSessionWatcher();
+      this.client?.close();
       this.realtime?.disconnect();
     });
   }
@@ -56,7 +59,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private async initialize(): Promise<void> {
-    if (this.initialized || this.initializing) {
+    if (this.shuttingDown || this.initialized || this.initializing) {
       this.debug('initialize.skipped', { initialized: this.initialized, initializing: this.initializing });
       return;
     }
@@ -65,6 +68,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     try {
       this.info('initialize.start');
       const session = await this.sessionStore.load();
+      if (this.shuttingDown) {
+        return;
+      }
       if (!session?.accessToken) {
         this.warn('initialize.no-session', { message: 'Open the plugin settings and complete login.' });
         this.startSessionWatcher();
@@ -78,6 +84,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         logger: (event) => this.info('rest.request', event),
       });
       await this.discoverDevices();
+      if (this.shuttingDown) {
+        return;
+      }
 
       this.realtime = new HejRealtimeClient(session, {
         onDeviceUpdate: (device) => this.handleRealtimeDeviceUpdate(device),
@@ -87,7 +96,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       this.realtime.connect();
       this.initialized = true;
     } catch (error) {
-      this.error('initialize.failed', { error: error instanceof Error ? error.message : String(error) });
+      if (!this.shuttingDown) {
+        this.error('initialize.failed', { error: error instanceof Error ? error.message : String(error) });
+      }
     } finally {
       this.initializing = false;
     }
@@ -247,7 +258,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private startSessionWatcher(): void {
-    if (this.sessionWatchTimer) {
+    if (this.shuttingDown || this.sessionWatchTimer) {
       return;
     }
     this.info('session-watcher.started');
@@ -267,7 +278,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private async checkSessionAndInitialize(): Promise<void> {
-    if (this.initialized || this.initializing) {
+    if (this.shuttingDown || this.initialized || this.initializing) {
       return;
     }
     try {

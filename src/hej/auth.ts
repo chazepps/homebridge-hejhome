@@ -1,4 +1,5 @@
 import type { HejSession } from '../types.js';
+import { sanitizeForLog } from '../utils/redact.js';
 
 export const HEJ_CLIENT_ID = '62f4020744ca4510827d3b4a4d2c7e7f';
 export const HEJ_CLIENT_SECRET = 'fcd4302cece447a9ab009296f649d2c0';
@@ -203,7 +204,7 @@ export class HejAuthClient {
   }
 
   private emitLog(event: HejAuthLogEvent): void {
-    this.logger?.(event);
+    this.logger?.(sanitizeForLog(event));
   }
 }
 

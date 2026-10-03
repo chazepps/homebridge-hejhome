@@ -32,6 +32,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate release version and channel
+        id: release
+        run: node tools/release/channel.mjs "$GITHUB_REF_NAME"
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
@@ -42,4 +46,4 @@ jobs:
         run: npm pack --dry-run
 
       - name: Publish to npm
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag "${{ steps.release.outputs.channel }}"

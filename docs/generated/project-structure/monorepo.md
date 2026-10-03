@@ -109,8 +109,10 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── platform-accessory.test.ts
 │   ├── platform.test.ts
 │   ├── public-surface.test.ts
+│   ├── realtime-resilience.test.ts
 │   ├── realtime.test.ts
 │   ├── redaction.test.ts
+│   ├── release-channel.test.ts
 │   ├── session-diagnostics.test.ts
 │   ├── session-store.test.ts
 │   ├── ui
@@ -122,11 +124,13 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── harness-lib.mjs
 │   │   ├── inventory-doc-harness.mjs
 │   │   └── validate-doc-harness.mjs
-│   └── homebridge
-│       ├── dev-ui-logging.mjs
-│       ├── prepare-dev-plugins.mjs
-│       ├── run-dev-ui.mjs
-│       └── verify-pi-runtime.mjs
+│   ├── homebridge
+│   │   ├── dev-ui-logging.mjs
+│   │   ├── prepare-dev-plugins.mjs
+│   │   ├── run-dev-ui.mjs
+│   │   └── verify-pi-runtime.mjs
+│   └── release
+│       └── channel.mjs
 ├── tsconfig.json
 └── vitest.config.ts
 ```

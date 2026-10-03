@@ -42,7 +42,13 @@ export class HejRealtimeClient {
 
     this.client.on('message', (_topic, payload) => {
       this.events.onStatus?.('message.received', { topic: _topic, bytes: payload.byteLength });
-      this.handleMessage(payload.toString('utf8'));
+      try {
+        this.handleMessage(payload.toString('utf8'));
+      } catch {
+        // Parser errors can contain raw payload fragments, including credentials.
+        this.events.onStatus?.('message.ignored', { reason: 'invalid realtime message' });
+        this.events.onError(new Error('Hejhome realtime message could not be processed'));
+      }
     });
 
     this.client.on('error', (error) => {

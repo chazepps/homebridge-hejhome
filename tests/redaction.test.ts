@@ -3,6 +3,23 @@ import { describe, expect, test } from 'vitest';
 import { redactSensitive, sanitizeForLog } from '../src/utils/redact.js';
 
 describe('sensitive value redaction', () => {
+  test.each([
+    ['redirect https://square.hej.so/list?code=private-oauth-code&state=ready', 'private-oauth-code'],
+    ['authCode=654321&status=failed', '654321'],
+    ['response: {"access_token":"private-access-token","status":401}', 'private-access-token'],
+    ['response: {"authCode":654321,"status":401}', '654321'],
+    ['refresh_token: private-refresh-token', 'private-refresh-token'],
+    ['password="private password with spaces" status=failed', 'private password with spaces'],
+  ])('redacts credentials embedded in diagnostic strings: %s', (raw, secret) => {
+    expect(redactSensitive(raw)).not.toContain(secret);
+    expect(redactSensitive(raw)).toContain('<REDACTED>');
+  });
+
+  test('redacts OAuth snake-case fields in nested diagnostic objects', () => {
+    expect(sanitizeForLog({ response: [{ access_token: 'secret', refresh_token: 'secret', auth_code: '654321' }] }))
+      .toEqual({ response: [{ access_token: '<REDACTED>', refresh_token: '<REDACTED>', auth_code: '<REDACTED>' }] });
+  });
+
   test('redacts cookies, OAuth tokens, bearer headers, and basic credentials', () => {
     const raw = [
       `authorization: Basic${' '}abcdef`,

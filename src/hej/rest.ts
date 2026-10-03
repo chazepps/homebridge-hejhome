@@ -34,6 +34,8 @@ export class HejRestClient {
   private readonly logger: ((event: HejRestLogEvent) => void) | undefined;
   private readonly now: () => number;
   private readonly requestTimeoutMs: number;
+  private readonly pendingRequests = new Set<AbortController>();
+  private closed = false;
 
   constructor(
     private readonly session: HejSession,
@@ -48,6 +50,13 @@ export class HejRestClient {
   async getFamilies(): Promise<HejFamily[]> {
     const response = await this.request<FamilyListResponse>('dashboard/family');
     return response.result;
+  }
+
+  close(): void {
+    this.closed = true;
+    for (const controller of this.pendingRequests) {
+      controller.abort();
+    }
   }
 
   async getRooms(familyId: number): Promise<HejRoom[]> {
@@ -88,9 +97,13 @@ export class HejRestClient {
   }
 
   private async requestText(path: string, init: RequestInit): Promise<string> {
+    if (this.closed) {
+      throw new Error('Hejhome API client is closed');
+    }
     const method = init.method ?? 'GET';
     const startedAt = this.now();
     const controller = new AbortController();
+    this.pendingRequests.add(controller);
     const timeout = setTimeout(() => {
       controller.abort();
     }, this.requestTimeoutMs);
@@ -120,7 +133,7 @@ export class HejRestClient {
       if (!response.ok) {
         throw new Error(`Hejhome API request failed: ${response.status} ${path}`);
       }
-      return response.text();
+      return await response.text();
     } catch (error) {
       const isAbort = error instanceof Error && error.name === 'AbortError';
       this.emitLog({
@@ -129,7 +142,7 @@ export class HejRestClient {
         status: 'error',
         durationMs: this.now() - startedAt,
         message: sanitizeForLog(isAbort
-          ? `request timed out after ${this.requestTimeoutMs}ms`
+          ? this.closed ? 'request cancelled because client is closed' : `request timed out after ${this.requestTimeoutMs}ms`
           : error instanceof Error
             ? error.message
             : String(error)),
@@ -137,6 +150,7 @@ export class HejRestClient {
       throw error;
     } finally {
       clearTimeout(timeout);
+      this.pendingRequests.delete(controller);
     }
   }
 
