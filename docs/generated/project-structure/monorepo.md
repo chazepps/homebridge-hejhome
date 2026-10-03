@@ -220,6 +220,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── login-ui.spec.ts
 │   │   ├── navigation-workflow.spec.ts
 │   │   └── power-specs.spec.ts
+│   ├── ui-auth-redaction-server.test.ts
 │   ├── ui-controller.test.ts
 │   ├── ui-diagnostics-server.test.ts
 │   ├── ui-features-server.test.ts
