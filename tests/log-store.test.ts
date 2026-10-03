@@ -7,6 +7,30 @@ import { describe, expect, test } from 'vitest';
 import { LogStore } from '../src/storage/logStore.js';
 
 describe('LogStore', () => {
+  test.each(['debug', 'error'] as const)('%s strings and nested provider fields never persist authorization codes or tokens', async (level) => {
+    const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hejhome-log-secrets-'));
+    try {
+      const store = new LogStore(storageRoot);
+      await store.append(level, 'provider.failed', {
+        message: 'callback?authCode=secret-code&state=keep',
+        response: '{"access_token":"secret-access","refreshToken":"secret-refresh"}',
+        nested: { auth_code: 'secret-nested' },
+        redirect: 'https://square.hej.so/callback?code=secret-oauth-code&state=keep',
+        error: 'client_secret=secret-client&grant_type=authorization_code',
+        code: 401,
+      });
+      const raw = fs.readFileSync(store.path, 'utf8');
+      expect(raw).toContain(`${level.toUpperCase()} provider.failed`);
+      expect(raw).toContain('state=keep');
+      expect(raw).toContain('"code":401');
+      for (const value of ['secret-code', 'secret-access', 'secret-refresh', 'secret-nested', 'secret-oauth-code', 'secret-client']) {
+        expect(raw).not.toContain(value);
+      }
+    } finally {
+      fs.rmSync(storageRoot, { recursive: true, force: true });
+    }
+  });
+
   test('appends redacted plugin diagnostics under the Homebridge storage path', async () => {
     const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hejhome-log-'));
     const store = new LogStore(storageRoot);

@@ -3,6 +3,32 @@ import { describe, expect, test } from 'vitest';
 import { redactSensitive, sanitizeForLog } from '../src/utils/redact.js';
 
 describe('sensitive value redaction', () => {
+  test.each([
+    'callback?authCode=secret-code&state=keep',
+    'https://square.hej.so/callback?code=secret-code&state=keep',
+    'https://square.hej.so/callback?state=keep&code=secret-code#done',
+    'client_secret=secret-access&clientSecret=secret-refresh&state=keep',
+    'access_token=secret-access; refresh_token=secret-refresh',
+    '{"authCode":"secret-code","accessToken":"secret-access","refresh_token":"secret-refresh","status":"keep"}',
+    '{\'auth_code\': \'secret-code\', \'token\': \'secret-access\', \'password\': \'secret-refresh\', \'status\': \'keep\'}',
+  ])('removes credential values embedded in diagnostic strings: %s', (message) => {
+    const redacted = redactSensitive(message);
+    for (const secret of ['secret-code', 'secret-access', 'secret-refresh']) {
+      expect(redacted).not.toContain(secret);
+    }
+    expect(redacted).toContain('<REDACTED>');
+    if (message.includes('keep')) {
+      expect(redacted).toContain('keep');
+    }
+  });
+
+  test('redacts snake-case provider credentials in nested diagnostic data', () => {
+    expect(sanitizeForLog({ response: { auth_code: 'secret-code', access_token: 'secret-access',
+      refresh_token: 'secret-refresh', client_secret: 'secret-client', code: 401, status: 'keep' } })).toEqual({ response: {
+      auth_code: '<REDACTED>', access_token: '<REDACTED>', refresh_token: '<REDACTED>', client_secret: '<REDACTED>', code: 401, status: 'keep',
+    } });
+  });
+
   test('redacts cookies, OAuth tokens, bearer headers, and basic credentials', () => {
     const raw = [
       `authorization: Basic${' '}abcdef`,

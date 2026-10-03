@@ -89,10 +89,13 @@ const log = {
 } as unknown as Logging;
 
 describe('HejhomePlatform', () => {
-  test('does not start cloud discovery without a session and prunes unsupported cached publications', async () => {
+  test.each([
+    { platform: PLATFORM_NAME },
+    { name: 'Hejhome', platform: PLATFORM_NAME },
+  ])('starts with configuration %j without a session and prunes unsupported cached publications', async (config) => {
     vi.clearAllMocks();
     const api = createApiMock();
-    const platform = new HejhomePlatform(log, { name: 'Hejhome', platform: PLATFORM_NAME }, api);
+    const platform = new HejhomePlatform(log, config, api);
 
     platform.configureAccessory({
       UUID: 'uuid:stale',

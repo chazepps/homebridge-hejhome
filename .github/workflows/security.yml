@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+      - codex/hejhome-3.0.0-beta
+      - codex/hejhome-v3-verification-readiness
   schedule:
     - cron: '24 3 * * 1'
 

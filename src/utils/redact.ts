@@ -1,4 +1,4 @@
-const SENSITIVE_KEY_PATTERN = /^(accessToken|authCode|authorization|cookie|jsessionId|password|refreshToken|token|topic|usernameCookie)$/i;
+const SENSITIVE_KEY_PATTERN = /^(access_?token|auth_?code|authorization|client_?secret|cookie|jsessionId|password|refresh_?token|token|topic|usernameCookie)$/i;
 
 export function redactSensitive(value: string): string {
   return value
@@ -6,6 +6,13 @@ export function redactSensitive(value: string): string {
     .replace(/(authorization\s*:\s*)Bearer\s+[^\s;,"']+/gi, '$1Bearer <REDACTED_BEARER>')
     .replace(/\bBasic\s+[A-Za-z0-9+/=._-]+/g, 'Basic <REDACTED_BASIC>')
     .replace(/\bBearer\s+[A-Za-z0-9._-]+/g, 'Bearer <REDACTED_BEARER>')
+    .replace(/([?&]code=)[^&#\s;"']+/gi, '$1<REDACTED>')
+    .replace(
+      /(["']?\b(?:access_?token|refresh_?token|auth_?code|client_?secret|password|token)\b["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s;,&}"']+)/gi,
+      (_match, prefix: string, secret: string) => {
+        const quote = secret.startsWith('"') ? '"' : secret.startsWith('\'') ? '\'' : '';
+        return `${prefix}${quote}<REDACTED>${quote}`;
+      })
     .replace(/\bJSESSIONID=([^;"'\s]+)/gi, 'JSESSIONID=<REDACTED>')
     .replace(/\baccessToken=([^;"'\s]+)/gi, 'accessToken=<REDACTED>')
     .replace(/\busername=([^;"'\s]+)/gi, 'username=<REDACTED>')
