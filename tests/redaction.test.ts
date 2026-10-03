@@ -77,3 +77,84 @@ describe('sensitive value redaction', () => {
     expect(payload.password).toBe('secret-password');
   });
 });
+
+
+describe('encoded diagnostic credentials', () => {
+  const secrets = ['654321', 'synthetic-access', 'synthetic-session'];
+  const nested = JSON.stringify({ error_description: JSON.stringify({ authCode: secrets[0], access_token: secrets[1] }), code: 401 });
+  test.each([
+    nested,
+    `Failed to verify: HTTP 401 ${nested}`,
+    JSON.stringify(JSON.stringify(nested)),
+    'error_description=authCode%3D654321%26access_token%3Dsynthetic-access',
+    'error_description=authCode%3D654321%26access_token%3Dsynthetic-access%ZZ',
+    String.raw`{"error_description":"{\"authCode\":\"654321\",\"access_token\":\"synthetic-access`,
+    'error_description=' + encodeURIComponent(encodeURIComponent(nested)),
+    'Set-Cookie: JSESSIONID="synthetic-session"; Path=/',
+    'authorization=synthetic-access; cookie=synthetic-session',
+    '%61%75%74%68%43%6f%64%65%3d%ff654321',
+    'cookie=synthetic-session==',
+    'cookie="opaque=synthetic-session"',
+    'Set-Cookie: JSESSIONID=\'synthetic-session\'; Path=/',
+    '{"authorization-code":"654321","access-token":"synthetic-access","usernameCookie":"synthetic-session"}',
+    'HTTP 401 {"error_description":"access_token=synthetic-access',
+  ])('removes encoded secrets and remains idempotent: %s', (input) => {
+    const result = redactSensitive(input);
+    for (const secret of secrets) {
+      expect(result).not.toContain(secret);
+    }
+    expect(redactSensitive(result)).toBe(result);
+  });
+
+  test('preserves safe status codes, methods and harmless URL encodings', () => {
+    const input = { code: 401, status: 'unauthorized', method: 'POST',
+      message: 'HTTP 401 POST /verify-code', url: 'https://example.test/path?q=room%20one&state=keep%2Fnext' };
+    expect(sanitizeForLog(input)).toEqual(input);
+  });
+
+  test('retains marker types and does not modify structured input', () => {
+    const input = { detail: nested, authorization: 'Basic synthetic-basic', nested: [{ 'client-secret': 'synthetic-access' }] };
+    const snapshot = JSON.stringify(input);
+    const result = sanitizeForLog(input);
+    expect(JSON.stringify(result)).not.toContain('synthetic-access');
+    expect(JSON.stringify(result)).not.toContain('654321');
+    expect(sanitizeForLog(result)).toEqual(result);
+    expect(JSON.stringify(input)).toBe(snapshot);
+  });
+
+  test('fails closed for oversized, deeply encoded and circular diagnostic data', () => {
+    let encoded = 'authCode=654321';
+    for (let i = 0; i < 30; i++) {
+      encoded = encodeURIComponent(encoded);
+    }
+    let deep: unknown = { authCode: '654321' };
+    for (let i = 0; i < 30; i++) {
+      deep = { nested: deep };
+    }
+    const cyclic: Record<string, unknown> = { safe: 'keep', detail: nested };
+    cyclic.self = cyclic;
+    for (const input of ['x'.repeat(100_000) + nested, encoded, deep, cyclic]) {
+      const result = JSON.stringify(sanitizeForLog(input));
+      expect(result).not.toContain('654321');
+      expect(result).not.toContain('synthetic-access');
+      expect(result).toContain('<REDACTED');
+    }
+  });
+});
+
+
+test('bounds processing of long token-like diagnostics without leaking trailing credentials', () => {
+  const input = 'a'.repeat(15_000) + '@invalid-domain authCode=654321';
+  const start = performance.now();
+  const result = redactSensitive(input);
+  expect(performance.now() - start).toBeLessThan(250);
+  expect(result).not.toContain('654321');
+  expect(result).toContain('<REDACTED>');
+});
+
+
+test('masks sensitive values that happen to equal an authorization scheme name', () => {
+  for (const input of ['password=Basic', 'access_token=Bearer', 'authorization=Basic']) {
+    expect(redactSensitive(input)).toBe(input.split('=')[0] + '=<REDACTED>');
+  }
+});

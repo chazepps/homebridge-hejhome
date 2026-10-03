@@ -106,3 +106,46 @@ describe('HejAuthClient', () => {
     expect(JSON.stringify(events)).not.toContain('user@example.test');
   });
 });
+
+
+describe('authentication HTTP failure boundary', () => {
+  test.each([
+    JSON.stringify({ error_description: JSON.stringify({ authCode: '654321', access_token: 'synthetic-access' }) }),
+    'error_description=authCode%3D654321%26access_token%3Dsynthetic-access',
+    'Set-Cookie: JSESSIONID="synthetic-session"; Path=/',
+    'unlabelled synthetic-access',
+  ])('does not expose an authentication response body through errors: %s', async (body) => {
+    const response = new Response(body, { status: 401 });
+    const events: unknown[] = [];
+    const client = new HejAuthClient({ fetch: async () => response, logger: (event) => events.push(event) });
+    let error: unknown;
+    try {
+      await client.verifyCode('user@example.test', '654321');
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('verify');
+    expect((error as Error).message).toContain('HTTP 401');
+    expect((error as Error).message).not.toContain('654321');
+    expect((error as Error).message).not.toContain('synthetic-');
+    expect(JSON.stringify(events)).not.toContain('synthetic-');
+    expect(response.bodyUsed).toBe(true);
+  });
+
+  test('rejects promptly without reading or awaiting cancellation of an untrusted error stream', async () => {
+    let cancelled = false;
+    const response = new Response(new ReadableStream({
+      cancel() {
+        cancelled = true; return new Promise<void>(() => {});
+      },
+    }), { status: 401 });
+    const client = new HejAuthClient({ fetch: async () => response, requestTimeoutMs: 20 });
+    const outcome = await Promise.race([
+      client.verifyCode('user@example.test', '654321').catch((error: Error) => error.message),
+      new Promise<string>((resolve) => setTimeout(() => resolve('stalled'), 100)),
+    ]);
+    expect(outcome).toContain('HTTP 401');
+    expect(cancelled).toBe(true);
+  });
+});
