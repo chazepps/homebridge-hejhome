@@ -25,6 +25,8 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── DESIGN.md
 │   ├── exec-plans
 │   │   ├── 2026-09-30-homebridge-feature-action-checklist.md
+│   │   ├── 2026-10-03-homebridge-scope-migration.md
+│   │   ├── 2026-10-03-homebridge-scope-transfer-request.md
 │   │   └── README.md
 │   ├── FRONTEND.md
 │   ├── generated

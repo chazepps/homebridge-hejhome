@@ -10,6 +10,8 @@
 
 ## Active Execution Plan
 
+[Homebridge 조직 스코프 이전 실행 계획](exec-plans/2026-10-03-homebridge-scope-migration.md)을 진행한다. 현재는 사전 점검과 [공식 신청 초안](exec-plans/2026-10-03-homebridge-scope-transfer-request.md) 작성 단계이며, 외부 신청과 소유권 이전은 아직 실행하지 않았다. v2 정식·v3 베타 채널, 기존 로그인·액세서리·페어링을 보존하는 것이 완료 기준이다.
+
 Published maintenance releases: [2.1.2](https://github.com/chazepps/homebridge-hejhome/releases/tag/v2.1.2) on `latest` and [3.0.1-beta.1](https://github.com/chazepps/homebridge-hejhome/releases/tag/v3.0.1-beta.1) on `beta`. Both update the development-only TypeScript ESLint tools to 8.71.0. Runtime features and supported environments are unchanged. Published packages match the tested files, include provenance, and appear in Homebridge's version picker. GitHub Latest remains the v2 stable release. Current beta support and installation instructions are in [the 3.0 beta guide](product-specs/3.0-beta-guide.md).
 
 ## Feature Expansion Action Checklist
