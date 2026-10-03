@@ -7,6 +7,30 @@ import { describe, expect, test } from 'vitest';
 import { LogStore } from '../src/storage/logStore.js';
 
 describe('LogStore', () => {
+  test('redacts nested encoded error diagnostics before writing them to disk', async () => {
+    const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hejhome-log-nested-'));
+    const store = new LogStore(storageRoot);
+    const diagnostics = {
+      status: 401,
+      message: JSON.stringify({ error_description: JSON.stringify({ authCode: '654321', access_token: 'synthetic-access' }) }),
+      body: 'error_description=authCode%3D654321%26access_token%3Dsynthetic-access',
+      cookieHeader: 'Set-Cookie: JSESSIONID="synthetic-session"; Path=/',
+    };
+    const original = structuredClone(diagnostics);
+
+    try {
+      await store.append('error', 'ui.verify-code.error', diagnostics);
+      const raw = fs.readFileSync(store.path, 'utf8');
+      expect(raw).toContain('"status":401');
+      for (const secret of ['654321', 'synthetic-access', 'synthetic-session']) {
+        expect.soft(raw).not.toContain(secret);
+      }
+      expect(diagnostics).toEqual(original);
+    } finally {
+      fs.rmSync(storageRoot, { recursive: true, force: true });
+    }
+  });
+
   test('appends redacted plugin diagnostics under the Homebridge storage path', async () => {
     const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hejhome-log-'));
     const store = new LogStore(storageRoot);

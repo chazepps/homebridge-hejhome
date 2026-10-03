@@ -11,6 +11,21 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
 }
 
 describe('HejAuthClient', () => {
+  test.each([
+    JSON.stringify({ error_description: JSON.stringify({ authCode: '654321', access_token: 'synthetic-access' }) }),
+    'error_description=authCode%3D654321%26access_token%3Dsynthetic-access',
+    'Set-Cookie: JSESSIONID="synthetic-session"; Path=/',
+  ])('excludes untrusted failed response bodies from thrown authentication errors: %s', async (body) => {
+    const response = new Response(body, { status: 401 });
+    const client = new HejAuthClient({ fetch: async () => response });
+
+    const error = await client.verifyCode('user@example.test', '654321').catch((error: unknown) => error);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Failed to verify Hejhome verification code: HTTP 401');
+    expect(response.bodyUsed).toBe(true);
+  });
+
   test('redacts transport error details before delivering auth diagnostic events', async () => {
     const events: unknown[] = [];
     const client = new HejAuthClient({

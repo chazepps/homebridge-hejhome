@@ -117,6 +117,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── session-store.test.ts
 │   ├── ui
 │   │   └── login-ui.spec.ts
+│   ├── ui-server-redaction.test.ts
 │   └── ui-server-source.test.ts
 ├── tools
 │   ├── docs

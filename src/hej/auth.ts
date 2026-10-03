@@ -233,7 +233,9 @@ function parseJSessionId(setCookie: string | null): string | null {
 
 async function ensureOk(response: Response, message: string): Promise<void> {
   if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`${message}: HTTP ${response.status}${text ? ` ${text}` : ''}`);
+    // Authentication bodies may echo arbitrary credentials. Discard the stream without
+    // reading it or waiting for an untrusted body/cancellation to finish.
+    void response.body?.cancel().catch(() => undefined);
+    throw new Error(`${message}: HTTP ${response.status}`);
   }
 }
