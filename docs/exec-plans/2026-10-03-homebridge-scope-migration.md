@@ -20,8 +20,8 @@
 | 요청할 새 패키지 | `@homebridge-plugins/homebridge-hejhome` — 최종 사용 승인은 Homebridge 팀이 결정 |
 | 저장소 | `chazepps/homebridge-hejhome`, 공개, 기본 브랜치 `main`, Issues 사용 |
 | 유지보수 계정 | npm `chazepps`; 현재 GitHub 계정의 저장소 관리 권한 확인 |
-| v2 정식 | `2.1.2`, `latest`, 태그 `v2.1.2`, 커밋 `37d0e40f0389d7230046902fa99962b103b0eef7` |
-| v3 베타 | `3.0.1-beta.1`, `beta`, 태그 `v3.0.1-beta.1`, 커밋 `ddd5ae5b97723cd9ee532a3fb0ecf6e9b8ffe20a` |
+| v2 정식 | `2.1.3`, `latest`, 태그 `v2.1.3`, 커밋 `60f39fe9ca74e2bed465de07cb436999bf77c873` |
+| v3 베타 | `3.0.2-beta.1`, `beta`, 태그 `v3.0.2-beta.1`, 커밋 `7db1431190e58877e098f3172b32e3276ba9da65` |
 | 개발 브랜치 | v2 `main`; v3 `codex/hejhome-3.0.0-beta` |
 | Verified | 공식 `verified-plugins.json`에 기존 패키지 등록 확인 |
 | 기존 검증 요청 | [homebridge/plugins #750](https://github.com/homebridge/plugins/issues/750), 종료된 Verification Request |
@@ -117,7 +117,7 @@
 
 **작업 경계:** 외부 팀의 승인에 의존하지 않는 기존 코드·테스트·배포 검사만 보완한다. 작업 B의 조직명·권한·이전 방식은 여전히 답변을 기다리며, 작업 C의 실제 패키지 이름 변경은 미착수로 유지한다.
 
-### B1 완료 기록 — 로컬 커밋, 미게시
+### B1 완료 기록 — 패치 릴리스 반영
 
 | 계열 | 코드 커밋·브랜치 | 변경 내용 | 검증 |
 | --- | --- | --- | --- |
@@ -126,9 +126,9 @@
 
 두 코드 커밋은 독립 리뷰에서 조치할 P1/P2가 없음을 확인했다. v2 응답 본문 대기 중 요청 취소와 양쪽의 비밀정보 제거·일반 오류 코드 보존은 추가 독립 검사도 수행했다. v2·v3의 기존 올바른 Schema와 v3의 메시지 검증·종료 guard를 불필요하게 다시 구현하지 않았다.
 
-공개 npm 패키지에는 아직 반영되지 않은 로컬 커밋이다. 기존 버전 번호를 유지했으며 push·새 버전 게시·공식 `/check` 댓글은 실행하지 않았다. 다음 게시 때 패치 버전을 확정하고 공개 파일/채널을 다시 확인해야 한다. 현재 `main`과 npm 정식 버전의 일치 상태를 바꾸지 않았다.
+최초 보완은 위 로컬 커밋으로 완료했고, 이후 아래 인증정보 보호 보완까지 포함해 사용자의 지시에 따라 정식 `2.1.3`과 베타 `3.0.2-beta.1`을 게시했다. 공식 `/check` 댓글과 새 조직 스코프 이전은 실행하지 않았다.
 
-실기 클라우드·장치 제어, 새 scope의 paired 캐시 이전, 새 코드에 대한 Node 22/26 실행과 공식 원격 검사는 이번 검증 완료 범위가 아니다. 개발 의존성까지 포함한 감사에는 기존 high 경고가 남아 있으며(v2 7건, v3 10건; 점검 시점 기준), 운영 패키지 감사 0건과 구분한다. 강제 다운그레이드나 전체 의존성 변경은 하지 않았다.
+실기 클라우드·장치 제어, 새 scope의 paired 캐시 이전 및 Homebridge 팀의 공식 검토는 이번 검증 완료 범위가 아니다. 배포 CI에서는 v2 Node 22/24, v3 Node 22/24/26 및 Homebridge 정식·베타 검증을 완료했다. 개발 의존성까지 포함한 감사에는 기존 high 경고가 남아 있으며(v2 7건, v3 10건; 점검 시점 기준), 운영 패키지 감사 0건과 구분한다. 강제 다운그레이드나 전체 의존성 변경은 하지 않았다.
 
 ### B1 후속 리뷰: 중첩 인증정보 보호 보완
 
@@ -139,7 +139,14 @@
 | v2 | `6dea4f5` | Node 24 전체 검증: 단위 103·UI 8 통과. 현재 소스로 UI 요청을 검증하며, 빌드 파일이 없어도 같은 회귀 테스트가 동작함을 확인. 새 빌드의 UI 오류 경로 6개 검증 통과 |
 | v3 | `371e144e321cebb8ffaf45fbfc69d08435354997` | Node 24 검증: 단위 595·UI 123 및 lint/typecheck/build 통과. 새 테스트 파일을 자동 문서 목록에 반영한 뒤 문서 검사 재실행 통과 |
 
-두 계열의 공통 정제기 파일은 동일하다. 독립 검토는 최종 커밋의 소스 일치와 합성 입력 82개에서 인증정보 누출 0건, HTTP 상태·일반 진단값 보존, 잘못된 UTF-8·깊이·크기·순환 데이터 처리를 확인했다. 실제 서비스의 유출 사고를 관측한 결과는 아니며, 실계정이나 실장비에 요청하지 않았다. 후속 커밋도 아직 게시하지 않았다.
+두 계열의 공통 정제기 파일은 동일하다. 독립 검토는 최종 커밋의 소스 일치와 합성 입력 82개에서 인증정보 누출 0건, HTTP 상태·일반 진단값 보존, 잘못된 UTF-8·깊이·크기·순환 데이터 처리를 확인했다. 실제 서비스의 유출 사고를 관측한 결과는 아니며, 실계정이나 실장비에 요청하지 않았다. 후속 커밋은 아래 패치 릴리스에 포함했다.
+
+### 패치 게시 확인 — 2026-10-03
+
+- 정식 [v2.1.3](https://github.com/chazepps/homebridge-hejhome/releases/tag/v2.1.3): [게시 워크플로](https://github.com/chazepps/homebridge-hejhome/actions/runs/37108437983) 성공, `latest=2.1.3`, GitHub Latest 유지. 공개 58개 파일이 검증 패키지와 일치하며 SHA-256은 `58e328866fd62547b7e1c77e4480e92e1b9b200836a4d3895522b7d201f0ad84`이다.
+- 베타 [v3.0.2-beta.1](https://github.com/chazepps/homebridge-hejhome/releases/tag/v3.0.2-beta.1): [게시 워크플로](https://github.com/chazepps/homebridge-hejhome/actions/runs/37108543755) 성공, `beta=3.0.2-beta.1`, GitHub prerelease로 공개. 공개 149개 파일이 검증 패키지와 일치하며 SHA-256은 `84e4458e999256fed569232a111b802ba1b53c3c9513e6f2121214173114fb5c`이다.
+- 두 버전의 패키지 무결성·provenance와 개발 Homebridge의 버전 선택 API를 확인했다. v3는 동일 패키지의 Node 22.13.0·24.4.1·26.10.0 × Homebridge 2.4.0·2.4.1-beta.11 6개 조합과 `2.1.2→3.0.2-beta.1→2.1.2` 격리 복귀도 통과했다.
+- 이번 작업은 기존 `@chazepps/homebridge-hejhome` 패키지의 공개 게시다. 운영 서버의 설치 버전 변경이나 조직 이전의 실기 검증을 뜻하지 않는다.
 
 ### 공식 번들·지원 표시에서 추가할 게이트
 
@@ -157,7 +164,7 @@
 
 **입력:** 작업 B의 확정된 이름과 저장소. **산출물:** v2·v3 각각의 검토 가능한 패치와 로컬 패키지.
 
-v2는 `v2.1.2`, v3는 `v3.0.1-beta.1`을 현재 기준으로 별도 작업 공간에서 시작한다. 실행 시 새 버전이 게시됐다면 기준선을 먼저 갱신한다. 두 버전의 소스를 서로 합치지 않는다.
+v2는 `v2.1.3`, v3는 `v3.0.2-beta.1`을 현재 기준으로 별도 작업 공간에서 시작한다. 실행 시 새 버전이 게시됐다면 기준선을 먼저 갱신한다. 두 버전의 소스를 서로 합치지 않는다.
 
 | 파일·영역 | 변경 또는 보존 내용 |
 | --- | --- |
@@ -268,7 +275,7 @@ export const PLUGIN_NAME = '@homebridge-plugins/homebridge-hejhome';
 
 ```sh
 git status --short
-git rev-parse 'v2.1.2^{commit}' 'v3.0.1-beta.1^{commit}'
+git rev-parse 'v2.1.3^{commit}' 'v3.0.2-beta.1^{commit}'
 npm view @chazepps/homebridge-hejhome dist-tags --json
 gh issue list --repo homebridge/plugins --state all --search '"@chazepps/homebridge-hejhome"' --json number,title,state,url
 gh api repos/homebridge/plugins/contents/.github/ISSUE_TEMPLATE/3_transfer-request.yml
