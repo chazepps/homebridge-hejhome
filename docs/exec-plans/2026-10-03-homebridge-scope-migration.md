@@ -21,7 +21,7 @@
 | 저장소 | `chazepps/homebridge-hejhome`, 공개, 기본 브랜치 `main`, Issues 사용 |
 | 유지보수 계정 | npm `chazepps`; 현재 GitHub 계정의 저장소 관리 권한 확인 |
 | v2 이전 정식 | `2.1.3`, 버전 선택으로 설치 가능, 태그 `v2.1.3`, 커밋 `60f39fe9ca74e2bed465de07cb436999bf77c873` |
-| v3 정식 | `3.0.2`, `latest`, 태그 `v3.0.2`, 커밋 `50e54968ad55efc87d20f8e95765e033244cb9d9` |
+| v3 정식 | `3.0.3`, `latest`, 태그 `v3.0.3`, 커밋 `c504e6dec3cddc8429ea2a2c0324b8b7a61b427c` |
 | v3 베타 | `3.0.2-beta.1`, `beta`, 태그 `v3.0.2-beta.1`, 커밋 `7db1431190e58877e098f3172b32e3276ba9da65` |
 | 개발 브랜치 | v3 정식 `main`; v2 `codex/hejhome-v2-maintenance`; 기존 베타 `codex/hejhome-3.0.0-beta` |
 | Verified | 공식 `verified-plugins.json`에 기존 패키지 등록 확인 |
@@ -29,7 +29,7 @@
 | 조직 스코프 전환 목록 | `has-scope-plugins.json`에 Hejhome 항목 없음 |
 | 새 패키지 조회 | npm 공개 조회에서 404. 이름 예약·게시 권한이 승인됐다는 뜻은 아님 |
 | 현재 이전 신청 | [#1251](https://github.com/homebridge/plugins/issues/1251), 작성자 `chazepps`, OPEN, `request-transfer`, 2026-10-03T06:40:02Z 기준 댓글 0개; 마지막 댓글 ID 없음 |
-| 추적 확인 시각 | 2026-10-04T03:29:57.456Z — 이슈 updatedAt·상태·라벨·댓글 변경 없음 |
+| 추적 확인 시각 | 2026-10-04T05:31:58.087Z — 이슈 updatedAt·상태·라벨·댓글 변경 없음 |
 | 답변 추적 | 이 대화의 1시간 간격 추적 활성화. 변화가 없으면 알리지 않고, 답변·승인·추가 요청·종료 시 변경 내용을 알림 |
 
 이 표의 값은 작업 당시 조회 결과다. 실제 이전 직전에 다시 조회하며, 그 사이 새 릴리스가 있으면 이전 기준 버전을 갱신한다. 기존 Verified 등록은 이번 패키지 이전이나 새 베타의 모든 기능에 대한 별도 승인으로 해석하지 않는다.
@@ -174,11 +174,15 @@
 - 설정 화면·도움말과 양언어 README를 정식 기준으로 바꾸고, 예시 장치로 정식 화면 스크린샷 4장을 다시 촬영했다. 기존 v2 보안 의존성 수정과 인증 로그 정제도 보존했다.
 - 개발 Homebridge의 버전 선택 API에서 `latest=3.0.2`와 v2·v3 정식·기존 베타 선택을 확인했다. GitHub Latest도 `v3.0.2`이다. 이번 작업은 공개 패키지 게시이며 개발 서버의 설치 버전은 변경하지 않았다.
 
+### README 목차 수정 — 2026-10-04
+
+정식 [v3.0.3](https://github.com/chazepps/homebridge-hejhome/releases/tag/v3.0.3)을 `latest`로 게시했다. README 한·영 목차가 실제 `user-content-` 앵커 ID를 직접 가리키도록 수정했다. GitHub의 한·영 목차 10개와 공개 npm 페이지 목차 5개를 브라우저에서 직접 클릭해 대상 위치로 이동함을 확인했다. 기능·설정 변경은 없으며 UI 빌드는 버전 번호만 달라진다. [게시 워크플로](https://github.com/chazepps/homebridge-hejhome/actions/runs/37183107477)의 6개 검증 조합이 통과했고, 공개 패키지 149개 파일·무결성·provenance가 후보와 일치했다. SHA-256: `7a541fd61d90bf7a2fdef4406341a67669acfea107da2cbc5220ebcb4f9aac8b`. `beta=3.0.2-beta.1`은 유지한다.
+
 ## C. v2·v3의 이름 변경 패치 준비
 
 **입력:** 작업 B의 확정된 이름과 저장소. **산출물:** v2·v3 각각의 검토 가능한 패치와 로컬 패키지.
 
-v2는 `v2.1.3`, v3 정식은 `v3.0.2`, 기존 베타는 `v3.0.2-beta.1`을 현재 기준으로 별도 작업 공간에서 시작한다. 실행 시 새 버전이 게시됐다면 기준선을 먼저 갱신한다. 두 버전의 소스를 서로 합치지 않는다.
+v2는 `v2.1.3`, v3 정식은 `v3.0.3`, 기존 베타는 `v3.0.2-beta.1`을 현재 기준으로 별도 작업 공간에서 시작한다. 실행 시 새 버전이 게시됐다면 기준선을 먼저 갱신한다. 두 버전의 소스를 서로 합치지 않는다.
 
 | 파일·영역 | 변경 또는 보존 내용 |
 | --- | --- |
@@ -289,7 +293,7 @@ export const PLUGIN_NAME = '@homebridge-plugins/homebridge-hejhome';
 
 ```sh
 git status --short
-git rev-parse 'v2.1.3^{commit}' 'v3.0.2^{commit}' 'v3.0.2-beta.1^{commit}'
+git rev-parse 'v2.1.3^{commit}' 'v3.0.3^{commit}' 'v3.0.2-beta.1^{commit}'
 npm view @chazepps/homebridge-hejhome dist-tags --json
 gh issue list --repo homebridge/plugins --state all --search '"@chazepps/homebridge-hejhome"' --json number,title,state,url
 gh api repos/homebridge/plugins/contents/.github/ISSUE_TEMPLATE/3_transfer-request.yml
