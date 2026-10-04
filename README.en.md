@@ -21,9 +21,9 @@ Use lights, switches, plugs and sensors registered in the Hejhome app through Ap
 A Hejhome account and an internet connection are required. Device control uses the Hejhome cloud.
 
 > **Version 3.0 stable**
-> This document covers **3.0.2**. The default **`latest` channel now provides v3**, which requires **Homebridge 2.4 or later**. To keep using Homebridge 1.x or plugin v2, select **2.1.3** in the version picker.
+> This document covers **3.0.3**. The default **`latest` channel now provides v3**, which requires **Homebridge 2.4 or later**. To keep using Homebridge 1.x or plugin v2, select **2.1.3** in the version picker.
 
-[Getting started](#getting-started) · [Settings](#settings) · [Supported devices](#supported-devices-and-features) · [Upgrading](#upgrading-from-2x) · [Troubleshooting](#troubleshooting)
+[Getting started](#user-content-getting-started) · [Settings](#user-content-settings) · [Supported devices](#user-content-supported-devices-and-features) · [Upgrading](#user-content-upgrading-from-2x) · [Troubleshooting](#user-content-troubleshooting)
 
 ## Screenshots
 
@@ -86,15 +86,15 @@ Remote, air-conditioner and air-purifier controls on the plugin settings page re
 
 ### 2. Install the plugin
 
-Find `@chazepps/homebridge-hejhome` in the **Plugins** section of Homebridge UI and install it, or select **Update**. The stable `latest` channel installs **3.0.2**.
+Find `@chazepps/homebridge-hejhome` in the **Plugins** section of Homebridge UI and install it, or select **Update**. The stable `latest` channel installs **3.0.3**.
 
 | Choice | Version | How to install |
 | --- | --- | --- |
-| Stable v3 | `3.0.2` (`latest`) | Normal installation or update |
+| Stable v3 | `3.0.3` (`latest`) | Normal installation or update |
 | Previous v2 | `2.1.3` | Choose Install Previous Version from the plugin menu |
 | Existing v3 beta | `3.0.2-beta.1` (`beta`) | Select explicitly in the version picker when a test version is needed |
 
-Open **Install Previous Version** (or Install Alternate Version, depending on the UI) from the plugin menu to choose a version. If you currently use the beta, select **3.0.2** to move to stable. Each installation runs one selected version.
+Open **Install Previous Version** (or Install Alternate Version, depending on the UI) from the plugin menu to choose a version. If you currently use the beta, select **3.0.3** to move to stable. Each installation runs one selected version.
 
 <details>
 <summary>Build and test a package from source</summary>
@@ -112,7 +112,7 @@ npm pack --ignore-scripts
 Transfer the generated package to the Homebridge installation environment and install it.
 
 ```sh
-npm install -g ./chazepps-homebridge-hejhome-3.0.2.tgz
+npm install -g ./chazepps-homebridge-hejhome-3.0.3.tgz
 ```
 
 Restart Homebridge or the relevant child bridge, then reopen the plugin settings. This installs a local package without publishing it to npm.
