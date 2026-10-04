@@ -2,7 +2,7 @@
 
 > **For agentic workers:** 구현 단계는 `superpowers:subagent-driven-development` 또는 `superpowers:executing-plans`로 작업 단위별 진행한다. 체크 표시는 실제 산출물과 검증 결과가 있는 항목에만 적용한다.
 
-**Goal:** 기존 사용자의 장치·로그인·설정을 보존하면서 `@chazepps/homebridge-hejhome`을 `@homebridge-plugins/homebridge-hejhome`으로 이전하고 v2 정식과 v3 베타를 계속 제공한다.
+**Goal:** 기존 사용자의 장치·로그인·설정을 보존하면서 `@chazepps/homebridge-hejhome`을 `@homebridge-plugins/homebridge-hejhome`으로 이전하고 기존 버전 선택과 정식·베타 채널을 보존한다.
 
 **Architecture:** 기존 GitHub 이력과 릴리스 채널을 유지하고 패키지 소유·게시 경로만 변경한다. Homebridge의 공식 GUI 전환 절차를 사용하되 HAP 캐시, 하위 브리지, Matter 저장 상태는 실제 이전 검증을 통과해야 한다. 저장소 이전, 패키지 이름 변경, 기존 사용자 전환 안내를 한 번에 공개하지 않고 검증 단계별로 진행한다.
 
@@ -20,9 +20,10 @@
 | 요청할 새 패키지 | `@homebridge-plugins/homebridge-hejhome` — 최종 사용 승인은 Homebridge 팀이 결정 |
 | 저장소 | `chazepps/homebridge-hejhome`, 공개, 기본 브랜치 `main`, Issues 사용 |
 | 유지보수 계정 | npm `chazepps`; 현재 GitHub 계정의 저장소 관리 권한 확인 |
-| v2 정식 | `2.1.3`, `latest`, 태그 `v2.1.3`, 커밋 `60f39fe9ca74e2bed465de07cb436999bf77c873` |
+| v2 이전 정식 | `2.1.3`, 버전 선택으로 설치 가능, 태그 `v2.1.3`, 커밋 `60f39fe9ca74e2bed465de07cb436999bf77c873` |
+| v3 정식 | `3.0.2`, `latest`, 태그 `v3.0.2`, 커밋 `50e54968ad55efc87d20f8e95765e033244cb9d9` |
 | v3 베타 | `3.0.2-beta.1`, `beta`, 태그 `v3.0.2-beta.1`, 커밋 `7db1431190e58877e098f3172b32e3276ba9da65` |
-| 개발 브랜치 | v2 `main`; v3 `codex/hejhome-3.0.0-beta` |
+| 개발 브랜치 | v3 정식 `main`; v2 `codex/hejhome-v2-maintenance`; 기존 베타 `codex/hejhome-3.0.0-beta` |
 | Verified | 공식 `verified-plugins.json`에 기존 패키지 등록 확인 |
 | 기존 검증 요청 | [homebridge/plugins #750](https://github.com/homebridge/plugins/issues/750), 종료된 Verification Request |
 | 조직 스코프 전환 목록 | `has-scope-plugins.json`에 Hejhome 항목 없음 |
@@ -38,7 +39,7 @@
 - 제품 표시 이름과 설정의 `platform: "Hejhome"`은 유지한다.
 - 기존 장치의 HAP UUID, Matter UUID·endpoint 식별자, 하위 브리지 설정을 유지한다.
 - 세션·기기 목록·전력 이력의 파일 경로와 계정 구분 방식을 유지한다.
-- v2 `latest`와 v3 `beta`를 각각 게시한다. v3 베타를 정식 기본 설치로 바꾸지 않는다.
+- 2026-10-04 사용자의 정식 전환 지시에 따라 `latest`는 v3 정식이다. 기존 v2는 명시 버전으로 보존하며 `beta`는 시험판 채널로 유지한다. 조직 이전을 이유로 사용자의 버전 계열을 임의로 바꾸지 않는다.
 - 이전 릴리스에 새 장치 기능, UI 개편, 의존성 일괄 업데이트를 섞지 않는다.
 - 사용자는 Homebridge GUI에서 전환한다. 공개 사용자 안내에 전역 npm 설치 명령을 기본 경로로 넣지 않는다.
 - 기존 패키지·버전·릴리스 태그는 삭제하거나 덮어쓰지 않는다.
@@ -161,11 +162,23 @@
 - 새 패키지는 전환 매핑 외에도 `verified-plugins.json`·아이콘 등록이 필요하다. 기존 이름이 검증 목록에서 제거되면 기존 번들도 정리될 수 있으므로 npm에 보존한 버전과 복귀 경로를 확인한다.
 - Verified 등록은 지속적인 품질·유지보수·개인정보 보호 조건을 따른다. 사용자 추적 도입, 반복 크래시, 장기 미유지보수는 재검토 사유가 된다. 아이콘을 다시 신청할 때는 공식 양식의 사용 권한과 정사각형 PNG 조건도 확인한다.
 
+### v3 정식 승격 확인 — 2026-10-04
+
+사용자가 v3를 `latest`로 배포하도록 명시적으로 요청했다. 기존 채널 정책은 이 요청으로 갱신한다. 공개 신청 #1251의 본문은 당시 기록으로 보존하며, 팀에 후속 답변을 보낼 때 최신 채널 기준을 함께 설명해야 한다. 이 작업에서 외부 댓글은 작성하지 않았다.
+
+- 정식 [v3.0.2](https://github.com/chazepps/homebridge-hejhome/releases/tag/v3.0.2), `latest=3.0.2`, `beta=3.0.2-beta.1`을 확인했다. [게시 워크플로](https://github.com/chazepps/homebridge-hejhome/actions/runs/37175555566)가 성공했다.
+- 배포 커밋은 `50e54968ad55efc87d20f8e95765e033244cb9d9`이며 `main`에 반영했다. 기존 v2 커밋은 `codex/hejhome-v2-maintenance`와 `v2.1.3`으로 보존했다.
+- Node 24 전체 검증: 단위 597개·UI 123개·문서 37개, lint/typecheck/build 통과. GitHub Node 22/24/26 × Homebridge 정식·베타 6개 조합 및 CodeQL 통과. 운영 의존성 감사 0건.
+- 동일 패키지의 격리 Homebridge 실행 6개 조합과 `2.1.3→3.0.2→2.1.3` 복귀 검사를 통과했다. 실제 사용자의 페어링·실물 장치 전체 검증을 의미하지 않는다.
+- 공개 149개 파일과 무결성·provenance가 검증 후보와 일치했다. SHA-256: `997ecb89ea7b683d685fb5d2b7eb9135349fe5a27301bfe5de3945496dadda1d`.
+- 설정 화면·도움말과 양언어 README를 정식 기준으로 바꾸고, 예시 장치로 정식 화면 스크린샷 4장을 다시 촬영했다. 기존 v2 보안 의존성 수정과 인증 로그 정제도 보존했다.
+- 개발 Homebridge의 버전 선택 API에서 `latest=3.0.2`와 v2·v3 정식·기존 베타 선택을 확인했다. GitHub Latest도 `v3.0.2`이다. 이번 작업은 공개 패키지 게시이며 개발 서버의 설치 버전은 변경하지 않았다.
+
 ## C. v2·v3의 이름 변경 패치 준비
 
 **입력:** 작업 B의 확정된 이름과 저장소. **산출물:** v2·v3 각각의 검토 가능한 패치와 로컬 패키지.
 
-v2는 `v2.1.3`, v3는 `v3.0.2-beta.1`을 현재 기준으로 별도 작업 공간에서 시작한다. 실행 시 새 버전이 게시됐다면 기준선을 먼저 갱신한다. 두 버전의 소스를 서로 합치지 않는다.
+v2는 `v2.1.3`, v3 정식은 `v3.0.2`, 기존 베타는 `v3.0.2-beta.1`을 현재 기준으로 별도 작업 공간에서 시작한다. 실행 시 새 버전이 게시됐다면 기준선을 먼저 갱신한다. 두 버전의 소스를 서로 합치지 않는다.
 
 | 파일·영역 | 변경 또는 보존 내용 |
 | --- | --- |
@@ -234,7 +247,7 @@ export const PLUGIN_NAME = '@homebridge-plugins/homebridge-hejhome';
 - [ ] Homebridge 팀이 안내한 순서로 저장소와 게시 권한을 이전한다. 사용자에게 자동 전환을 권장하는 공식 매핑과 안내는 작업 F가 끝날 때까지 보류한다.
 - [ ] 이전 직후 저장소 기본 브랜치·보호 규칙·환경 `npm`·유지보수 권한을 재확인한다. 과거 태그를 다시 push해 게시 워크플로를 실행하지 않는다.
 - [ ] 팀 담당자가 새 스코프의 최초 정식·베타 패키지를 게시한다. 기존 대응 버전 번호를 유지할지 별도 이전 버전을 사용할지는 B에서 확정한 정책을 따른다.
-- [ ] 새 패키지의 `latest`가 v2, `beta`가 v3인지 직접 조회하고 GitHub Latest도 정식 v2인지 확인한다.
+- [ ] 새 패키지의 `latest`가 대응하는 v3 정식, `beta`가 의도한 시험판인지 직접 조회하고 GitHub Latest도 정식 버전인지 확인한다. v2의 명시 버전 설치 가능 여부도 별도로 확인한다.
 - [ ] 공개 tarball의 무결성·내용·provenance가 검증한 후보와 일치하는지 확인한다.
 - [ ] 새 이름이 공식 검증 목록과 아이콘 목록에 등록됐는지 확인한다. 정식 버전의 scoped 번들 및 SHA256 생성도 별도로 확인하며, 반영 전·베타 설치는 GUI의 npm 경로로 검증한다.
 - [ ] 초기 릴리스에 조직 이전용 버전임을 표시하고 기존 기능 제한을 유지한다. 기존 패키지의 사용자에게 전환을 권장하는 안내는 작업 F 이후 공개한다.
@@ -246,7 +259,7 @@ export const PLUGIN_NAME = '@homebridge-plugins/homebridge-hejhome';
 **입력:** 작업 E의 공개 패키지와 Homebridge 팀의 등록 절차. **산출물:** 사용자 전환 경로 및 버전 선택 결과.
 
 - [ ] 공식 `has-scope-plugins.json`의 `from`·`to`·`switch` 처리 방식과 GUI 전환 도구의 지원 버전을 확인한다. 기존 설정 GUI 최소 버전과 조직 전환 도구의 최소 버전을 혼동하지 않는다.
-- [ ] 공개 매핑 등록 전에, 실제 Homebridge UI 전환 구현에 테스트용 매핑 응답을 연결해 **v2 → 새 v2**, **v3 베타 → 새 v3 베타**의 선택과 설치 순서를 검증한다. 베타가 `latest`로 바뀌면 교정 전 매핑을 공개하지 않는다.
+- [ ] 공개 매핑 등록 전에, 실제 Homebridge UI 전환 구현에 테스트용 매핑 응답을 연결해 **v2 → 새 v2**, **v3 정식 → 새 v3 정식**, **v3 베타 → 새 v3 베타**의 선택과 설치 순서를 검증한다. 베타가 `latest`로 바뀌면 교정 전 매핑을 공개하지 않는다.
 - [ ] 지정된 개발용 Homebridge에서 전환 전 저장 공간 사본과 액세서리 목록을 보관한다.
 - [ ] 개발 환경의 GUI에서 새 패키지 설치 → 기존 패키지 제거 → 재시작 순서를 검증한다. 정상 절차에서 구 패키지를 disabled 상태로 공존시키지 않는다.
 - [ ] GUI 전환 후 로그인, 장치 제어, 상태 재수신, 재시작 두 번, Apple Home의 방·장면·자동화를 확인한다.
@@ -276,7 +289,7 @@ export const PLUGIN_NAME = '@homebridge-plugins/homebridge-hejhome';
 
 ```sh
 git status --short
-git rev-parse 'v2.1.3^{commit}' 'v3.0.2-beta.1^{commit}'
+git rev-parse 'v2.1.3^{commit}' 'v3.0.2^{commit}' 'v3.0.2-beta.1^{commit}'
 npm view @chazepps/homebridge-hejhome dist-tags --json
 gh issue list --repo homebridge/plugins --state all --search '"@chazepps/homebridge-hejhome"' --json number,title,state,url
 gh api repos/homebridge/plugins/contents/.github/ISSUE_TEMPLATE/3_transfer-request.yml

@@ -2,7 +2,7 @@
 
 상태: **[공식 이슈 #1251](https://github.com/homebridge/plugins/issues/1251) 제출 확인**. 작성자는 `chazepps`이며, 실제 신청에서 계속 유지보수하는 선택과 조직 밖 재이전 제한을 이해한다는 내용을 확인했다. 이 문서의 한국어는 검토용 번역이며, 실제 제출 내용은 공개 이슈가 기준이다. 전체 작업 순서는 [이전 실행 계획](2026-10-03-homebridge-scope-migration.md)을 따른다.
 
-신청 후 유지보수 릴리스 `2.1.3`·`3.0.2-beta.1`을 게시했다. 아래 번역과 영문 버전 표는 실제 신청 당시 내용을 보존한다.
+신청 후 유지보수 릴리스 `2.1.3`·`3.0.2-beta.1`을 게시했다. 2026-10-04에는 사용자의 요청으로 정식 `3.0.2`를 `latest`로 승격했다. 아래 번역과 영문 버전 표는 실제 신청 당시 내용을 보존하며, 현재 채널은 이전 실행 계획을 따른다.
 
 제출 위치: [Plugin Transfer Request](https://github.com/homebridge/plugins/issues/new?template=3_transfer-request.yml).
 
