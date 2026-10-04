@@ -20,41 +20,41 @@
 
 헤이홈 계정과 인터넷 연결이 필요하며, 기기 제어에는 헤이홈 클라우드를 사용합니다.
 
-> **3.0 베타 안내**
-> 이 문서는 **3.0.2-beta.1** 기준입니다. **정식 v2는 `latest`, 베타 v3는 `beta` 채널**로 구분합니다. 일반 설치·업데이트는 정식 버전을 사용하며, v3 베타는 직접 선택해야 합니다. 두 버전의 기능과 실행 환경은 다를 수 있습니다.
+> **3.0 정식 버전**
+> 이 문서는 **3.0.2** 기준입니다. 기본 설치·업데이트 채널인 **`latest`는 v3**를 제공합니다. **Homebridge 2.4 이상**이 필요합니다. Homebridge 1.x를 사용하거나 v2를 유지하려면 버전 선택 화면에서 **2.1.3**을 선택하세요.
 
 [시작하기](#시작하기) · [설정 화면](#설정-화면) · [지원 기기](#지원-기기와-기능) · [업데이트 안내](#2x에서-업데이트하기) · [문제 해결](#연결이-안-될-때)
 
 ## 화면 미리보기
 
-3.0 베타의 어두운 테마입니다. 이미지를 누르면 원본 크기로 볼 수 있습니다.
+3.0.2 정식 버전의 어두운 테마입니다. 화면에는 예시 장치를 사용했습니다. 이미지를 누르면 원본 크기로 볼 수 있습니다.
 
 <table>
   <tr>
     <td width="50%" valign="top">
       <strong>장치</strong><br>
-      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-devices.png">
-        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-devices.png" alt="장치 목록과 Apple Home·Matter 연결 준비 상태" width="100%">
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-devices.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-devices.png" alt="장치 목록과 Apple Home·Matter 연결 준비 상태" width="100%">
       </a>
     </td>
     <td width="50%" valign="top">
       <strong>연결</strong><br>
-      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-connections.png">
-        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-connections.png" alt="계정, 집과 방, Matter 연결 설정" width="100%">
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-connections.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-connections.png" alt="계정, 집과 방, Matter 연결 설정" width="100%">
       </a>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <strong>전력</strong><br>
-      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-power.png">
-        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-power.png" alt="장치별 소비전력과 대기전력 입력" width="100%">
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-power.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-power.png" alt="장치별 소비전력과 대기전력 입력" width="100%">
       </a>
     </td>
     <td width="50%" valign="top">
       <strong>도움말</strong><br>
-      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-help.png">
-        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-help.png" alt="연결 상태와 진단, 베타 사용 안내" width="100%">
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-help.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-help.png" alt="연결 상태와 진단, 3.0 사용 안내" width="100%">
       </a>
     </td>
   </tr>
@@ -72,7 +72,7 @@
 
 ### 1. 실행 환경 확인
 
-| 항목 | 3.0 베타 요구사항 |
+| 항목 | 3.0 요구사항 |
 | --- | --- |
 | Homebridge | 2.4 이상인 2.x 계열 |
 | Homebridge 관리 화면 | 5.29 이상 |
@@ -86,37 +86,20 @@ Homebridge 자체를 베타로 바꾸거나 관리 화면의 알파 버전을 �
 
 ### 2. 플러그인 설치
 
-Homebridge 관리 화면의 **플러그인** 메뉴에서 `@chazepps/homebridge-hejhome`을 찾아 설치합니다. 명령어를 사용할 때는 Homebridge가 설치된 환경에서 실행하세요.
+Homebridge 관리 화면의 **플러그인** 메뉴에서 `@chazepps/homebridge-hejhome`을 찾아 설치하거나 **업데이트**를 누릅니다. 정식 `latest` 채널의 **3.0.2**가 설치됩니다.
 
-| 선택 | 채널 | 버전 | 설치 방법 |
-| --- | --- | --- | --- |
-| 정식 v2 | `latest` | `2.1.3` | 일반 설치·업데이트 또는 `@latest` |
-| 베타 v3 | `beta` | `3.0.2-beta.1` | 버전 선택 화면에서 베타 선택 또는 `@beta` |
+| 선택 | 버전 | 설치 방법 |
+| --- | --- | --- |
+| 정식 v3 | `3.0.2` (`latest`) | 일반 설치·업데이트 |
+| 이전 v2 | `2.1.3` | 플러그인 메뉴 → 이전 버전 설치에서 선택 |
+| 기존 v3 베타 | `3.0.2-beta.1` (`beta`) | 시험 버전이 필요한 경우 버전 선택 화면에서 직접 선택 |
 
-설치된 플러그인의 메뉴에서 **이전 버전 설치**(관리 화면에 따라 다른 버전 설치)를 열면 버전을 선택할 수 있습니다. v3는 Homebridge 2.4 이상에서 사용하세요. 한 설치에는 선택한 버전 하나가 적용됩니다.
-
-```sh
-# 공개된 정식 버전 설치
-npm install -g @chazepps/homebridge-hejhome@latest
-```
-
-**v3 베타를 직접 선택하려면 다음 명령을 사용합니다.**
-
-```sh
-npm install -g @chazepps/homebridge-hejhome@3.0.2-beta.1
-```
-
-`@beta`는 베타 채널의 버전을 설치합니다. 특정 베타를 유지하려면 위처럼 버전 번호를 지정하세요. 현재 채널과 버전은 다음 명령으로 확인할 수 있습니다.
-
-```sh
-npm view @chazepps/homebridge-hejhome dist-tags
-npm install -g @chazepps/homebridge-hejhome@beta
-```
+설치된 플러그인의 메뉴에서 **이전 버전 설치**(관리 화면에 따라 다른 버전 설치)를 열면 버전을 선택할 수 있습니다. 베타를 사용 중이라면 **3.0.2**를 선택해 정식으로 전환하세요. 한 설치에는 선택한 버전 하나가 적용됩니다.
 
 <details>
 <summary>소스에서 패키지를 만들어 시험하려면</summary>
 
-테스트용 Homebridge 설정을 백업한 뒤, 3.0 베타 소스가 있는 저장소에서 실행합니다.
+테스트용 Homebridge 설정을 백업한 뒤, 3.0 소스가 있는 저장소에서 실행합니다.
 
 ```sh
 nvm use
@@ -129,7 +112,7 @@ npm pack --ignore-scripts
 생성된 패키지를 Homebridge 설치 환경으로 옮겨 설치합니다.
 
 ```sh
-npm install -g ./chazepps-homebridge-hejhome-3.0.2-beta.1.tgz
+npm install -g ./chazepps-homebridge-hejhome-3.0.2.tgz
 ```
 
 Homebridge 또는 해당 하위 브리지를 다시 시작하고 설정 화면을 다시 여세요. 이 방법은 npm에 공개 게시하지 않고 패키지를 설치하는 방법입니다.
@@ -162,7 +145,7 @@ Homebridge 또는 해당 하위 브리지를 다시 시작하고 설정 화면�
 | **장치** | 이름·종류·모델 검색, 표시 이름·연결 방식 설정, 지원하는 장치 조작 |
 | **연결** | 계정 상태·재로그인, 집·방 선택, Matter·적응형 조명 설정 |
 | **전력** | 소비전력·대기전력 입력, 실제 전력 측정 모델의 고급 설정 |
-| **도움말** | 연결 상태, 개인 정보 없는 진단, 베타 안내, 모델별 지원 범위 |
+| **도움말** | 연결 상태, 개인 정보 없는 진단, 사용 안내, 모델별 지원 범위 |
 
 변경한 내용은 각 영역의 저장 버튼으로 저장합니다. 재시작이 필요한 설정은 화면에 안내합니다. **‘준비됨’은 Homebridge가 연결을 준비했다는 뜻이며, Apple Home 페어링 완료를 확인한 표시는 아닙니다.**
 
@@ -206,7 +189,7 @@ Homebridge의 Matter 콘센트 타일은 W를 표시할 수 있습니다. 조명
 | 공기청정기 | 지원 타입 `Airpurifier`의 전원 제어, 설정 화면에서 모드 변경. 배율을 확인해 설정한 경우 PM2.5 읽기 |
 | 지원 도어락 | `ZigbeeDoorlock`의 문 열림만 읽기. 잠금 상태·잠금·해제 조작은 미지원 |
 
-배터리 정보를 제공하는 기기는 배터리 상태도 표시합니다. 실제 장치 타입과 세부 기능은 [장치별 지원 목록](src/devices/capabilities.ts) 및 [베타 사용 안내](docs/product-specs/3.0-beta-guide.md)에서 확인할 수 있습니다.
+배터리 정보를 제공하는 기기는 배터리 상태도 표시합니다. 실제 장치 타입과 세부 기능은 [장치별 지원 목록](src/devices/capabilities.ts) 및 [3.0 사용 안내](docs/product-specs/3.0-beta-guide.md)에서 확인할 수 있습니다.
 
 ### 적외선 리모컨 장비
 
@@ -239,11 +222,11 @@ Homebridge 관리 화면 6 알파의 자동화 연계는 별도 시험 항목입
 | 에어컨·스마트 버튼 | 확인되지 않은 운전 상태나 클릭 이벤트를 제공하던 항목이 제거됩니다. 기존 자동화를 점검하세요. |
 | 연결 방식·표시 형태 | 기존 장치 식별자는 유지하지만 제공되는 서비스가 달라져 앱 설정이나 자동화 수정이 필요할 수 있습니다. |
 
-문제 해결을 위해 기존 페어링이나 액세서리 정보를 먼저 초기화하지 마세요. [베타 변경 안내](docs/product-specs/3.0-beta-guide.md#이전-버전과-달라지는-표시)를 확인한 뒤 주요 장치와 자동화를 점검하세요.
+문제 해결을 위해 기존 페어링이나 액세서리 정보를 먼저 초기화하지 마세요. [3.0 변경 안내](docs/product-specs/3.0-beta-guide.md#이전-버전과-달라지는-표시)를 확인한 뒤 주요 장치와 자동화를 점검하세요.
 
-### 정식 버전으로 돌아가기
+### v2로 돌아가기
 
-새 연결 옵션을 끄고 [복귀 절차](docs/product-specs/3.0-beta-guide.md#정식-버전으로-돌아가기)를 따릅니다. 2.0·2.1 계열로 돌아갈 때는 백업을 남긴 뒤 Hejhome 설정의 `features` 항목을 제거해야 합니다. `@latest`는 설치 시점의 정식 버전이므로 특정 버전으로 돌아가려면 버전 번호를 지정하세요.
+새 연결 옵션을 끄고 [복귀 절차](docs/product-specs/3.0-beta-guide.md#v2로-돌아가기)를 따릅니다. 2.0·2.1 계열로 돌아갈 때는 백업을 남긴 뒤 Hejhome 설정의 `features` 항목을 제거해야 합니다. Homebridge 관리 화면의 버전 선택에서 **2.1.3**을 지정하세요. `latest`는 v3이므로 v2 복귀에 사용하지 않습니다.
 
 ## 연결이 안 될 때
 

@@ -6,6 +6,7 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtemp
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
+import { releaseChannel } from './channel.mjs';
 
 const pluginName = '@chazepps/homebridge-hejhome';
 const nodeVersions = { 22: '22.13.0', 24: '24.4.1', 26: '26.10.0' };
@@ -32,7 +33,7 @@ export function selectCells(only) {
 export function candidateVersion(pkg, expected = '3.0.0-beta.1') {
   assert.equal(pkg.name, pluginName, 'Unexpected plugin package name');
   assert.equal(pkg.version, expected, 'Tarball version differs from requested candidate');
-  assert.equal(pkg.publishConfig?.tag, 'beta', 'Candidate must remain on the beta channel');
+  releaseChannel(pkg.version, `v${pkg.version}`, pkg.version, pkg.publishConfig?.tag);
   return pkg.version;
 }
 

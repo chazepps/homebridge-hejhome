@@ -32,10 +32,10 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── generated
 │   │   └── README.md
 │   ├── images
-│   │   ├── v3-beta-connections.png
-│   │   ├── v3-beta-devices.png
-│   │   ├── v3-beta-help.png
-│   │   └── v3-beta-power.png
+│   │   ├── v3-connections.png
+│   │   ├── v3-devices.png
+│   │   ├── v3-help.png
+│   │   └── v3-power.png
 │   ├── PLANS.md
 │   ├── PRODUCT_SENSE.md
 │   ├── product-specs

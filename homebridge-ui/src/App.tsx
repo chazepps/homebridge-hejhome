@@ -57,7 +57,7 @@ export default function App() {
           <div className="brand-lockup">
             <img className="brand-icon" src={logoUrl} alt="" width="34" height="34" />
             <div className="brand-copy"><span className="brand-name">Hejhome</span><span className="brand-caption">Homebridge</span></div>
-            <Badge highContrast className="brand-beta" color="gray" variant="soft" size="1">BETA</Badge>
+            {__PLUGIN_VERSION__.includes('-') && <Badge highContrast className="brand-beta" color="gray" variant="soft" size="1">BETA</Badge>}
           </div>
           <Text className="sidebar-label" size="1" color="gray">{t('내 스마트 홈', 'YOUR SMART HOME')}</Text>
           <nav className="app-navigation" aria-label={t('설정 탐색', 'Settings navigation')}>

@@ -295,20 +295,23 @@ export default function Help() {
             <Flex gap="2" align="center">
               <InfoCircledIcon />
               <Heading as="h2" size="4">
-                {t('3.0 베타 안내', '3.0 beta guide')}
+                {t('Hejhome 3.0 사용 안내', 'Your guide to Hejhome 3.0')}
               </Heading>
             </Flex>
-            <Badge highContrast color="iris">BETA</Badge>
+            <Badge highContrast color={__PLUGIN_VERSION__.includes('-') ? 'iris' : 'green'}>
+              {__PLUGIN_VERSION__.includes('-') ? 'BETA' : t('정식', 'Stable')}
+            </Badge>
           </div>
           <Text as="p" size="2" color="gray">
             {t(
-              '센서 측정값, 에어컨 설정, Apple Home 리모컨 버튼의 표시가 바뀔 수 있습니다. 기존 장치를 변경하기 전에 안내를 확인하세요.',
-              'Sensor readings, AC settings and Apple Home remote buttons may change. Review the guide before changing existing devices.',
+              '장치별 설정, Matter 연결, 소비전력 설정 등 3.0의 기능과 사용 방법을 확인하세요. 2.x에서 업데이트했다면 변경된 센서·에어컨·리모컨 표시와 관련 자동화도 확인해 주세요.',
+              'Explore device settings, Matter connections and power settings in 3.0. '
+              + 'If upgrading from 2.x, review changes to sensors, air conditioners and remote buttons, along with related automations.',
             )}
           </Text>
           <Flex gap="4" wrap="wrap" mt="4">
             <Link href={`${repository}/blob/main/docs/product-specs/3.0-beta-guide.md`} target="_blank" rel="noopener noreferrer">
-              {t('베타 사용 안내', 'Beta guide')} <ExternalLinkIcon />
+              {t('사용 안내', 'User guide')} <ExternalLinkIcon />
             </Link>
             <Link href={`${repository}/blob/main/docs/product-specs/smart-automation-guide.md`} target="_blank" rel="noopener noreferrer">
               {t('자동화 안내', 'Automation guide')} <ExternalLinkIcon />

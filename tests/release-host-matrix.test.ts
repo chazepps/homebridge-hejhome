@@ -34,3 +34,10 @@ test('candidate and npm installation arguments cannot drift into a global or wro
     'install', 'homebridge@2.4.0', '--global=false', '--prefix=/tmp/isolated-cell',
   ]);
 });
+
+test('stable candidates use latest while beta candidates remain isolated', () => {
+  const stable = { name: '@chazepps/homebridge-hejhome', version: '3.0.2', publishConfig: { tag: 'latest' } };
+  expect(candidateVersion(stable, '3.0.2')).toBe('3.0.2');
+  expect(() => candidateVersion({ ...stable, publishConfig: { tag: 'beta' } }, '3.0.2')).toThrow();
+  expect(() => candidateVersion({ ...stable, version: '3.0.2-alpha.1' }, '3.0.2-alpha.1')).toThrow();
+});

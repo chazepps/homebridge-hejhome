@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - codex/hejhome-v3-stable
       - codex/hejhome-3.0.0-beta
       - codex/hejhome-v3-verification-readiness
   schedule:
@@ -39,7 +40,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4.37.3
+        uses: github/codeql-action/init@v4.38.2
         with:
           languages: javascript-typescript
 
@@ -56,4 +57,4 @@ jobs:
         run: npm run build
 
       - name: Analyze
-        uses: github/codeql-action/analyze@v4.37.3
+        uses: github/codeql-action/analyze@v4.38.2

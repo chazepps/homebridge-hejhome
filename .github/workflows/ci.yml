@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - codex/hejhome-v3-stable
       - codex/hejhome-3.0.0-beta
       - codex/hejhome-v3-verification-readiness
   pull_request:

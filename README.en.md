@@ -20,41 +20,41 @@ Use lights, switches, plugs and sensors registered in the Hejhome app through Ap
 
 A Hejhome account and an internet connection are required. Device control uses the Hejhome cloud.
 
-> **About the 3.0 beta**
-> This document covers **3.0.2-beta.1**. **Stable v2 uses `latest`; beta v3 uses `beta`.** Normal installations and updates use the stable version. Select the v3 beta explicitly. Features and system requirements differ between the two versions.
+> **Version 3.0 stable**
+> This document covers **3.0.2**. The default **`latest` channel now provides v3**, which requires **Homebridge 2.4 or later**. To keep using Homebridge 1.x or plugin v2, select **2.1.3** in the version picker.
 
 [Getting started](#getting-started) · [Settings](#settings) · [Supported devices](#supported-devices-and-features) · [Upgrading](#upgrading-from-2x) · [Troubleshooting](#troubleshooting)
 
 ## Screenshots
 
-The 3.0 beta in dark mode, shown in Korean. Click an image to view it at full size.
+Version 3.0.2 stable in dark mode, shown in Korean with sample devices. Click an image to view it at full size.
 
 <table>
   <tr>
     <td width="50%" valign="top">
       <strong>Devices</strong><br>
-      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-devices.png">
-        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-devices.png" alt="Device list and Apple Home and Matter connection readiness" width="100%">
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-devices.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-devices.png" alt="Device list and Apple Home and Matter connection readiness" width="100%">
       </a>
     </td>
     <td width="50%" valign="top">
       <strong>Connections</strong><br>
-      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-connections.png">
-        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-connections.png" alt="Account, home and room selection, and Matter connection settings" width="100%">
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-connections.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-connections.png" alt="Account, home and room selection, and Matter connection settings" width="100%">
       </a>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <strong>Power</strong><br>
-      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-power.png">
-        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-power.png" alt="Device power and standby power inputs" width="100%">
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-power.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-power.png" alt="Device power and standby power inputs" width="100%">
       </a>
     </td>
     <td width="50%" valign="top">
       <strong>Help</strong><br>
-      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-help.png">
-        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/codex/hejhome-3.0.0-beta/docs/images/v3-beta-help.png" alt="Connection status, diagnostics, and beta guidance" width="100%">
+      <a href="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-help.png">
+        <img src="https://raw.githubusercontent.com/chazepps/homebridge-hejhome/v3.0.2/docs/images/v3-help.png" alt="Connection status, diagnostics, and user guidance" width="100%">
       </a>
     </td>
   </tr>
@@ -72,7 +72,7 @@ The 3.0 beta in dark mode, shown in Korean. Click an image to view it at full si
 
 ### 1. Check the requirements
 
-| Component | Requirements for the 3.0 beta |
+| Component | Requirements for 3.0 |
 | --- | --- |
 | Homebridge | Version 2.4 or later within the 2.x series |
 | Homebridge UI | Version 5.29 or later |
@@ -86,37 +86,20 @@ Remote, air-conditioner and air-purifier controls on the plugin settings page re
 
 ### 2. Install the plugin
 
-Find `@chazepps/homebridge-hejhome` in the **Plugins** section of Homebridge UI. If using the command line, run commands in the environment where Homebridge is installed.
+Find `@chazepps/homebridge-hejhome` in the **Plugins** section of Homebridge UI and install it, or select **Update**. The stable `latest` channel installs **3.0.2**.
 
-| Choice | Channel | Version | How to install |
-| --- | --- | --- | --- |
-| Stable v2 | `latest` | `2.1.3` | Normal installation or update, or `@latest` |
-| Beta v3 | `beta` | `3.0.2-beta.1` | Select the beta in the version picker, or use `@beta` |
+| Choice | Version | How to install |
+| --- | --- | --- |
+| Stable v3 | `3.0.2` (`latest`) | Normal installation or update |
+| Previous v2 | `2.1.3` | Choose Install Previous Version from the plugin menu |
+| Existing v3 beta | `3.0.2-beta.1` (`beta`) | Select explicitly in the version picker when a test version is needed |
 
-Open **Install Previous Version** (or Install Alternate Version, depending on the UI) from the installed plugin's menu to choose a version. Version 3 requires Homebridge 2.4 or later. Each installation runs one selected version.
-
-```sh
-# Install the published stable version
-npm install -g @chazepps/homebridge-hejhome@latest
-```
-
-**To explicitly select the v3 beta, use:**
-
-```sh
-npm install -g @chazepps/homebridge-hejhome@3.0.2-beta.1
-```
-
-`@beta` installs the version on the beta channel. Specify the exact version as above to stay on a particular beta. Check the current channel versions with:
-
-```sh
-npm view @chazepps/homebridge-hejhome dist-tags
-npm install -g @chazepps/homebridge-hejhome@beta
-```
+Open **Install Previous Version** (or Install Alternate Version, depending on the UI) from the plugin menu to choose a version. If you currently use the beta, select **3.0.2** to move to stable. Each installation runs one selected version.
 
 <details>
 <summary>Build and test a package from source</summary>
 
-Back up your test Homebridge configuration, then run these commands from a checkout containing the 3.0 beta source.
+Back up your test Homebridge configuration, then run these commands from a checkout containing the 3.0 source.
 
 ```sh
 nvm use
@@ -129,7 +112,7 @@ npm pack --ignore-scripts
 Transfer the generated package to the Homebridge installation environment and install it.
 
 ```sh
-npm install -g ./chazepps-homebridge-hejhome-3.0.2-beta.1.tgz
+npm install -g ./chazepps-homebridge-hejhome-3.0.2.tgz
 ```
 
 Restart Homebridge or the relevant child bridge, then reopen the plugin settings. This installs a local package without publishing it to npm.
@@ -162,7 +145,7 @@ If editing `config.json` directly, the minimum configuration is shown below. Com
 | **Devices** | Search by name, type or model; set display names and connection methods; use supported controls |
 | **Connections** | Check account status, sign in again, select homes and rooms, configure Matter and Adaptive Lighting |
 | **Power** | Enter active and standby wattage; configure advanced profiles for actual power measurements |
-| **Help** | Check connection status, view diagnostics without personal information, read beta guidance and model support details |
+| **Help** | Check connection status, view diagnostics without personal information, read the user guide and model support details |
 
 Save changes using the button in each section. Settings that require a restart are identified on screen. **“Prepared” means Homebridge has prepared a connection; it does not confirm that Apple Home pairing is complete.**
 
@@ -206,7 +189,7 @@ Support depends on the model and the values it reports. This table describes the
 | Air purifiers | Power control for the supported `Airpurifier` type; mode changes in the settings UI; PM2.5 readings when a verified conversion multiplier is configured |
 | Supported door locks | Door-open state only for `ZigbeeDoorlock`; no lock-state reporting or lock/unlock controls |
 
-Battery status is shown when supplied by the device. See the [device support registry](src/devices/capabilities.ts) and the [beta guide (Korean)](docs/product-specs/3.0-beta-guide.md) for device types and detailed capabilities.
+Battery status is shown when supplied by the device. See the [device support registry](src/devices/capabilities.ts) and the [3.0 guide (Korean)](docs/product-specs/3.0-beta-guide.md) for device types and detailed capabilities.
 
 ### Infrared remote devices
 
@@ -239,11 +222,11 @@ Back up your configuration and review these changes.
 | Air conditioners and smart buttons | Services previously exposing unconfirmed operating states or click events are removed. Review existing automations. |
 | Connection method and display type | Existing device identifiers are retained, but available services may change and require updates in your app or automations. |
 
-Do not start troubleshooting by resetting existing pairings or accessory data. Read the [beta migration notes (Korean)](docs/product-specs/3.0-beta-guide.md#이전-버전과-달라지는-표시), then check your main devices and automations.
+Do not start troubleshooting by resetting existing pairings or accessory data. Read the [3.0 migration notes (Korean)](docs/product-specs/3.0-beta-guide.md#이전-버전과-달라지는-표시), then check your main devices and automations.
 
-### Return to a stable version
+### Return to v2
 
-Turn off the new connection options and follow the [rollback steps (Korean)](docs/product-specs/3.0-beta-guide.md#정식-버전으로-돌아가기). Before returning to the 2.0 or 2.1 series, save a copy of your configuration and remove the Hejhome `features` section. `@latest` installs whichever version is currently stable; specify a version number to return to a particular release.
+Turn off the new connection options and follow the [rollback steps (Korean)](docs/product-specs/3.0-beta-guide.md#v2로-돌아가기). Before returning to the 2.0 or 2.1 series, save a copy of your configuration and remove the Hejhome `features` section. Select **2.1.3** explicitly in the Homebridge UI version picker. The `latest` channel now provides v3 and must not be used to return to v2.
 
 ## Troubleshooting
 
