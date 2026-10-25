@@ -206,9 +206,9 @@ Additional remote buttons are off by default. Enable **Show remote buttons in Ap
 
 Apple Home and Matter thermostat interfaces are not provided because actual air-conditioner operating state cannot be confirmed. You can link a separate Hejhome thermometer to show the measured current temperature in the settings UI.
 
-### Hejhome scenes
+### Hejhome scenes (Recipes)
 
-Scenes created in the Hejhome app can be run from Apple Home switches. This is off by default. Add `"scenes": true` to `features` in `config.json` and restart Homebridge to get one switch per scene in the selected homes. Turning a switch on runs the scene once and it immediately returns to off. Device states inside a scene are not read, and the scene list is refreshed on every discovery. Turning the option off removes the switches. Creating or editing scenes is not supported.
+Scenes (called "Recipes" in the Korean Hejhome app) created in the Hejhome app can be run from Apple Home switches. This is off by default. Add `"scenes": true` to `features` in `config.json` and restart Homebridge to get one switch per scene in the selected homes. Turning a switch on runs the scene once and it immediately returns to off. Device states inside a scene are not read, and the scene list is refreshed on every discovery. Turning the option off removes the switches. Creating or editing scenes is not supported.
 
 ### Features not yet available
 
