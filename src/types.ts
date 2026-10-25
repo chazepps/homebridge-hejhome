@@ -95,6 +95,11 @@ export interface HejFamily {
   name: string;
 }
 
+export interface HejScene {
+  name: string;
+  sceneId: string;
+}
+
 export interface HejRoom {
   room_id: number;
   name: string;
