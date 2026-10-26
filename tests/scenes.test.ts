@@ -16,7 +16,8 @@ const session: HejSession = { identifier: 'user@example.test', autoLogin: true, 
 describe('scene REST calls', () => {
   test('lists scenes by the family-id query and drops malformed entries', async () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify({
-      result: [{ name: 'Main', sceneId: 's8-main' }, { name: 'No id' }, null, { name: 'Empty', sceneId: '' }] }) });
+      result: [{ name: 'Main', sceneId: 's8-main' }, { name: 'No id' }, null, { name: 'Empty', sceneId: '' },
+        { name: '  ', sceneId: 's8-blank' }] }) });
     const client = new HejRestClient(session, { fetch: fetch as unknown as typeof globalThis.fetch });
     expect(await client.getScenes(100)).toEqual([{ name: 'Main', sceneId: 's8-main' }]);
     expect(fetch.mock.calls[0]![0]).toBe('https://square.hej.so/dashboard/scene?family-id=100');
@@ -163,5 +164,131 @@ describe('scene accessories', () => {
     handler.dispose();
     await accessory.getService(f.host.hap.Service.Switch)!.getCharacteristic(f.host.hap.Characteristic.On).handleSetRequest(true);
     expect(run).not.toHaveBeenCalled();
+  });
+  test('refuses a scene that the current account has not confirmed', async () => {
+    const f = await fixture(true);
+    const seed = { familyId: 100, sceneId: 's8-main', name: 'Main' };
+    const cached = new f.host.platformAccessory('Main', f.host.hap.uuid.generate(sceneUuidSeed(seed)));
+    cached.context.scene = seed;
+    f.platform.configureAccessory(cached);
+    await expect(f.platform.runScene(seed)).rejects.toThrow('not confirmed');
+    f.client.getScenes.mockResolvedValue([seed]);
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    await f.platform.runScene(seed);
+    expect(f.client.runScene).toHaveBeenCalledWith(100, 's8-main');
+    await expect(f.platform.runScene({ ...seed, familyId: 200 })).rejects.toThrow('not confirmed');
+    expect(f.client.runScene).toHaveBeenCalledTimes(1);
+  });
+  test('a failed list does not confirm cached scenes, and an empty list is a normal result', async () => {
+    const f = await fixture(true);
+    const seed = { familyId: 100, sceneId: 's8-main', name: 'Main' };
+    const cached = new f.host.platformAccessory('Main', f.host.hap.uuid.generate(sceneUuidSeed(seed)));
+    cached.context.scene = seed;
+    f.platform.configureAccessory(cached);
+    f.client.getScenes.mockRejectedValue(new Error('offline'));
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    await expect(f.platform.runScene(seed)).rejects.toThrow('not confirmed');
+    expect(f.platform.accessories.size).toBe(1);
+    f.client.getScenes.mockResolvedValue([]);
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    expect(f.platform.accessories.size).toBe(0);
+    expect(f.api.unregisterPlatformAccessories).toHaveBeenCalledTimes(1);
+  });
+  test('requests during a run share one execution and its outcome', async () => {
+    vi.useFakeTimers();
+    const f = await fixture(true);
+    f.client.getScenes.mockResolvedValue([{ name: 'Main', sceneId: 's8-main' }]);
+    let release!: () => void;
+    f.client.runScene.mockReturnValue(new Promise<void>((resolve) => {
+      release = resolve;
+    }));
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    const on = [...f.platform.accessories.values()][0]!.getService(f.host.hap.Service.Switch)!
+      .getCharacteristic(f.host.hap.Characteristic.On);
+    const first = on.handleSetRequest(true);
+    const second = on.handleSetRequest(true);
+    await vi.advanceTimersByTimeAsync(0);
+    release();
+    await Promise.all([first, second]);
+    expect(f.client.runScene).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(on.value).toBe(false);
+  });
+  test('every request during a failing run is reported as a failure', async () => {
+    vi.useFakeTimers();
+    const f = await fixture(true);
+    f.client.getScenes.mockResolvedValue([{ name: 'Main', sceneId: 's8-main' }]);
+    let fail!: () => void;
+    f.client.runScene.mockReturnValue(new Promise<void>((_, reject) => {
+      fail = () => reject(new Error('cloud refused'));
+    }));
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    const on = [...f.platform.accessories.values()][0]!.getService(f.host.hap.Service.Switch)!
+      .getCharacteristic(f.host.hap.Characteristic.On);
+    const results = Promise.allSettled([on.handleSetRequest(true), on.handleSetRequest(true)]);
+    await vi.advanceTimersByTimeAsync(0);
+    fail();
+    expect((await results).map((entry) => entry.status)).toEqual(['rejected', 'rejected']);
+    expect(f.client.runScene).toHaveBeenCalledTimes(1);
+  });
+  test('re-discovery during a run keeps the handler, so nothing runs twice and the switch still resets', async () => {
+    vi.useFakeTimers();
+    const f = await fixture(true);
+    f.client.getScenes.mockResolvedValue([{ name: 'Main', sceneId: 's8-main' }]);
+    let release!: () => void;
+    f.client.runScene.mockReturnValue(new Promise<void>((resolve) => {
+      release = resolve;
+    }));
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    const accessory = [...f.platform.accessories.values()][0]!;
+    const on = accessory.getService(f.host.hap.Service.Switch)!.getCharacteristic(f.host.hap.Characteristic.On);
+    const first = on.handleSetRequest(true);
+    await vi.advanceTimersByTimeAsync(0);
+    f.client.getScenes.mockResolvedValue([{ name: 'Renamed', sceneId: 's8-main' }]);
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    const second = on.handleSetRequest(true);
+    release();
+    await Promise.all([first, second]);
+    expect(f.client.runScene).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(on.value).toBe(false);
+    expect(accessory.displayName).toBe('Renamed');
+    expect(accessory.context.scene.name).toBe('Renamed');
+  });
+  test('a scene that cannot be registered does not abort the others or leave a handler behind', async () => {
+    const f = await fixture(true);
+    f.client.getScenes.mockResolvedValue([{ name: 'Bad', sceneId: 's8-bad' }, { name: 'Good', sceneId: 's8-good' }]);
+    f.api.registerPlatformAccessories = vi.fn((_plugin: string, _platform: string, accessories: Array<{ displayName: string }>) => {
+      if (accessories[0]!.displayName === 'Bad') {
+        throw new Error('Cannot Bridge more than 149 Accessories');
+      }
+    });
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    expect([...f.platform.accessories.values()].map((entry) => entry.displayName)).toEqual(['Good']);
+    expect((f.platform as unknown as { sceneHandlers: Map<string, unknown> }).sceneHandlers.size).toBe(1);
+  });
+  test('replacing a scene unpublishes the old one before registering the new one', async () => {
+    const f = await fixture(true);
+    f.client.getScenes.mockResolvedValue([{ name: 'Old', sceneId: 's8-old' }]);
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    f.client.getScenes.mockResolvedValue([{ name: 'New', sceneId: 's8-new' }]);
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    const unregister = f.api.unregisterPlatformAccessories as ReturnType<typeof vi.fn>;
+    const register = f.api.registerPlatformAccessories as ReturnType<typeof vi.fn>;
+    expect(unregister.mock.invocationCallOrder[0]).toBeLessThan(register.mock.invocationCallOrder[1]!);
+    expect([...f.platform.accessories.values()].map((entry) => entry.displayName)).toEqual(['New']);
+  });
+  test('keeps the scene UUID across a rename and separates the same scene ID in different homes', async () => {
+    const f = await fixture(true);
+    f.client.getScenes.mockResolvedValue([{ name: 'Main', sceneId: 's8-main' }]);
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    const [uuid, accessory] = [...f.platform.accessories.entries()][0]!;
+    f.client.getScenes.mockResolvedValue([{ name: 'Renamed', sceneId: 's8-main' }]);
+    await f.internal.reconcileScenes(f.client, [family], 0);
+    expect(f.platform.accessories.get(uuid)).toBe(accessory);
+    const other = await fixture(true);
+    other.client.getScenes.mockResolvedValue([{ name: 'Main', sceneId: 's8-main' }]);
+    await other.internal.reconcileScenes(other.client, [family, { familyId: 200, name: 'Other' }], 0);
+    expect(other.platform.accessories.size).toBe(2);
   });
 });

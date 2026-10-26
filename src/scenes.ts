@@ -27,54 +27,34 @@ export function cachedScene(accessory: PlatformAccessory): SceneContext | undefi
 /** A momentary switch: turning it on runs the scene, then it returns to off. */
 export class HejhomeSceneSwitch {
   private disposed = false;
-  private running = false;
+  private pending: Promise<void> | null = null;
   private resetTimer: ReturnType<typeof setTimeout> | null = null;
+  private scene: SceneContext;
   private readonly service: Service;
   private readonly Characteristic: typeof Characteristic;
 
   constructor(private readonly options: SceneSwitchOptions) {
     const { accessory, hap, scene } = options;
+    this.scene = scene;
     this.Characteristic = hap.Characteristic;
-    accessory.context.scene = { familyId: scene.familyId, sceneId: scene.sceneId, name: scene.name };
-    accessory.displayName = scene.name;
-
-    accessory.getService(hap.Service.AccessoryInformation)!
-      .setCharacteristic(hap.Characteristic.Manufacturer, 'Hejhome')
-      .setCharacteristic(hap.Characteristic.Model, 'Scene')
-      .setCharacteristic(hap.Characteristic.SerialNumber, `${scene.familyId}/${scene.sceneId}`);
-
     this.service = accessory.getService(hap.Service.Switch) ?? accessory.addService(hap.Service.Switch, scene.name);
-    this.service.displayName = scene.name;
-    for (const characteristic of [hap.Characteristic.Name, hap.Characteristic.ConfiguredName]) {
-      if (this.service.testCharacteristic(characteristic)) {
-        this.service.updateCharacteristic(characteristic, scene.name);
-      }
-    }
+    this.applyMetadata();
     this.service.getCharacteristic(hap.Characteristic.On)
       .onGet(() => false)
       .onSet(async (value) => {
-        if (this.disposed || (value !== true && value !== 1) || this.running) {
+        if (this.disposed || (value !== true && value !== 1)) {
           return;
         }
-        this.running = true;
-        try {
-          await this.options.run(scene);
-        } catch {
-          throw new hap.HapStatusError(hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-        } finally {
-          this.running = false;
-        }
-        if (this.resetTimer) {
-          clearTimeout(this.resetTimer);
-        }
-        // HAP commits the requested value after onSet resolves, so the reset must come after that.
-        this.resetTimer = setTimeout(() => {
-          this.resetTimer = null;
-          if (!this.disposed) {
-            this.service.updateCharacteristic(this.Characteristic.On, false);
-          }
-        }, 0);
+        // A request that arrives mid-run shares the same outcome instead of reporting a false success.
+        this.pending ??= this.execute();
+        await this.pending;
       });
+  }
+
+  /** Re-discovery keeps this handler (and any run in flight); only the scene metadata is refreshed. */
+  update(scene: SceneContext): void {
+    this.scene = scene;
+    this.applyMetadata();
   }
 
   dispose(): void {
@@ -83,5 +63,45 @@ export class HejhomeSceneSwitch {
       clearTimeout(this.resetTimer);
       this.resetTimer = null;
     }
+  }
+
+  private applyMetadata(): void {
+    const { accessory, hap } = this.options;
+    const scene = this.scene;
+    accessory.context.scene = { familyId: scene.familyId, sceneId: scene.sceneId, name: scene.name };
+    accessory.displayName = scene.name;
+    accessory.getService(hap.Service.AccessoryInformation)!
+      .setCharacteristic(hap.Characteristic.Manufacturer, 'Hejhome')
+      .setCharacteristic(hap.Characteristic.Model, 'Scene')
+      .setCharacteristic(hap.Characteristic.SerialNumber, `${scene.familyId}/${scene.sceneId}`);
+    this.service.displayName = scene.name;
+    for (const characteristic of [hap.Characteristic.Name, hap.Characteristic.ConfiguredName]) {
+      if (this.service.testCharacteristic(characteristic)) {
+        this.service.updateCharacteristic(characteristic, scene.name);
+      }
+    }
+  }
+
+  private async execute(): Promise<void> {
+    try {
+      await this.options.run(this.scene);
+    } catch {
+      throw new this.options.hap.HapStatusError(this.options.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    } finally {
+      this.pending = null;
+    }
+    if (this.disposed) {
+      return;
+    }
+    if (this.resetTimer) {
+      clearTimeout(this.resetTimer);
+    }
+    // HAP commits the requested value after onSet resolves, so the reset must come after that.
+    this.resetTimer = setTimeout(() => {
+      this.resetTimer = null;
+      if (!this.disposed) {
+        this.service.updateCharacteristic(this.Characteristic.On, false);
+      }
+    }, 0);
   }
 }

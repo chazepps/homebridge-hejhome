@@ -77,7 +77,7 @@ export class HejRestClient {
     }
     return response.result.filter((scene): scene is HejScene => !!scene && typeof scene === 'object'
       && typeof (scene as HejScene).sceneId === 'string' && (scene as HejScene).sceneId.length > 0
-      && typeof (scene as HejScene).name === 'string');
+      && typeof (scene as HejScene).name === 'string' && (scene as HejScene).name.trim().length > 0);
   }
 
   /** The web app runs a scene with a body-less POST; the scene is identified only by the query string. */

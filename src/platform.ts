@@ -47,6 +47,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private readonly handlerSignatures = new Map<string, string>();
   private readonly accessoryHandlers: Map<string, HejhomePlatformAccessory> = new Map();
   private readonly sceneHandlers = new Map<string, HejhomeSceneSwitch>();
+  /** Scenes confirmed by a successful list for the current session; cached switches are not trusted before this. */
+  private verifiedScenes: { fingerprint: string; uuids: Set<string> } | null = null;
   private readonly logStore: LogStore;
   private readonly snapshotStore: DeviceSnapshotStore;
   private readonly sessionStore: SessionStore;
@@ -267,6 +269,11 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     }
     if (generation !== this.generation || this.stopping || this.client !== client) {
       throw new Error('Hejhome session changed. Try again.');
+    }
+    const verified = this.verifiedScenes;
+    if (verified?.fingerprint !== this.sessionFingerprint
+      || !verified.uuids.has(this.api.hap.uuid.generate(sceneUuidSeed(scene)))) {
+      throw new Error('Hejhome scene is not confirmed for this account yet. Try again.');
     }
     try {
       await client.runScene(scene.familyId, scene.sceneId);
@@ -688,27 +695,41 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     if (generation !== this.generation || this.stopping) {
       return;
     }
-    for (const [uuid, scene] of wanted) {
-      const existing = this.accessories.get(uuid);
-      const accessory = existing ?? new this.api.platformAccessory(scene.name, uuid);
-      this.createSceneHandler(accessory, scene);
-      if (existing) {
-        this.api.updatePlatformAccessories([accessory]);
-      } else {
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-        this.accessories.set(uuid, accessory);
-      }
-    }
+    this.verifiedScenes = { fingerprint: this.sessionFingerprint, uuids: new Set(wanted.keys()) };
+    // Remove first so a replacement still fits when the bridge is at its accessory limit.
     for (const [uuid, accessory] of this.accessories) {
       if (cachedScene(accessory) && !wanted.has(uuid)) {
         this.removeSceneAccessory(uuid, accessory);
+      }
+    }
+    for (const [uuid, scene] of wanted) {
+      const existing = this.accessories.get(uuid);
+      try {
+        const accessory = existing ?? new this.api.platformAccessory(scene.name, uuid);
+        this.createSceneHandler(accessory, scene);
+        if (existing) {
+          this.api.updatePlatformAccessories([accessory]);
+        } else {
+          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+          this.accessories.set(uuid, accessory);
+        }
+      } catch (error) {
+        if (!existing) {
+          this.sceneHandlers.get(uuid)?.dispose();
+          this.sceneHandlers.delete(uuid);
+        }
+        this.warn('scene.register.failed', { familyId: scene.familyId, sceneId: scene.sceneId, error: String(error) });
       }
     }
     this.info('scene.discovery.finished', { sceneCount: wanted.size });
   }
 
   private createSceneHandler(accessory: PlatformAccessory, scene: SceneContext): void {
-    this.sceneHandlers.get(accessory.UUID)?.dispose();
+    const existing = this.sceneHandlers.get(accessory.UUID);
+    if (existing) {
+      existing.update(scene);
+      return;
+    }
     this.sceneHandlers.set(accessory.UUID, new HejhomeSceneSwitch({
       accessory, hap: this.api.hap, scene, run: (target) => this.runScene(target),
     }));
