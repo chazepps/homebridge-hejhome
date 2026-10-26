@@ -166,6 +166,12 @@
             "type": "boolean",
             "default": false
           },
+          "scenes": {
+            "title": "헤이홈 레시피 노출 / Expose Hejhome scenes (Recipes)",
+            "description": "선택한 집의 레시피마다 스위치를 만듭니다. 켜면 레시피가 실행되고 곧바로 꺼집니다. / Creates a switch per scene in the selected homes. Turning it on runs the scene, then it returns to off.",
+            "type": "boolean",
+            "default": false
+          },
           "meters": {
             "type": "array",
             "default": [],

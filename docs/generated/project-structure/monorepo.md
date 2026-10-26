@@ -137,6 +137,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── observations.ts
 │   │   ├── powerEstimates.ts
 │   │   └── status.ts
+│   ├── scenes.ts
 │   ├── settings.ts
 │   ├── storage
 │   │   ├── deviceSnapshotStore.ts
@@ -205,6 +206,8 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── runtime-session-ownership.test.ts
 │   ├── runtime-status.test.ts
 │   ├── runtime-visibility.test.ts
+│   ├── scenes-init.test.ts
+│   ├── scenes.test.ts
 │   ├── session-diagnostics.test.ts
 │   ├── session-store.test.ts
 │   ├── ui

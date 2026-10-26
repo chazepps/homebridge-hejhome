@@ -1,4 +1,4 @@
-import type { HejDevice, HejFamily, HejRoom, HejSession } from '../types.js';
+import type { HejDevice, HejFamily, HejRoom, HejScene, HejSession } from '../types.js';
 import { sanitizeForLog } from '../utils/redact.js';
 
 const SQUARE_ORIGIN = 'https://square.hej.so';
@@ -68,6 +68,21 @@ export class HejRestClient {
   async getDevices(familyId: number, roomId?: number | 'all'): Promise<HejDevice[]> {
     const roomSegment = roomId === undefined ? '' : `/room/${roomId}`;
     return this.request<HejDevice[]>(`dashboard/${familyId}${roomSegment}/devices-state?scope=shop`);
+  }
+
+  async getScenes(familyId: number): Promise<HejScene[]> {
+    const response = await this.request<{ result?: unknown }>(`dashboard/scene?family-id=${familyId}`);
+    if (!Array.isArray(response?.result)) {
+      throw new Error('Hejhome scene list response was not recognised.');
+    }
+    return response.result.filter((scene): scene is HejScene => !!scene && typeof scene === 'object'
+      && typeof (scene as HejScene).sceneId === 'string' && (scene as HejScene).sceneId.length > 0
+      && typeof (scene as HejScene).name === 'string' && (scene as HejScene).name.trim().length > 0);
+  }
+
+  /** The web app runs a scene with a body-less POST; the scene is identified only by the query string. */
+  async runScene(familyId: number, sceneId: string): Promise<void> {
+    await this.requestText(`dashboard/scene/?family-id=${familyId}&scene-id=${encodeURIComponent(sceneId)}`, { method: 'POST' });
   }
 
   async getCameraDevices(): Promise<unknown[]> {
