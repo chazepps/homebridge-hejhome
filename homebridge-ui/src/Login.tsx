@@ -46,8 +46,12 @@ export default function Login() {
       if (token !== sequence.current || error instanceof StaleAccountError) {
         return;
       }
+      // Homebridge rejects requests with a serialized { message, error } object.
+      // Do not stringify the object or expose arbitrary diagnostic fields.
+      const message = error && typeof error === 'object' && 'message' in error ? error.message : error;
       const text = app.language === 'en' ? 'Could not complete this step. Please check your connection and try again.'
-        : error instanceof Error ? error.message : String(error);
+        : typeof message === 'string' && message.trim() ? message
+          : '요청을 완료하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.';
       setMessage(text); app.notify('error', text);
     } finally {
       if (token === sequence.current) {

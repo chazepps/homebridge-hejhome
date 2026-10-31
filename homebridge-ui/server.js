@@ -710,11 +710,12 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       this.log(`${name}.success`, { durationMs: elapsed(startedAt) });
       return result;
     } catch (error) {
+      const requestError = toRequestError(userMessage, error);
       this.log(`${name}.error`, {
         durationMs: elapsed(startedAt),
-        error: sanitizeForLog(error instanceof Error ? error.message : String(error)),
+        error: requestError.requestError.detail,
       }, 'error');
-      throw toRequestError(userMessage, error);
+      throw requestError;
     }
   }
 
@@ -944,8 +945,20 @@ function isLikelyExpiredSession(error) {
 }
 
 function toRequestError(message, error) {
-  return new RequestError(message, { detail: sanitizeForLog(error instanceof Error ? error.message : String(error)),
+  const portExhausted = hasPortExhaustion(error);
+  const detail = sanitizeForLog(error instanceof Error ? error.message : String(error));
+  return new RequestError(portExhausted
+    ? 'Homebridge 서버의 네트워크 포트가 부족해 연결하지 못했습니다. 서버의 네트워크 상태를 확인해 주세요.' : message, {
+    detail: portExhausted ? `${detail} (EADDRNOTAVAIL)` : detail,
     ...(error instanceof ScopeEditError || error instanceof PowerSpecsError ? { code: error.code } : {}) });
+}
+
+function hasPortExhaustion(error, depth = 0) {
+  if (!error || typeof error !== 'object' || depth >= 5) {
+    return false;
+  }
+  return error.code === 'EADDRNOTAVAIL' || hasPortExhaustion(error.cause, depth + 1)
+    || Array.isArray(error.errors) && error.errors.some((nested) => hasPortExhaustion(nested, depth + 1));
 }
 
 function normalizeHvacSettings(value) {
