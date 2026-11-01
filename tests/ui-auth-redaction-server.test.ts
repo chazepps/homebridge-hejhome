@@ -75,3 +75,16 @@ test.each([
     }
   }
 });
+
+test('port exhaustion is reported as a server network failure rather than a password error', async () => {
+  vi.stubGlobal('fetch', async () => {
+    throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect failed'), { code: 'EADDRNOTAVAIL' }) });
+  });
+  await import('../homebridge-ui/server.js');
+  const error = await bridge.handlers.get('/send-verification')!({ identifier: 'user@example.test' }).catch((caught: Error) => caught);
+  const server = bridge.instance as { logStore: { append(level: string, event: string): Promise<void> } };
+  await server.logStore.append('info', 'test.flush');
+  expect((error as Error).message).toContain('Homebridge 서버');
+  expect((error as Error).message).toContain('포트');
+  expect((error as { requestError?: { detail?: string } }).requestError?.detail).toContain('EADDRNOTAVAIL');
+});
