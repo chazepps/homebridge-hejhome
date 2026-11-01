@@ -175,6 +175,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── ir-hap-buttons.test.ts
 │   ├── ir-remote-commands.test.ts
 │   ├── log-store.test.ts
+│   ├── matter-additive-parts.test.ts
 │   ├── matter-cache-restore.test.ts
 │   ├── matter-conformance.test.ts
 │   ├── matter-dimming.test.ts
@@ -248,7 +249,9 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── inventory-doc-harness.mjs
 │   │   └── validate-doc-harness.mjs
 │   ├── homebridge
+│   │   ├── additive-matter-parts-runtime.mjs
 │   │   ├── dev-ui-logging.mjs
+│   │   ├── patch-additive-matter-parts.mjs
 │   │   ├── prepare-dev-plugins.mjs
 │   │   ├── run-dev-ui.mjs
 │   │   └── verify-pi-runtime.mjs

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { HejDevice, HejFamily, HejhomePlatformConfig } from '../types.js';
+import { resolveDiscoveryScope } from '../discovery/scope.js';
 
 export interface HejDeviceSnapshot {
   ownerFingerprint?: string;
@@ -56,4 +57,30 @@ export class DeviceSnapshotStore {
       throw error;
     }
   }
+
+  async loadDevicesForSession(ownerFingerprint: string, scope: NonNullable<HejhomePlatformConfig['scope']>): Promise<HejDevice[]> {
+    const snapshot = await this.load();
+    if (!snapshot || snapshot.ownerFingerprint !== ownerFingerprint || !snapshot.discoveryScope
+      || scopeKey(snapshot.discoveryScope) !== scopeKey(scope)) {
+      return [];
+    }
+    const selected = resolveDiscoveryScope({ scope }, snapshot.families.map((entry) => entry.family));
+    return selected.flatMap(({ familyId, roomIds }) => {
+      const devices = snapshot.families.find((entry) => entry.family.familyId === familyId)?.devices ?? [];
+      return devices.filter((device) => typeof device.id === 'string' && device.id
+        && typeof device.deviceType === 'string' && typeof device.name === 'string'
+        && (roomIds === undefined || roomIds.includes(Number(device.roomId))));
+    });
+  }
+}
+
+function scopeKey(scope: NonNullable<HejhomePlatformConfig['scope']>): string {
+  const mode = scope.mode ?? 'first-family';
+  if (mode !== 'custom') {
+    return mode;
+  }
+  const families = [...new Set(scope.includedFamilyIds ?? [])].sort((a, b) => a - b);
+  const rooms = scope.includedRoomsByFamilyId ?? {};
+  return JSON.stringify(families.map((id) => [id, Object.hasOwn(rooms, String(id))
+    ? [...new Set(rooms[String(id)] ?? [])].sort((a, b) => a - b) : null]));
 }

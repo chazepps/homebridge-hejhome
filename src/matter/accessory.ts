@@ -171,7 +171,8 @@ export function createMatterAccessory(
   estimate?: EstimatedElectricalState,
 ): MatterAccessory | null {
   const device = current();
-  const kind = getDeviceCapability(device.deviceType)?.serviceKind;
+  const capability = getDeviceCapability(device.deviceType);
+  const kind = capability?.serviceKind;
   if (kind === 'ir-switch' && (isMomentaryPowerDevice(device) || readVendorPower(device) === undefined)) {
     return null;
   }
@@ -428,7 +429,9 @@ export function createMatterAccessory(
         measuredValue: calibratePm25(state.pm25, pm25Multiplier), measurementMedium: 0, measurementUnit: 4,
       } } }];
   }
-  if (state.battery !== undefined) {
+  // Battery support is a device capability, independent of whether a sleeping
+  // sensor happened to include a battery reading in the cached snapshot.
+  if (state.battery !== undefined || capability?.homeKitServices.includes('BatteryService')) {
     const battery = number(state.battery);
     clusters.powerSource = { status: 1, order: 0, description: 'Battery',
       batPercentRemaining: battery === null ? null : Math.round(Math.max(0, Math.min(100, battery)) * 2) };
