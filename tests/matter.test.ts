@@ -183,6 +183,33 @@ describe('Matter device contract', () => {
 });
 
 describe('Matter lifecycle', () => {
+  test.each([false, true])('failed asynchronous cache registration can recover (late completion: %s)', async (lateCompletion) => {
+    vi.useFakeTimers();
+    let ready = false;
+    let attempt = 0;
+    const host = { ...api, registerPlatformAccessories: vi.fn(async () => {
+      if (++attempt > 1) {
+        ready = true;
+      }
+    }), getAccessoryState: vi.fn(async () => ready ? { reachable: true } : undefined),
+    updateAccessoryState: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(), unregisterPlatformAccessories: vi.fn() } as unknown as MatterAPI;
+    const adapter = new MatterAdapter(host, vi.fn(), [], vi.fn());
+    try {
+      const failed = expect(adapter.restoreMissingDevices([device('RelayController', { power1: true })])).rejects.toThrow('Timed out');
+      await vi.advanceTimersByTimeAsync(5100);
+      await failed;
+      expect(adapter.hasDevice('d1')).toBe(false);
+      ready = lateCompletion;
+      expect(await adapter.restoreMissingDevices([device('RelayController', { power1: true })])).toBe(1);
+      expect(adapter.hasDevice('d1')).toBe(true);
+      expect(host.registerPlatformAccessories).toHaveBeenCalledTimes(lateCompletion ? 1 : 2);
+      expect(host.updateAccessoryState).toHaveBeenCalledWith('uuid:hejhome:matter:d1', 'bridgedDeviceBasicInformation', { reachable: false }, undefined);
+      expect(host.unregisterPlatformAccessories).not.toHaveBeenCalled();
+    } finally {
+      adapter.dispose();
+      vi.useRealTimers();
+    }
+  });
   test('restores handlers, removes stale cache only during reconciliation and propagates state', async () => {
     const host = { ...api, registerPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn(),
       unregisterPlatformAccessories: vi.fn(), updateAccessoryState: vi.fn() } as unknown as MatterAPI;

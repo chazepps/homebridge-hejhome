@@ -15,7 +15,8 @@ import type { HejRealtimeEvents } from '../src/hej/realtime.js';
 const mocks = vi.hoisted(() => ({ clients: [] as Array<Record<string, ReturnType<typeof vi.fn>>>,
   realtime: [] as Array<{ events: HejRealtimeEvents; disconnect: ReturnType<typeof vi.fn> }>,
   loggers: [] as Array<(event: HejRestLogEvent) => void>,
-  families: [{ familyId: 1, name: 'Home' }], devices: [] as HejDevice[], fail: false, connectDuringDiscovery: false }));
+  families: [{ familyId: 1, name: 'Home' }], devices: [] as HejDevice[], fail: false, connectDuringDiscovery: false,
+  familyGate: undefined as Promise<Array<{ familyId: number; name: string }>> | undefined }));
 vi.mock('../src/hej/rest.js', () => ({ HejRestClient: class {
   getFamilies = vi.fn(async () => {
     if (mocks.connectDuringDiscovery) {
@@ -24,7 +25,7 @@ vi.mock('../src/hej/rest.js', () => ({ HejRestClient: class {
       mocks.realtime.at(-1)?.events.onStatus?.('connect.success');
       mocks.loggers.at(-1)?.({ path: 'dashboard/family', method: 'GET', status: 'success', httpStatus: 200 });
     }
-    return mocks.families;
+    return mocks.familyGate ?? mocks.families;
   });
   getDevices = vi.fn(async (family: number) => {
     if (mocks.fail && family === 2) {
@@ -49,11 +50,12 @@ vi.mock('../src/hej/realtime.js', () => ({ HejRealtimeClient: class {
   }
 } }));
 import { HejhomePlatform } from '../src/platform.js';
-import { SessionStore } from '../src/storage/sessionStore.js';
+import { SessionStore, sessionFingerprint } from '../src/storage/sessionStore.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 beforeEach(() => {
   mocks.clients.length = 0; mocks.loggers.length = 0; mocks.realtime.length = 0; mocks.fail = false; mocks.connectDuringDiscovery = false;
+  mocks.familyGate = undefined;
   mocks.families = [{ familyId: 1, name: 'Home' }]; mocks.devices = [device('one')];
 });
 afterEach(async () => {
@@ -64,7 +66,8 @@ afterEach(async () => {
 function device(id: string): HejDevice {
   return { id, name: id, deviceType: 'ZigbeeSwitch1', online: true, deviceState: { power: true } };
 }
-async function fixture(preferences?: Record<string, unknown>, scope: NonNullable<HejhomePlatformConfig['scope']> = { mode: 'all' }, matter?: MatterAPI) {
+async function fixture(preferences?: Record<string, unknown>, scope: NonNullable<HejhomePlatformConfig['scope']> = { mode: 'all' }, matter?: MatterAPI,
+  startup: { cachedDevices?: HejDevice[]; deferLaunch?: boolean } = {}) {
   const dir = await fs.mkdtemp(path.join('/tmp', 'hej-runtime-'));
   const store = new SessionStore(dir);
   const session: HejSession = { identifier: 'private', accessToken: 'secret-one', jsessionId: 'cookie',
@@ -77,6 +80,11 @@ async function fixture(preferences?: Record<string, unknown>, scope: NonNullable
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as unknown as Logging;
   const platform = new HejhomePlatform(log, { platform: 'Hejhome', scope,
     features: { ...(preferences ? { devices: preferences } : {}), ...(matter ? { matter: true } : {}) } } as never, api);
+  for (const cached of startup.cachedDevices ?? []) {
+    const accessory = new api.platformAccessory(cached.name, api.hap.uuid.generate(cached.id));
+    accessory.context.device = cached;
+    platform.configureAccessory(accessory);
+  }
   const internal = platform as unknown as { initialize(): Promise<void>; discoverDevices(): Promise<void>;
     discoveryRunning: Promise<void> | null; refreshDiscovery(): Promise<void>; checkSessionAndInitialize(): Promise<void>;
     initializing: boolean; sessionChecking: boolean; powerEstimates: PowerEstimates; refreshHealth(): void; statusStore: { flush(): Promise<void> } };
@@ -93,7 +101,9 @@ async function fixture(preferences?: Record<string, unknown>, scope: NonNullable
     await internal.statusStore.flush();
     await fs.rm(dir, { recursive: true, force: true });
   });
-  await internal.initialize();
+  if (!startup.deferLaunch) {
+    await internal.initialize();
+  }
   return { platform, internal, store, session, api, dir, shutdown: () => listeners.get('shutdown')?.() };
 }
 test('session replacement disconnects old MQTT and rejects stale in-flight control result', async () => {
@@ -122,6 +132,201 @@ test('failed partial discovery does not publish additions or delete cached devic
   expect([...platform.accessories.values()].map((a) => a.context.device.id)).toEqual(['one']);
   expect(api.unregisterPlatformAccessories).not.toHaveBeenCalled();
 });
+test('cached Matter topology is published offline before slow cloud discovery and reused after it completes', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const cached = { ...device('wall'), deviceType: 'ZigbeeSwitch2', deviceState: { power1: true, power2: false } };
+  const { platform, internal, api } = await fixture(undefined, { mode: 'all' }, matter,
+    { cachedDevices: [cached], deferLaunch: true });
+  let finish!: (families: typeof mocks.families) => void;
+  mocks.familyGate = new Promise((resolve) => {
+    finish = resolve;
+  });
+  mocks.devices = [cached];
+  const launch = internal.initialize();
+  try {
+    await vi.waitFor(() => expect(mocks.clients[0]?.getFamilies).toHaveBeenCalledOnce());
+    expect(matter.registerPlatformAccessories).toHaveBeenCalledWith('@chazepps/homebridge-hejhome', 'Hejhome', [expect.objectContaining({
+      UUID: 'hejhome:matter:wall', clusters: expect.objectContaining({ bridgedDeviceBasicInformation: { reachable: false } }),
+      parts: [expect.objectContaining({ id: 'power1' }), expect.objectContaining({ id: 'power2' })],
+    })]);
+    expect(platform.getDeviceHealth('wall').reachable).toBe(false);
+    await expect(platform.controlDevice('wall', { power1: false }, 'matter')).rejects.toThrow('no longer available');
+  } finally {
+    finish(mocks.families);
+    await launch;
+  }
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledOnce();
+  expect(matter.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
+  expect(api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  expect(platform.getDeviceHealth('wall').reachable).toBe(true);
+  await platform.controlDevice('wall', { power1: false }, 'matter');
+});
+
+test('cached Matter devices stay registered offline without a session and respect explicit visibility', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { platform, internal, store } = await fixture({ hidden: { visibility: 'hidden' }, hap: { visibility: 'homekit' } },
+    { mode: 'all' }, matter, { cachedDevices: [device('one'), device('hidden'), device('hap')], deferLaunch: true });
+  await store.clear();
+  await internal.initialize();
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledWith(expect.any(String), expect.any(String), [expect.objectContaining({
+    UUID: 'hejhome:matter:one', clusters: expect.objectContaining({ bridgedDeviceBasicInformation: { reachable: false } }),
+  })]);
+  expect(mocks.clients).toHaveLength(0);
+  expect(platform.getDeviceHealth('one').reachable).toBe(false);
+  await internal.checkSessionAndInitialize();
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledOnce();
+  expect(matter.unregisterPlatformAccessories).not.toHaveBeenCalled();
+});
+
+test('cached tracked IR power retains its Matter topology while offline', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { internal, store } = await fixture(undefined, { mode: 'all' }, matter,
+    { cachedDevices: [{ id: 'ac', name: 'AC', deviceType: 'IrAirconditioner', deviceState: { power: '켜짐' } }], deferLaunch: true });
+  await store.clear();
+  await internal.initialize();
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledWith(expect.any(String), expect.any(String), [expect.objectContaining({
+    UUID: 'hejhome:matter:ac', clusters: expect.objectContaining({ bridgedDeviceBasicInformation: { reachable: false } }),
+  })]);
+});
+
+test('Matter-only devices recover from an owned scoped snapshot before cloud discovery without HAP cache', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { platform, internal, dir, session, api } = await fixture({ one: { visibility: 'matter' } }, { mode: 'all' }, matter,
+    { deferLaunch: true });
+  await new DeviceSnapshotStore(dir).save([{ family: mocks.families[0]!, devices: [device('one')] }],
+    sessionFingerprint(session), { mode: 'all' });
+  let finish!: (families: typeof mocks.families) => void;
+  mocks.familyGate = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const launch = internal.initialize();
+  try {
+    await vi.waitFor(() => expect(mocks.clients[0]?.getFamilies).toHaveBeenCalledOnce());
+    expect(matter.registerPlatformAccessories).toHaveBeenCalledWith(expect.any(String), expect.any(String), [expect.objectContaining({
+      UUID: 'hejhome:matter:one', clusters: expect.objectContaining({ bridgedDeviceBasicInformation: { reachable: false } }),
+    })]);
+    expect(platform.getDeviceHealth('one').reachable).toBe(false);
+    await expect(platform.controlDevice('one', { power1: false }, 'matter')).rejects.toThrow('no longer available');
+  } finally {
+    finish(mocks.families);
+    await launch;
+  }
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledOnce();
+  expect(matter.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
+  expect(platform.getDeviceHealth('one').reachable).toBe(true);
+});
+
+test.each(['other-account', 'other-scope', 'no-provenance', 'no-session', 'corrupted'])('snapshot recovery rejects %s safely', async (reason) => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { internal, dir, session, store } = await fixture({ stale: { visibility: 'matter' } }, { mode: 'all' }, matter,
+    { deferLaunch: true });
+  const snapshots = new DeviceSnapshotStore(dir);
+  await snapshots.save([{ family: mocks.families[0]!, devices: [device('stale')] }],
+    reason === 'other-account' ? 'different-owner' : sessionFingerprint(session),
+    reason === 'no-provenance' ? undefined : { mode: reason === 'other-scope' ? 'first-family' : 'all' });
+  if (reason === 'no-session') {
+    await store.clear();
+  } else if (reason === 'corrupted') {
+    await fs.writeFile(snapshots.path, '{broken');
+  }
+  await internal.initialize();
+  const published = vi.mocked(matter.registerPlatformAccessories).mock.calls.flatMap((call) => call[2]);
+  expect(published.map((entry) => entry.UUID)).not.toContain('hejhome:matter:stale');
+  expect(mocks.clients).toHaveLength(reason === 'no-session' ? 0 : 1);
+});
+
+test('snapshot recovery respects equivalent custom selections and filters excluded families and rooms', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const scope = { mode: 'custom' as const, includedFamilyIds: [1, 2], includedRoomsByFamilyId: { '1': [11, 12], '2': [] } };
+  const { internal, dir, session } = await fixture(undefined, scope, matter, { deferLaunch: true });
+  await new DeviceSnapshotStore(dir).save([
+    { family: { familyId: 1, name: 'Home' }, devices: [
+      { ...device('room-11'), roomId: 11 }, { ...device('room-12'), roomId: 12 }, { ...device('excluded-room'), roomId: 13 },
+    ] },
+    { family: { familyId: 2, name: 'Empty room selection' }, devices: [{ ...device('empty-selection'), roomId: 21 }] },
+    { family: { familyId: 3, name: 'Excluded family' }, devices: [device('excluded-family')] },
+  ], sessionFingerprint(session), { mode: 'custom', includedFamilyIds: [2, 1], includedRoomsByFamilyId: { '2': [], '1': [12, 11] } });
+  let finish!: (families: typeof mocks.families) => void;
+  mocks.familyGate = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const launch = internal.initialize();
+  try {
+    await vi.waitFor(() => expect(mocks.clients[0]?.getFamilies).toHaveBeenCalledOnce());
+    const published = vi.mocked(matter.registerPlatformAccessories).mock.calls.flatMap((call) => call[2]).map((entry) => entry.UUID);
+    expect(published.sort()).toEqual(['hejhome:matter:room-11', 'hejhome:matter:room-12']);
+  } finally {
+    finish(mocks.families);
+    await launch;
+  }
+});
+
+test('a session change during snapshot loading cannot publish the previous account inventory', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { internal, dir, session, store } = await fixture({ stale: { visibility: 'matter' } }, { mode: 'all' }, matter,
+    { deferLaunch: true });
+  const snapshots = new DeviceSnapshotStore(dir);
+  await snapshots.save([{ family: mocks.families[0]!, devices: [device('stale')] }], sessionFingerprint(session), { mode: 'all' });
+  const snapshot = await snapshots.load();
+  let finish!: (snapshot: Awaited<ReturnType<DeviceSnapshotStore['load']>>) => void;
+  const load = vi.spyOn(DeviceSnapshotStore.prototype, 'load').mockImplementationOnce(() => new Promise((resolve) => {
+    finish = resolve;
+  }));
+  const launch = internal.initialize();
+  try {
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    await store.save({ ...session, identifier: 'other-account', accessToken: 'other-token' });
+  } finally {
+    finish(snapshot);
+    await launch;
+    load.mockRestore();
+  }
+  const published = vi.mocked(matter.registerPlatformAccessories).mock.calls.flatMap((call) => call[2]);
+  expect(published.map((entry) => entry.UUID)).not.toContain('hejhome:matter:stale');
+});
+
+test('snapshot recovery retries a transient read failure while cloud discovery remains unavailable', async () => {
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { platform, internal, dir, session } = await fixture({ one: { visibility: 'matter' } }, { mode: 'all' }, matter,
+    { deferLaunch: true });
+  await new DeviceSnapshotStore(dir).save([{ family: mocks.families[0]!, devices: [device('one')] }],
+    sessionFingerprint(session), { mode: 'all' });
+  const load = vi.spyOn(DeviceSnapshotStore.prototype, 'loadDevicesForSession')
+    .mockRejectedValueOnce(Object.assign(new Error('Temporary snapshot read failure'), { code: 'EBUSY' }));
+  mocks.familyGate = Promise.reject(new Error('Cloud unavailable'));
+  void mocks.familyGate.catch(() => undefined);
+  await internal.initialize();
+  expect(matter.registerPlatformAccessories).not.toHaveBeenCalled();
+  await internal.checkSessionAndInitialize();
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledWith(expect.any(String), expect.any(String), [expect.objectContaining({
+    UUID: 'hejhome:matter:one', clusters: expect.objectContaining({ bridgedDeviceBasicInformation: { reachable: false } }),
+  })]);
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(platform.getDeviceHealth('one').reachable).toBe(false);
+  await expect(platform.controlDevice('one', { power1: false }, 'matter')).rejects.toThrow('no longer available');
+  await internal.checkSessionAndInitialize();
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledOnce();
+  expect(matter.unregisterPlatformAccessories).not.toHaveBeenCalled();
+});
+
 test('runtime snapshots retain the discovery scope used to filter the full provider family list', async () => {
   mocks.families = [{ familyId: 1, name: 'First' }, { familyId: 2, name: 'Second' }];
   const { dir } = await fixture(undefined, { mode: 'custom', includedFamilyIds: [2] });

@@ -4,6 +4,7 @@ import type { HejDevice } from '../types.js';
 import type { EstimatedElectricalState } from '../runtime/powerEstimates.js';
 import { PLUGIN_NAME, PLATFORM_NAME } from '../settings.js';
 import { createMatterAccessory, MatterDimmingController } from './accessory.js';
+import { getDeviceCapability } from '../devices/capabilities.js';
 
 export class MatterAdapter {
   private readonly accessories = new Map<string, MatterAccessory>();
@@ -54,6 +55,58 @@ export class MatterAdapter {
 
   restore(accessory: MatterAccessory): void {
     this.accessories.set(accessory.UUID, accessory);
+  }
+
+  async restoreMissingDevices(devices: HejDevice[]): Promise<number> {
+    if (this.disposed) {
+      return 0;
+    }
+    const missing = new Map<string, MatterAccessory>();
+    for (const device of devices) {
+      const uuid = this.api.uuid.generate(`hejhome:matter:${device.id}`);
+      if (this.accessories.has(uuid) || missing.has(uuid)) {
+        continue;
+      }
+      // Preserve topology before cloud I/O, without trusting cached reachability.
+      this.devices.set(device.id, { ...device, online: false });
+      const accessory = this.build(device.id);
+      if (accessory) {
+        missing.set(uuid, accessory);
+      }
+    }
+    if (missing.size) {
+      const reader: Partial<MatterAPI> = this.api;
+      const registrations: MatterAccessory[] = [];
+      for (const [uuid, accessory] of missing) {
+        // A previous timed-out registration may have completed in the host.
+        if (!reader.getAccessoryState || !await reader.getAccessoryState(uuid, 'bridgedDeviceBasicInformation')) {
+          registrations.push(accessory);
+        }
+      }
+      // A single batch lets the host serialize parent/part creation before online.
+      if (registrations.length) {
+        await this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, registrations);
+      }
+      for (const [uuid, accessory] of missing) {
+        // Homebridge emits registration without awaiting endpoint creation and
+        // initializes reachable=true regardless of the supplied cluster state.
+        const deadline = Date.now() + 5000;
+        while (reader.getAccessoryState && !await reader.getAccessoryState(uuid, 'bridgedDeviceBasicInformation')) {
+          if (this.disposed) {
+            return missing.size;
+          }
+          if (Date.now() >= deadline) {
+            throw new Error(`Timed out restoring cached Matter accessory ${accessory.displayName}`);
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        this.accessories.set(uuid, accessory);
+        this.active.add(uuid);
+        const id = cachedDeviceId(accessory)!;
+        await this.update(this.devices.get(id)!);
+      }
+    }
+    return missing.size;
   }
 
   async pruneHidden(isVisible: (deviceId: string | undefined) => boolean): Promise<void> {
@@ -151,8 +204,25 @@ export class MatterAdapter {
           this.accessories.delete(accessory.UUID);
         }
       }
-      if (this.active.has(accessory.UUID)) {
+      const additions = restored?.parts?.length && restored.deviceType.name === accessory.deviceType.name
+        && restored.parts.every((old) => accessory.parts?.some((part) => part.id === old.id && part.deviceType.name === old.deviceType.name))
+        ? accessory.parts?.filter((part) => !restored.parts!.some((old) => old.id === part.id)) ?? [] : [];
+      if (this.active.has(accessory.UUID) || additions.length) {
         await this.api.updatePlatformAccessories([accessory]);
+        const reader: Partial<MatterAPI> = this.api;
+        const deadline = Date.now() + 5000;
+        for (const part of additions) {
+          // Homebridge emits updates without awaiting child endpoint creation.
+          while (reader.getAccessoryState && !await reader.getAccessoryState(accessory.UUID, 'descriptor', part.id)) {
+            if (this.disposed) {
+              return;
+            }
+            if (Date.now() >= deadline) {
+              throw new Error(`Matter part ${part.id} was not added; this host requires the additive-parts compatibility patch.`);
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+        }
       } else {
         await this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
@@ -209,7 +279,10 @@ export class MatterAdapter {
       }
       await this.report(accessory.UUID, accessory.clusters ?? {});
       for (const part of accessory.parts ?? []) {
-        await this.report(accessory.UUID, part.clusters, part.id);
+        // A report can race the asynchronous host update that adds a new port.
+        if (this.accessories.get(accessory.UUID)?.parts?.some((registered) => registered.id === part.id)) {
+          await this.report(accessory.UUID, part.clusters, part.id);
+        }
       }
     });
     return this.queue;
@@ -240,7 +313,21 @@ export class MatterAdapter {
       dimmer = new MatterDimmingController(this.onError);
       this.dimmers.set(id, dimmer);
     }
-    return createMatterAccessory(this.api, () => this.devices.get(id) ?? device, async (requirements) => {
+    const current = (): HejDevice => {
+      const latest = this.devices.get(id) ?? device;
+      if (getDeviceCapability(latest.deviceType)?.serviceKind !== 'power-strip') {
+        return latest;
+      }
+      const deviceState = { ...latest.deviceState };
+      const published = this.accessories.get(this.api.uuid.generate(`hejhome:matter:${id}`));
+      for (const part of published?.parts ?? []) {
+        if (/^power\d+$/.test(part.id) && !Object.hasOwn(deviceState, part.id)) {
+          deviceState[part.id] = null;
+        }
+      }
+      return { ...latest, deviceState };
+    };
+    return createMatterAccessory(this.api, current, async (requirements) => {
       if (this.disposed) {
         throw new Error('Hejhome bridge is shutting down.');
       }

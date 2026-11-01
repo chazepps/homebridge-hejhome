@@ -70,3 +70,59 @@ test('runtime push bursts keep cloud status reads flat and changed discovery ref
   await page.getByRole('button', { name: '연결', exact: true }).click();
   await expect(page.getByText('새 집', { exact: true })).toBeVisible();
 });
+
+for (const route of ['/send-verification', '/verify-code', '/login']) {
+  test(`serialized Homebridge errors stay readable and retryable at ${route}`, async ({ page }) => {
+    await installUiHost(page, { status: { configured: false, sessionValid: false } });
+    await page.evaluate((route) => {
+      const request = window.homebridge.request;
+      let failed = false;
+      window.homebridge.request = async (path, payload) => {
+        if (path === route && !failed) {
+          failed = true;
+          throw { message: 'Homebridge 서버의 네트워크 연결을 확인해 주세요.', error: { detail: 'fetch failed' } };
+        }
+        return request(path, payload);
+      };
+    }, route);
+    await page.setContent(source);
+    await page.getByLabel('이메일').fill('user@example.test');
+    await page.locator('#sendCode').click();
+    if (route !== '/send-verification') {
+      await page.getByLabel('6자리 인증번호 입력').fill('123456');
+      await page.locator('#verifyCode').click();
+    }
+    if (route === '/login') {
+      await page.getByLabel('비밀번호').fill('test-password');
+      await page.locator('#login').click();
+    }
+    await expect(page.locator('#loginStatus')).toContainText('Homebridge 서버의 네트워크 연결');
+    await expect(page.locator('#loginStatus')).not.toContainText('[object Object]');
+    const button = page.locator(route === '/login' ? '#login' : route === '/verify-code' ? '#verifyCode' : '#sendCode');
+    await expect(button).toBeEnabled();
+    await button.click();
+    if (route === '/login') {
+      await expect(page.locator('#loginView')).toBeHidden();
+    } else {
+      await expect(page.getByLabel(route === '/verify-code' ? '비밀번호' : '6자리 인증번호 입력')).toBeEnabled();
+    }
+  });
+}
+
+test('unknown serialized login errors show a fallback without dumping arbitrary fields', async ({ page }) => {
+  await installUiHost(page, { status: { configured: false, sessionValid: false } });
+  await page.evaluate(() => {
+    const request = window.homebridge.request;
+    window.homebridge.request = async (route, payload) => {
+      if (route === '/send-verification') {
+        throw { message: { unexpected: 'synthetic-secret' }, error: { detail: 'synthetic-secret' } };
+      }
+      return request(route, payload);
+    };
+  });
+  await page.setContent(source);
+  await page.getByLabel('이메일').fill('user@example.test');
+  await page.locator('#sendCode').click();
+  await expect(page.locator('#loginStatus')).toContainText('연결 상태를 확인');
+  await expect(page.locator('#loginStatus')).not.toContainText(/object Object|synthetic-secret/);
+});
