@@ -127,10 +127,10 @@ describe.skipIf(hostPackage.version !== '2.4.0')('Homebridge 2.4.0 additive-part
     let release!: () => void;
     let entered!: () => void;
     const gate = new Promise<void>((resolve) => {
-      release = resolve; 
+      release = resolve;
     });
     const ready = new Promise<void>((resolve) => {
-      entered = resolve; 
+      entered = resolve;
     });
     vi.spyOn(manager, 'notifyPartsListChanged').mockImplementationOnce(async (deps) => {
       entered();
@@ -325,7 +325,7 @@ describe.skipIf(hostPackage.version !== '2.4.0')('Homebridge 2.4.0 additive-part
     const send = vi.fn(async () => undefined);
     const adapter = new MatterAdapter(api, send, [], vi.fn());
     cleanups.push(async () => {
-      adapter.dispose(); 
+      adapter.dispose();
     });
     adapter.restore(vi.mocked(api.registerPlatformAccessories).mock.calls[0]![2][0]!);
     await adapter.reconcile([{ ...cached, deviceState: { ...cached.deviceState, power6: true } }]);
