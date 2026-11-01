@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { URL, pathToFileURL } from 'node:url';
+import { URL, fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 
 const MARKER = '// hejhome-additive-matter-parts-v1';
@@ -160,7 +160,8 @@ ${server.slice(end)}`.replace('//# sourceMappingURL=server.js.map', '');
   return { status: 'applied', root, backup };
 }
 
-if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+const invokedPath = process.argv[1] ? await fs.realpath(process.argv[1]).catch(() => undefined) : undefined;
+if (invokedPath && invokedPath === await fs.realpath(fileURLToPath(import.meta.url))) {
   const args = process.argv.slice(2);
   const rootIndex = args.indexOf('--homebridge-root');
   const root = rootIndex >= 0 ? args[rootIndex + 1] : undefined;

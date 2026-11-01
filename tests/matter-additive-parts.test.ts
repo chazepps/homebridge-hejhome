@@ -416,6 +416,13 @@ test.skipIf(hostPackage.version !== '2.4.0')('host patch checks, applies idempot
       await fs.writeFile(path.join(root, file), originals[index]!);
     }
     expect((await patchAdditiveMatterParts(root, 'check')).status).toBe('ready');
+    const alias = path.join(root, 'tool-link');
+    await fs.symlink(path.resolve('tools/homebridge'), alias, 'dir');
+    const linked = spawnSync(process.execPath, [path.join(alias, 'patch-additive-matter-parts.mjs'),
+      '--homebridge-root', root, '--check'], { encoding: 'utf8' });
+    expect(linked.status).toBe(0);
+    expect(linked.stdout.trim()).not.toBe('');
+    expect(JSON.parse(linked.stdout).status).toBe('ready');
     const ambiguous = spawnSync(process.execPath, [path.resolve('tools/homebridge/patch-additive-matter-parts.mjs'),
       '--homebridge-root', root, '--check', '--apply'], { encoding: 'utf8' });
     expect(ambiguous.status).toBe(1);
