@@ -18,6 +18,46 @@ const coreDeviceTypes = [
 ];
 const pmLabelCases = [['hangul', '가'.repeat(32)], ['emoji', '😀'.repeat(20)]];
 
+test('restored Matter port endpoints receive changed and cleared names without replacement', async () => {
+  const environment = new Environment('hej-port-names', Environment.default);
+  environment.set(StorageService, new MockStorageService(environment));
+  const node = await ServerNode.create({ id: 'port-names', environment });
+  const aggregator = new Endpoint(AggregatorEndpoint, { id: 'bridge' });
+  await node.add(aggregator);
+  try {
+    const device = { id: 'sw', name: 'Switch', deviceType: 'Switch2', deviceState: { power1: true, power2: false } };
+    const build = (names: Record<string, string>) => createMatterAccessory(api, () => device, vi.fn(), [], undefined, undefined, undefined, names)!;
+    const accessories: AccessoryManagerDeps['accessories'] = new Map();
+    const deps: AccessoryManagerDeps = {
+      accessories, config: { externalAccessory: false } as AccessoryManagerDeps['config'],
+      behaviorRegistry: new BehaviorRegistry(accessories), registryManager: new RegistryManager(), accessoryCache: null,
+      getServerNode: () => node, getAggregator: () => aggregator, getIsRunning: () => false,
+      getMonitoringEnabled: () => false, isCommissioned: () => false,
+    };
+    const manager = new AccessoryManager();
+    const before = build({});
+    await manager.registerAccessory('homebridge-hejhome', 'Hejhome', before, deps);
+    const endpoint = accessories.get(before.UUID)?.endpoint;
+    const states = new StateManager(accessories, new EventEmitter(), () => false);
+    for (const [names, expected] of [[{ power1: '책상' }, '책상'], [{ power1: '😀'.repeat(32) }, '😀'.repeat(32)], [{}, 'Switch 1']] as const) {
+      accessories.get(before.UUID)!._restoredFromCache = true;
+      const next = build(names);
+      await manager.registerAccessory('homebridge-hejhome', 'Hejhome', next, deps);
+      for (const part of next.parts ?? []) {
+        for (const [cluster, value] of Object.entries(part.clusters ?? {})) {
+          await states.updateAccessoryState(next.UUID, cluster, value, part.id);
+        }
+      }
+      expect(accessories.get(before.UUID)?.endpoint).toBe(endpoint);
+      expect(states.getAccessoryState(next.UUID, 'descriptor', 'power1')?.tagList).toEqual([
+        { mfgCode: null, namespaceId: 7, tag: 0, label: expected },
+      ]);
+    }
+  } finally {
+    await node.close();
+  }
+});
+
 describe('real Matter endpoint conformance', () => {
   test.each(coreDeviceTypes)('%s registers and restores on the installed host', async (deviceType) => {
     const environment = new Environment('hej-conformance', Environment.default);

@@ -7,6 +7,7 @@ import type { Device, DevicePreference } from '../../core/types';
 import { Choice, Field } from './Fields';
 import { DeviceCommands, type CommandState } from './Commands';
 import { DeviceStatus } from './Status';
+import { PersonalizationFields } from './PersonalizationFields';
 import { deviceKind, editorValue, remoteTypes, sensorTypes, serializePreference, type DeviceEditorValue } from './model';
 
 export function DeviceInspector({ device, available, onClose, command, updateCommand, onSaved, saved }: {
@@ -123,6 +124,7 @@ export function DeviceInspector({ device, available, onClose, command, updateCom
                 onClick={() => update({ freshnessMinutes: '' })}>{t('유효 시간 지우기', 'Clear validity time')}</Button>}
             </Field>}
           </div>
+          <PersonalizationFields device={device} value={value} update={update} disabled={!available} />
           {remoteTypes.has(device.deviceType) && <label className="device-switch-row" htmlFor={id('remote')}>
             <div><Text as="span" id={id('remote-label')} size="2" weight="medium">
               {t('리모컨 버튼을 Apple Home에 표시', 'Show remote buttons in Apple Home')}</Text>
