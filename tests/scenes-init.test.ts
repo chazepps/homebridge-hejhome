@@ -34,27 +34,43 @@ afterEach(async () => {
 });
 
 const cachedSeed = { familyId: 100, sceneId: 's8-main', name: 'Main' };
+const account = (identifier: string) => ({ identifier, accessToken: identifier, jsessionId: identifier, usernameCookie: identifier,
+  autoLogin: true, expiresAt: Date.now() + 3600000 });
 
 /** Restores a scene cached from home 100, then starts the platform for real with a saved session. */
 async function launched() {
   const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-scene-init-'));
-  await new SessionStore(storage).save({ identifier: 'test', accessToken: 'test', jsessionId: 'test', usernameCookie: 'test',
-    autoLogin: true, expiresAt: Date.now() + 3600000 });
+  const sessions = new SessionStore(storage);
+  await sessions.save(account('test'));
   const host = new HomebridgeAPI();
-  const events = new Map<string, () => void | Promise<unknown>>();
+  const events = new Map<string, () => unknown>();
   const api = { hap: host.hap, platformAccessory: host.platformAccessory, user: { storagePath: () => storage },
-    on: (event: string, callback: () => void | Promise<unknown>) => events.set(event, callback),
+    on: (event: string, callback: () => unknown) => events.set(event, callback),
     registerPlatformAccessories: vi.fn(), unregisterPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn() } as unknown as API;
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as unknown as Logging;
   const platform = new HejhomePlatform(log, { platform: 'Hejhome', features: { scenes: true } }, api);
+  const internal = platform as unknown as { initialize(): Promise<void>; checkSessionAndInitialize(): Promise<void>;
+    stopSessionWatcher(): void };
   const cached = new host.platformAccessory('Main', host.hap.uuid.generate(sceneUuidSeed(cachedSeed)));
   cached.context.scene = cachedSeed;
   platform.configureAccessory(cached);
   cleanups.push(async () => {
-    await events.get('shutdown')?.(); await new Promise((resolve) => setTimeout(resolve, 30));
-    await fs.rm(storage, { recursive: true, force: true });
+    await events.get('shutdown')?.();
+    await fs.rm(storage, { recursive: true, force: true, maxRetries: 5 });
   });
-  return { platform, api, launch: () => (platform as unknown as { initialize(): Promise<void> }).initialize() };
+  return {
+    platform,
+    launch: async () => {
+      await internal.initialize();
+      // The test drives session checks itself, so a watcher tick cannot reorder them.
+      internal.stopSessionWatcher();
+    },
+    /** Saves another account's session, then waits for the platform to adopt it and finish its discovery. */
+    switchAccount: async () => {
+      await sessions.save(account('other'));
+      await internal.checkSessionAndInitialize();
+    },
+  };
 }
 
 test('after a real start, a cached scene from another home is refused when the new list fails', async () => {
@@ -78,4 +94,24 @@ test('after a real start, a cached scene is runnable once the current home lists
   await f.platform.runScene(cachedSeed);
   expect(rest.runScene).toHaveBeenCalledWith(100, 's8-main');
   await expect(f.platform.runScene({ ...cachedSeed, sceneId: 's8-other' })).rejects.toThrow('not confirmed');
+});
+
+test.each([
+  ['its scene list fails', () => rest.getScenes.mockRejectedValue(new Error('offline'))],
+  ['its discovery fails before scenes are listed', () => rest.getFamilies.mockRejectedValue(new Error('offline'))],
+])('after switching accounts, a scene confirmed for the previous account is refused when %s', async (_, fail) => {
+  rest.getFamilies.mockResolvedValue([{ familyId: 100, name: 'Home' }]);
+  rest.getDevices.mockResolvedValue([]);
+  rest.getScenes.mockResolvedValue([{ name: 'Main', sceneId: 's8-main' }]);
+  rest.runScene.mockResolvedValue(undefined);
+  const f = await launched();
+  await f.launch();
+  await f.platform.runScene(cachedSeed);
+  expect(rest.runScene).toHaveBeenCalledTimes(1);
+  fail();
+  const families = rest.getFamilies.mock.calls.length;
+  await f.switchAccount();
+  expect(rest.getFamilies.mock.calls.length).toBeGreaterThan(families);
+  await expect(f.platform.runScene(cachedSeed)).rejects.toThrow('not confirmed');
+  expect(rest.runScene).toHaveBeenCalledTimes(1);
 });

@@ -48,7 +48,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private readonly accessoryHandlers: Map<string, HejhomePlatformAccessory> = new Map();
   private readonly sceneHandlers = new Map<string, HejhomeSceneSwitch>();
   /** Scenes confirmed by a successful list for the current session; cached switches are not trusted before this. */
-  private verifiedScenes: { fingerprint: string; uuids: Set<string> } | null = null;
+  private verifiedScenes = new Set<string>();
   private readonly logStore: LogStore;
   private readonly snapshotStore: DeviceSnapshotStore;
   private readonly sessionStore: SessionStore;
@@ -270,9 +270,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     if (generation !== this.generation || this.stopping || this.client !== client) {
       throw new Error('Hejhome session changed. Try again.');
     }
-    const verified = this.verifiedScenes;
-    if (verified?.fingerprint !== this.sessionFingerprint
-      || !verified.uuids.has(this.api.hap.uuid.generate(sceneUuidSeed(scene)))) {
+    if (!this.verifiedScenes.has(this.api.hap.uuid.generate(sceneUuidSeed(scene)))) {
       throw new Error('Hejhome scene is not confirmed for this account yet. Try again.');
     }
     try {
@@ -433,6 +431,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.cancelMatterSettlements();
     this.observations.clear();
     this.verifiedDevices.clear();
+    this.verifiedScenes.clear();
     this.reportedStates.clear();
     this.reportedAt.clear();
     this.health.retain(new Set());
@@ -675,46 +674,66 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     await this.reconcileScenes(client, snapshotFamilies.map((entry) => entry.family), generation);
   }
 
-  /** Scene failures never affect device discovery; the previous scene accessories are kept until a list succeeds. */
+  /** Scene failures never affect device discovery; a home whose list fails keeps its scene accessories. */
   private async reconcileScenes(client: HejRestClient, families: HejFamily[], generation: number): Promise<void> {
     if (!this.features.scenes || this.stopping) {
       return;
     }
     const wanted = new Map<string, SceneContext>();
-    try {
-      for (const family of families) {
+    const listed = new Set<number>();
+    for (const family of families) {
+      try {
         for (const scene of await client.getScenes(family.familyId)) {
           wanted.set(this.api.hap.uuid.generate(sceneUuidSeed({ familyId: family.familyId, sceneId: scene.sceneId })),
             { familyId: family.familyId, sceneId: scene.sceneId, name: scene.name });
         }
+        listed.add(family.familyId);
+      } catch (error) {
+        this.warn('scene.discovery.failed', { familyId: family.familyId, error: String(error) });
       }
-    } catch (error) {
-      this.warn('scene.discovery.failed', { error: String(error) });
-      return;
     }
     if (generation !== this.generation || this.stopping) {
       return;
     }
-    this.verifiedScenes = { fingerprint: this.sessionFingerprint, uuids: new Set(wanted.keys()) };
+    const selected = new Set(families.map((family) => family.familyId));
+    const verified = new Set(wanted.keys());
     // Remove first so a replacement still fits when the bridge is at its accessory limit.
     for (const [uuid, accessory] of this.accessories) {
-      if (cachedScene(accessory) && !wanted.has(uuid)) {
-        this.removeSceneAccessory(uuid, accessory);
+      const scene = cachedScene(accessory);
+      if (!scene || wanted.has(uuid)) {
+        continue;
       }
+      if (selected.has(scene.familyId) && !listed.has(scene.familyId)) {
+        // Only scenes this session has already confirmed stay runnable while their home cannot be listed.
+        if (this.verifiedScenes.has(uuid)) {
+          verified.add(uuid);
+        }
+        continue;
+      }
+      this.removeSceneAccessory(uuid, accessory);
     }
+    this.verifiedScenes = verified;
     for (const [uuid, scene] of wanted) {
       const existing = this.accessories.get(uuid);
+      let created: PlatformAccessory | undefined;
       try {
-        const accessory = existing ?? new this.api.platformAccessory(scene.name, uuid);
-        this.createSceneHandler(accessory, scene);
         if (existing) {
-          this.api.updatePlatformAccessories([accessory]);
+          this.createSceneHandler(existing, scene);
+          this.api.updatePlatformAccessories([existing]);
         } else {
-          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-          this.accessories.set(uuid, accessory);
+          created = new this.api.platformAccessory(scene.name, uuid);
+          this.createSceneHandler(created, scene);
+          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [created]);
+          this.accessories.set(uuid, created);
         }
       } catch (error) {
-        if (!existing) {
+        if (created) {
+          // Homebridge caches an accessory before its bridge accepts it; take that copy back, or a retry is skipped as a duplicate.
+          try {
+            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [created]);
+          } catch {
+            // The bridge never held it, and Homebridge has already dropped its cached copy.
+          }
           this.sceneHandlers.get(uuid)?.dispose();
           this.sceneHandlers.delete(uuid);
         }
@@ -736,9 +755,14 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private removeSceneAccessory(uuid: string, accessory: PlatformAccessory): void {
+    try {
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    } catch (error) {
+      // Homebridge drops its cached copy before the bridge refuses one it does not hold, so the accessory is gone either way.
+      this.warn('scene.unregister.failed', { uuid, error: String(error) });
+    }
     this.sceneHandlers.get(uuid)?.dispose();
     this.sceneHandlers.delete(uuid);
-    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
     this.accessories.delete(uuid);
   }
 

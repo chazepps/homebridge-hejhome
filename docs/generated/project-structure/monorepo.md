@@ -206,6 +206,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── runtime-session-ownership.test.ts
 │   ├── runtime-status.test.ts
 │   ├── runtime-visibility.test.ts
+│   ├── scenes-host.test.ts
 │   ├── scenes-init.test.ts
 │   ├── scenes.test.ts
 │   ├── session-diagnostics.test.ts
