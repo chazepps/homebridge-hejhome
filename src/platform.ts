@@ -18,7 +18,7 @@ import { RuntimeCommandServer, type RuntimeCommandRequest } from './runtime/comm
 import { createIrRemoteRequirements } from './media/irRemoteCommands.js';
 import { getDeviceCapability } from './devices/capabilities.js';
 import { isMomentaryPowerDevice } from './devices/power.js';
-import { encodePurifierControl, decodePurifierSettings } from './devices/purifier.js';
+import { encodePurifierControl, decodePurifierSettings, type AirPurifierMode } from './devices/purifier.js';
 import { encodeHvacControl, decodeHvacSettings, type HvacCommand } from './devices/hvac.js';
 import { RuntimeHealth, measurementFreshnessMs, type HealthResult } from './runtime/health.js';
 import { RuntimeStatusStore, type RuntimeStatus } from './runtime/status.js';
@@ -252,7 +252,11 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     await this.controlDevice(id, requirements, 'ui', signal);
   }
 
-  private executeUiCommand(request: RuntimeCommandRequest, signal: AbortSignal): Promise<void> {
+  public controlPurifierMode(id: string, mode: AirPurifierMode): Promise<void> {
+    return this.executeUiCommand({ deviceId: id, kind: 'purifier', command: { mode } });
+  }
+
+  private executeUiCommand(request: RuntimeCommandRequest, signal?: AbortSignal): Promise<void> {
     const device = this.devices.get(request.deviceId);
     if (!device) {
       return Promise.reject(new Error('기기를 찾을 수 없습니다.'));
@@ -689,7 +693,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private createAccessoryHandler(accessory: PlatformAccessory, device: HejDevice): void {
     const signature = JSON.stringify([device.deviceType, device.modelName ?? null, isMomentaryPowerDevice(device),
       this.features.devices?.[device.id]?.remoteButtons === true, this.features.devices?.[device.id]?.freshnessMinutes ?? null,
-      this.features.devices?.[device.id]?.pm25Multiplier ?? null]);
+      this.features.devices?.[device.id]?.pm25Multiplier ?? null,
+      this.features.devices?.[device.id]?.favoriteChannels ?? [], this.features.devices?.[device.id]?.purifierModeButtons ?? false,
+      this.features.devices?.[device.id]?.channelNames ?? {}]);
     const existing = this.accessoryHandlers.get(accessory.UUID);
     if (existing && this.handlerSignatures.get(accessory.UUID) === signature) {
       existing.rebindClient(this.client);

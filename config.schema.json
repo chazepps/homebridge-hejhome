@@ -107,7 +107,12 @@
               "properties": {
                 "visibility": {
                   "type": "string",
-                  "enum": ["both", "homekit", "matter", "hidden"]
+                  "enum": [
+                    "both",
+                    "homekit",
+                    "matter",
+                    "hidden"
+                  ]
                 },
                 "name": {
                   "type": "string",
@@ -116,7 +121,12 @@
                 },
                 "role": {
                   "type": "string",
-                  "enum": ["original", "light", "outlet", "switch"]
+                  "enum": [
+                    "original",
+                    "light",
+                    "outlet",
+                    "switch"
+                  ]
                 },
                 "temperatureSensorId": {
                   "type": "string",
@@ -153,6 +163,49 @@
                       "minimum": 0,
                       "maximum": 1000000
                     }
+                  }
+                },
+                "favoriteChannels": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "name",
+                      "channel"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9-]{0,23}$"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 32
+                      },
+                      "channel": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 999
+                      }
+                    }
+                  }
+                },
+                "purifierModeButtons": {
+                  "type": "boolean"
+                },
+                "channelNames": {
+                  "type": "object",
+                  "propertyNames": {
+                    "pattern": "^power[1-6]$"
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
                   }
                 }
               }

@@ -1,5 +1,6 @@
 import { isReservedMeasurementField } from './runtime/measurementFields.js';
 import { MAX_POWER_ESTIMATE_WATTS } from './runtime/powerEstimates.js';
+import { normalizePersonalization, type Personalization } from './devices/personalization.js';
 
 export interface MeterSource { field: string; multiplier: number }
 export interface MeterProfile {
@@ -9,7 +10,7 @@ export interface MeterProfile {
   current?: MeterSource;
   energy?: MeterSource;
 }
-export interface DevicePreference {
+export interface DevicePreference extends Personalization {
   visibility?: 'both' | 'homekit' | 'matter' | 'hidden';
   name?: string;
   role?: 'original' | 'light' | 'outlet' | 'switch';
@@ -81,11 +82,12 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
       }
       const preference = object(rawPreference);
       for (const key of Object.keys(preference)) {
-        if (!['visibility', 'name', 'role', 'temperatureSensorId', 'freshnessMinutes', 'remoteButtons', 'pm25Multiplier', 'powerSpec'].includes(key)) {
+        if (!['visibility', 'name', 'role', 'temperatureSensorId', 'freshnessMinutes', 'remoteButtons', 'pm25Multiplier', 'powerSpec',
+          'favoriteChannels', 'purifierModeButtons', 'channelNames'].includes(key)) {
           throw new Error(`Unknown device option: ${key}`);
         }
       }
-      const entry: DevicePreference = {};
+      const entry: DevicePreference = normalizePersonalization(preference);
       if (preference.visibility !== undefined) {
         if (!['both', 'homekit', 'matter', 'hidden'].includes(preference.visibility as string)) {
           throw new Error('Invalid device visibility.');

@@ -306,3 +306,5 @@ body { background: var(--color-background, transparent); }
 @media (prefers-reduced-motion: reduce) {
   .hej-app *, .hej-app *::before, .hej-app *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+.device-personalization-group { display: grid; gap: 12px; margin-block: 20px; min-width: 0; }
+.device-personalization-entry { display: grid; gap: 8px; min-width: 0; }

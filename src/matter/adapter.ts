@@ -332,7 +332,8 @@ export class MatterAdapter {
         throw new Error('Hejhome bridge is shutting down.');
       }
       await this.send(id, requirements);
-    }, this.meters, dimmer, this.devicePreferences[id]?.pm25Multiplier, this.electricalEstimate?.(device));
+    }, this.meters, dimmer, this.devicePreferences[id]?.pm25Multiplier, this.electricalEstimate?.(device),
+    this.devicePreferences[id]?.channelNames);
   }
 
   private async report(uuid: string, clusters: Record<string, Record<string, unknown>>, partId?: string): Promise<void> {

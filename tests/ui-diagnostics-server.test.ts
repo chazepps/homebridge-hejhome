@@ -101,6 +101,20 @@ describe('custom UI server device settings and diagnostics', () => {
       .toMatchObject(stored.devices);
   });
 
+  test('saves personalization and rejects device-incompatible settings without changing config', async () => {
+    await save({ deviceId: 'tv-secret', preference: { favoriteChannels: [{ id: 'news', name: ' 뉴스 ', channel: 11 }] } });
+    await save({ deviceId: 'purifier-secret', preference: { purifierModeButtons: true } });
+    await save({ deviceId: 'strip-secret', preference: { channelNames: { power1: '책상' } } });
+    const config = JSON.parse(await fs.readFile(bridge.config, 'utf8'));
+    expect(config.platforms[0].features.devices['tv-secret'].favoriteChannels).toEqual([{ id: 'news', name: '뉴스', channel: 11 }]);
+    const before = await fs.readFile(bridge.config, 'utf8');
+    await expect(save({ deviceId: 'sensor-secret', preference: { purifierModeButtons: true } })).rejects.toThrow();
+    await expect(save({ deviceId: 'plug-secret', preference: { channelNames: { power1: '포트' } } })).rejects.toThrow();
+    await expect(save({ deviceId: 'strip-secret', preference: { channelNames: { power5: '전체' } } })).rejects.toThrow();
+    await expect(save({ deviceId: 'purifier-secret', preference: { favoriteChannels: [{ id: 'a', name: 'A', channel: 1 }] } })).rejects.toThrow();
+    expect(await fs.readFile(bridge.config, 'utf8')).toBe(before);
+  });
+
   test('rejects invalid feature and unsupported device settings without changing config', async () => {
     const beforeInvalid = await fs.readFile(bridge.config, 'utf8');
     await expect(bridge.handlers.get('/save-features')!({})).rejects.toThrow();
