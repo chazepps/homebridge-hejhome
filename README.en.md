@@ -20,6 +20,8 @@ Use lights, switches, plugs and sensors registered in the Hejhome app through Ap
 
 A Hejhome account and an internet connection are required. Device control uses the Hejhome cloud.
 
+> **New in the 3.1 beta** — Add recipes in the Hejhome app and enable them in the plugin settings to run them with one button press in Apple Home.
+
 > **Version 3.0 stable**
 > This document covers **3.0.6**. The default **`latest` channel now provides v3**, which requires **Homebridge 2.4 or later**. To keep using Homebridge 1.x or plugin v2, select **2.1.3** in the version picker.
 
