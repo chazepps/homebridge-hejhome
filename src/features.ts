@@ -23,6 +23,8 @@ export interface DevicePreference extends Personalization {
 export interface FeatureOptions {
   matter: boolean;
   adaptiveLighting: boolean;
+  /** Publishes each Hejhome scene as a momentary HomeKit switch. Off unless explicitly enabled. */
+  scenes?: boolean;
   meters: MeterProfile[];
   devices?: Record<string, DevicePreference>;
 }
@@ -30,11 +32,11 @@ export interface FeatureOptions {
 export function normalizeFeatures(input: unknown): FeatureOptions {
   const value = object(input ?? {});
   for (const key of Object.keys(value)) {
-    if (!['matter', 'adaptiveLighting', 'meters', 'devices'].includes(key)) {
+    if (!['matter', 'adaptiveLighting', 'scenes', 'meters', 'devices'].includes(key)) {
       throw new Error(`Unknown feature option: ${key}`);
     }
   }
-  for (const key of ['matter', 'adaptiveLighting']) {
+  for (const key of ['matter', 'adaptiveLighting', 'scenes']) {
     if (value[key] !== undefined && typeof value[key] !== 'boolean') {
       throw new Error(`${key} must be a boolean.`);
     }
@@ -73,6 +75,9 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
     return result;
   });
   const result: FeatureOptions = { matter: value.matter === true, adaptiveLighting: value.adaptiveLighting === true, meters };
+  if (value.scenes === true) {
+    result.scenes = true;
+  }
   if (value.devices !== undefined) {
     const devices = object(value.devices);
     const normalized: Record<string, DevicePreference> = Object.create(null);
