@@ -19,7 +19,7 @@ import { createIrRemoteRequirements } from './media/irRemoteCommands.js';
 import { HejhomeSceneSwitch, cachedScene, sceneUuidSeed, type SceneContext } from './scenes.js';
 import { getDeviceCapability } from './devices/capabilities.js';
 import { isMomentaryPowerDevice } from './devices/power.js';
-import { encodePurifierControl, decodePurifierSettings } from './devices/purifier.js';
+import { encodePurifierControl, decodePurifierSettings, type AirPurifierMode } from './devices/purifier.js';
 import { encodeHvacControl, decodeHvacSettings, type HvacCommand } from './devices/hvac.js';
 import { RuntimeHealth, measurementFreshnessMs, type HealthResult } from './runtime/health.js';
 import { RuntimeStatusStore, type RuntimeStatus } from './runtime/status.js';
@@ -85,6 +85,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private discoveryPatches: Map<string, DiscoveryPatch> | null = null;
   private initializing = false;
   private localPublicationsPruned = false;
+  private cachedMatterInventoryLoaded = false;
   private sessionWatchTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -282,7 +283,11 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     }
   }
 
-  private executeUiCommand(request: RuntimeCommandRequest, signal: AbortSignal): Promise<void> {
+  public controlPurifierMode(id: string, mode: AirPurifierMode): Promise<void> {
+    return this.executeUiCommand({ deviceId: id, kind: 'purifier', command: { mode } });
+  }
+
+  private executeUiCommand(request: RuntimeCommandRequest, signal?: AbortSignal): Promise<void> {
     const device = this.devices.get(request.deviceId);
     if (!device) {
       return Promise.reject(new Error('기기를 찾을 수 없습니다.'));
@@ -369,6 +374,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.initializing = true;
     try {
       await this.pruneHiddenPublications();
+      await this.restoreCachedMatterPublications();
       await this.commandServer.start();
       const session = await this.sessionStore.load();
       if (this.stopping) {
@@ -412,6 +418,46 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     await this.matter?.pruneHidden((id) => id === undefined ? this.features.matter : this.matterVisible(id));
     this.localPublicationsPruned = true;
     this.persistStatus();
+  }
+
+  private async restoreCachedMatterPublications(): Promise<void> {
+    if (!this.matter || !this.features.matter || this.stopping) {
+      return;
+    }
+    if (!this.cachedMatterInventoryLoaded) {
+      try {
+        const session = await this.sessionStore.load();
+        if (session) {
+          const owner = sessionFingerprint(session);
+          const cached = await this.snapshotStore.loadDevicesForSession(owner, this.config.scope ?? { mode: 'first-family' });
+          const current = await this.sessionStore.load();
+          if (!this.stopping && current && sessionFingerprint(current) === owner) {
+            for (const device of cached) {
+              // HAP caches are absent for explicitly Matter-only devices. Restore
+              // metadata only; discovery still owns health and control permission.
+              if (!this.devices.has(device.id)) {
+                this.devices.set(device.id, { ...device, name: this.features.devices?.[device.id]?.name ?? device.name });
+              }
+            }
+            this.cachedMatterInventoryLoaded = true;
+          }
+        }
+      } catch (error) {
+        this.warn('matter.inventory.restore.failed', { error: String(error) });
+      }
+    }
+    try {
+      // A missing Matter cache must not expose an empty bridge while REST is slow
+      // or unavailable: Apple Home can remove devices absent on reconnection.
+      // Native Matter restores stay untouched; only missing endpoints are added.
+      const count = await this.matter.restoreMissingDevices([...this.devices.values()]
+        .filter((device) => this.matterVisible(device.id)));
+      if (count) {
+        this.info('matter.cache.recovered', { count });
+      }
+    } catch (error) {
+      this.warn('matter.cache.restore.failed', { error: String(error) });
+    }
   }
 
   private async loadPowerAccount(identifier: string): Promise<void> {
@@ -785,7 +831,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private createAccessoryHandler(accessory: PlatformAccessory, device: HejDevice): void {
     const signature = JSON.stringify([device.deviceType, device.modelName ?? null, isMomentaryPowerDevice(device),
       this.features.devices?.[device.id]?.remoteButtons === true, this.features.devices?.[device.id]?.freshnessMinutes ?? null,
-      this.features.devices?.[device.id]?.pm25Multiplier ?? null]);
+      this.features.devices?.[device.id]?.pm25Multiplier ?? null,
+      this.features.devices?.[device.id]?.favoriteChannels ?? [], this.features.devices?.[device.id]?.purifierModeButtons ?? false,
+      this.features.devices?.[device.id]?.channelNames ?? {}]);
     const existing = this.accessoryHandlers.get(accessory.UUID);
     if (existing && this.handlerSignatures.get(accessory.UUID) === signature) {
       existing.rebindClient(this.client);
@@ -1015,6 +1063,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.sessionChecking = true;
     try {
       await this.pruneHiddenPublications();
+      await this.restoreCachedMatterPublications();
       const session = await this.sessionStore.load();
       if (this.stopping) {
         return;

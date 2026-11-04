@@ -14,6 +14,7 @@ import { StateManager } from '../node_modules/homebridge/dist/matter/server/Stat
 import { BehaviorRegistry, RegistryManager } from '../node_modules/homebridge/dist/matter/behaviors/index.js';
 import { MatterAdapter } from '../src/matter/adapter.js';
 import type { EstimatedElectricalState } from '../src/runtime/powerEstimates.js';
+import type { HejDevice } from '../src/types.js';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -66,6 +67,88 @@ async function host(storage: string, cycle: number, estimate?: () => EstimatedEl
   });
   return { accessories, cache, deps, manager, states, adapter, api };
 }
+
+test('seven cached devices recover before cloud discovery and retain their native endpoints over two restarts', async () => {
+  const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-matter-startup-cache-'));
+  cleanups.push(() => fs.rm(storage, { recursive: true, force: true }));
+  const devices: HejDevice[] = [
+    { id: 'relay', name: 'Relay', deviceType: 'RelayController', deviceState: { power1: false } },
+    { id: 'rgb', name: 'RGB', deviceType: 'LightRgbw5', deviceState: { power: true, lightMode: 'COLOUR',
+      brightness: 50, hsvColor: { hue: 120, saturation: 60, brightness: 50 } } },
+    { id: 'motion', name: 'Motion', deviceType: 'SensorMo', deviceState: { motionDetected: false, battery: 61 } },
+    ...['bathroom', 'living', 'bedroom', 'kitchen'].map((id, index) => ({ id, name: id,
+      deviceType: index < 2 ? 'ZigbeeSwitch2' : 'ZigbeeSwitch1', deviceState: { power1: true, ...(index < 2 ? { power2: false } : {}) } })),
+  ];
+  const first = await host(storage, 10);
+  // No native Matter cache: recover the HAP device inventory without cloud I/O.
+  expect(await first.adapter.restoreMissingDevices(devices)).toBe(7);
+  expect(first.accessories.size).toBe(7);
+  expect(first.api.registerPlatformAccessories).toHaveBeenCalledTimes(1);
+  for (const accessory of first.accessories.values()) {
+    expect(first.states.getAccessoryState(accessory.UUID, 'bridgedDeviceBasicInformation')?.reachable).toBe(false);
+  }
+  await first.adapter.reconcile(devices);
+  expect(first.api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  await first.cache.save(first.accessories);
+
+  const types = new Map(Object.entries(deviceTypes));
+  for (const type of Object.values(deviceTypes)) {
+    types.set(type.name, type);
+  }
+  for (let cycle = 11; cycle <= 12; cycle++) {
+    const runtime = await host(storage, cycle);
+    for (const cached of runtime.cache.getAllCached()) {
+      // Match Homebridge's pre-online deserialization and handler stubs.
+      const handlers = (clusters: Record<string, unknown> | undefined) =>
+        Object.fromEntries(Object.keys(clusters ?? {}).map((name) => [name, {}]));
+      const restored: MatterAccessory = { UUID: cached.uuid, displayName: cached.displayName, context: cached.context,
+        serialNumber: cached.serialNumber, manufacturer: cached.manufacturer, model: cached.model,
+        deviceType: types.get(cached.deviceType.name!)!, clusters: cached.clusters ?? {}, handlers: handlers(cached.clusters),
+        ...(cached.parts ? { parts: cached.parts.map((part) => ({ id: part.id, displayName: part.displayName,
+          deviceType: types.get(part.deviceType.name!)!, clusters: part.clusters, handlers: handlers(part.clusters) })) } : {}),
+      };
+      await runtime.manager.registerAccessory('test-plugin', 'Hejhome', restored, runtime.deps);
+      runtime.accessories.get(cached.uuid)!._restoredFromCache = true;
+      runtime.adapter.restore(restored);
+    }
+    const endpoints = new Map([...runtime.accessories].map(([uuid, accessory]) => [uuid,
+      { parent: accessory.endpoint, parts: accessory._parts?.map((part) => part.endpoint) }]));
+    expect(await runtime.adapter.restoreMissingDevices(devices.slice(0, 1))).toBe(0);
+    expect(runtime.accessories.size).toBe(7);
+    await runtime.adapter.reconcile(devices);
+    expect(runtime.api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+    for (const [uuid, accessory] of runtime.accessories) {
+      expect(accessory.endpoint).toBe(endpoints.get(uuid)!.parent);
+      expect(accessory._parts?.map((part) => part.endpoint)).toEqual(endpoints.get(uuid)!.parts);
+    }
+    await runtime.cache.save(runtime.accessories);
+    expect(runtime.cache.getAllCached()).toHaveLength(7);
+  }
+});
+
+test.each([
+  ['SensorMo', { motionDetected: false }],
+  ['SensorDo', { state: 'CLOSED' }],
+  ['SensorTh', { temperature: 21, humidity: 45 }],
+  ['SensorWater2', { alarm: false }],
+  ['SensorSmoke3', { alarm: false }],
+] as const)('%s restores unknown battery then accepts the first battery report without replacing endpoints', async (deviceType, state) => {
+  const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-matter-unknown-battery-'));
+  cleanups.push(() => fs.rm(storage, { recursive: true, force: true }));
+  const runtime = await host(storage, 20);
+  const cached: HejDevice = { id: 'battery-device', name: deviceType, deviceType, deviceState: state };
+  await runtime.adapter.restoreMissingDevices([cached]);
+  const uuid = 'hejhome:matter:battery-device';
+  const endpoint = runtime.accessories.get(uuid)!.endpoint;
+  const parts = runtime.accessories.get(uuid)!._parts?.map((part) => part.endpoint);
+  expect(runtime.states.getAccessoryState(uuid, 'powerSource')?.batPercentRemaining).toBeNull();
+  await runtime.adapter.reconcile([{ ...cached, online: true, deviceState: { ...state, battery: 80 } }]);
+  expect(runtime.states.getAccessoryState(uuid, 'powerSource')?.batPercentRemaining).toBe(160);
+  expect(runtime.accessories.get(uuid)!.endpoint).toBe(endpoint);
+  expect(runtime.accessories.get(uuid)!._parts?.map((part) => part.endpoint)).toEqual(parts);
+  expect(runtime.api.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  expect(runtime.api.registerPlatformAccessories).toHaveBeenCalledOnce();
+});
 
 test('serialized PM2.5 part keeps its ID and regains NumericMeasurement after discovery', async () => {
   const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-matter-pm-cache-'));

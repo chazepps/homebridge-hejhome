@@ -21,6 +21,7 @@ export interface Device {
   inScope?: boolean; online?: boolean | null; homekit?: boolean; matter?: boolean; lastControl?: string;
   lastControlAt?: string | null; lastSeenAt?: string | null; temperatureCelsius?: number | null;
   meterProfileApplied?: boolean; roleChangeSupported?: boolean; preference?: DevicePreference;
+  powerChannels?: string[];
   powerEstimateMeterPriority?: boolean; powerSpecEligibility?: { supported?: boolean; reason?: string; channelCount?: number };
   hvacSettings?: Record<string, unknown> | null; purifierSettings?: Record<string, unknown> | null;
   [key: string]: unknown;

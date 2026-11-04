@@ -45,7 +45,7 @@ async function restoredFixture(matterEnabled: boolean, sessionPresent: boolean) 
     const accessory = new host.platformAccessory(id, host.hap.uuid.generate(id));
     accessory.context.device = device;
     cached.set(id, accessory); platform.configureAccessory(accessory);
-    platform.configureMatterAccessory({ UUID: `matter:${id}`, displayName: id, context: { deviceId: id },
+    platform.configureMatterAccessory({ UUID: matter.uuid.generate(`hejhome:matter:${id}`), displayName: id, context: { deviceId: id },
       clusters: { bridgedDeviceBasicInformation: { reachable: true } } } as unknown as MatterAccessory);
   }
   cleanups.push(async () => {
@@ -71,7 +71,7 @@ for (const sessionPresent of [false, true]) {
       const hiddenMatter = vi.mocked(matter.unregisterPlatformAccessories).mock.calls.flatMap((call) => call[2].map((accessory) => accessory.context.deviceId));
       expect(hiddenMatter.sort()).toEqual(matterEnabled ? ['blocked', 'homekit-only'] : ['allowed', 'blocked', 'homekit-only', 'matter-only']);
       if (matterEnabled) {
-        expect(matter.updateAccessoryState).toHaveBeenCalledWith('matter:allowed', 'bridgedDeviceBasicInformation', { reachable: false });
+        expect(matter.updateAccessoryState).toHaveBeenCalledWith('matter:hejhome:matter:allowed', 'bridgedDeviceBasicInformation', { reachable: false });
       }
       expect(api.registerPlatformAccessories).not.toHaveBeenCalled();
       expect(matter.registerPlatformAccessories).not.toHaveBeenCalled();

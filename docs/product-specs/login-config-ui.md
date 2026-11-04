@@ -23,3 +23,5 @@ Allow a Homebridge user to authenticate with Hejhome Web from the plugin setting
 - Phone/SMS login is not shown because the current Homebridge flow uses the verified email endpoint.
 - Request order is send, verify, login.
 - Password is not persisted in config or session storage.
+- Serialized Homebridge request errors display their message without stringifying the error object or exposing diagnostic fields.
+- Server-side network port exhaustion is identified separately from rejected credentials, with a retryable authentication step.

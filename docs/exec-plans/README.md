@@ -11,4 +11,6 @@ New plans should include scope, official gates, test plan, release impact, and r
 
 ## Feature Expansion
 
+- [장치별 개인화 구현 계획](2026-11-03-device-personalization.md): 즐겨찾기 채널·청정기 모드 순간 버튼과 HAP/Matter 포트 이름.
+
 - [Homebridge 기능 확장 액션 체크리스트](2026-09-30-homebridge-feature-action-checklist.md): 우선순위, 선행 증거, 구현·테스트·실기 작업, 완료 조건, 베타 출시 게이트.

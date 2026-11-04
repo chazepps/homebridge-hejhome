@@ -74,6 +74,11 @@ export class HejhomePlatformAccessory {
       accessory: this.accessory, Service: this.platform.Service, Characteristic: this.platform.Characteristic,
       deviceType: device.deviceType, enabled: this.platform.features?.devices?.[device.id]?.remoteButtons === true,
       send: (command) => this.platform.controlRemoteButton(device.id, command),
+      favoriteChannels: ['matter', 'hidden'].includes(this.platform.features?.devices?.[device.id]?.visibility ?? 'both')
+        ? [] : this.platform.features?.devices?.[device.id]?.favoriteChannels ?? [],
+      purifierModeButtons: !['matter', 'hidden'].includes(this.platform.features?.devices?.[device.id]?.visibility ?? 'both')
+        && this.platform.features?.devices?.[device.id]?.purifierModeButtons === true,
+      sendPurifierMode: (mode) => this.platform.controlPurifierMode(device.id, mode),
       ensureAvailable: () => {
         this.readDevice();
         this.requireClient();
@@ -443,10 +448,27 @@ export class HejhomePlatformAccessory {
   }
 
   private configurePowerServices(keys: PowerKey[], serviceType: ServiceType, label: string): void {
-    keys.forEach((key, index) => {
-      const name = keys.length === 1 ? this.device.name : `${this.device.name} ${label} ${index + 1}`;
+    const names = this.platform.features?.devices?.[this.device.id]?.channelNames ?? {};
+    const previouslyNamed: string[] = this.accessory.context.namedPowerChannels ?? [];
+    const retained = previouslyNamed.filter((key) => !keys.includes(key as PowerKey)
+      && this.accessory.getServiceById(serviceType, key));
+    const knownKeys = [...keys, ...retained].sort((a, b) => Number(a.slice(5)) - Number(b.slice(5)));
+    const portName = (key: string) => names[key]
+      ?? (knownKeys.length === 1 ? this.device.name : `${this.device.name} ${label} ${knownKeys.indexOf(key) + 1}`);
+    for (const key of keys) {
+      const name = portName(key);
       this.configurePowerService(serviceType, key, name, key);
-    });
+    }
+    for (const key of knownKeys) {
+      if (names[key] || previouslyNamed.includes(key)) {
+        const service = this.accessory.getServiceById(serviceType, key)!;
+        const name = portName(key);
+        service.displayName = name;
+        service.setCharacteristic(this.platform.Characteristic.Name, name);
+        service.setCharacteristic(this.platform.Characteristic.ConfiguredName, name);
+      }
+    }
+    this.accessory.context.namedPowerChannels = Object.keys(names);
   }
 
   private configurePowerService(serviceType: ServiceType, key: PowerKey, name: string, subtype?: string): void {

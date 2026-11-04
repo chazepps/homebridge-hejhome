@@ -169,9 +169,11 @@ export function createMatterAccessory(
   dimmer = new MatterDimmingController(),
   pm25Multiplier?: number,
   estimate?: EstimatedElectricalState,
+  channelNames: Record<string, string> = {},
 ): MatterAccessory | null {
   const device = current();
-  const kind = getDeviceCapability(device.deviceType)?.serviceKind;
+  const capability = getDeviceCapability(device.deviceType);
+  const kind = capability?.serviceKind;
   if (kind === 'ir-switch' && (isMomentaryPowerDevice(device) || readVendorPower(device) === undefined)) {
     return null;
   }
@@ -207,9 +209,14 @@ export function createMatterAccessory(
       await actuate({ [key]: !value });
     },
   });
-  const powerPart = (key: string, outlet: boolean): MatterAccessoryPart => ({
-    id: key, displayName: `${label} ${key.slice('power'.length)}`, deviceType: outlet ? types.OnOffOutlet : types.OnOffLight,
-    clusters: { onOff: typeof state[key] === 'boolean' ? { onOff: state[key] === true } : {} }, handlers: { onOff: power(key) },
+  const powerPart = (key: string, outlet: boolean, index: number): MatterAccessoryPart => ({
+    id: key, displayName: matterLabel(channelNames[key] ?? `${label} ${key.slice('power'.length)}`, 64),
+    deviceType: outlet ? types.OnOffOutlet : types.OnOffLight,
+    clusters: {
+      descriptor: { tagList: [{ mfgCode: null, namespaceId: 7, tag: index,
+        label: matterLabel(channelNames[key] ?? `${label} ${key.slice('power'.length)}`, 64) }] },
+      onOff: typeof state[key] === 'boolean' ? { onOff: state[key] === true } : {},
+    }, handlers: { onOff: power(key) },
   });
   switch (kind) {
     case 'relay-switch':
@@ -232,7 +239,7 @@ export function createMatterAccessory(
         ? Array.from({ length: Number(/Switch(\d+)/.exec(device.deviceType)?.[1] ?? 1) }, (_, i) => `power${i + 1}`)
         : Array.from({ length: Math.max(4, ...Object.keys(state).map((k) => Number(/^power(\d+)$/.exec(k)?.[1] ?? 0))) },
           (_, i) => `power${i + 1}`).filter((k) => k !== 'power5');
-      accessory.parts = keys.map((key) => powerPart(key, kind === 'power-strip'));
+      accessory.parts = keys.map((key, index) => powerPart(key, kind === 'power-strip', index));
       if (keys.some((key) => typeof state[key] !== 'boolean')) {
         clusters.bridgedDeviceBasicInformation = { reachable: false };
       }
@@ -428,7 +435,9 @@ export function createMatterAccessory(
         measuredValue: calibratePm25(state.pm25, pm25Multiplier), measurementMedium: 0, measurementUnit: 4,
       } } }];
   }
-  if (state.battery !== undefined) {
+  // Battery support is a device capability, independent of whether a sleeping
+  // sensor happened to include a battery reading in the cached snapshot.
+  if (state.battery !== undefined || capability?.homeKitServices.includes('BatteryService')) {
     const battery = number(state.battery);
     clusters.powerSource = { status: 1, order: 0, description: 'Battery',
       batPercentRemaining: battery === null ? null : Math.round(Math.max(0, Math.min(100, battery)) * 2) };
@@ -465,12 +474,12 @@ function closedPercent(value: unknown): number | null {
 function isColorMode(mode: unknown): boolean {
   return mode === 'COLOR' || mode === 'COLOUR';
 }
-function matterLabel(name: string): string {
-  // Installed Matter.js validates nodeLabel with JavaScript UTF-16 length <= 32.
+function matterLabel(name: string, maxLength = 32): string {
+  // Parent nodeLabel allows 32 UTF-16 code units; part semantic-tag labels allow 64.
   // Iterate code points so truncation never leaves half of a surrogate pair.
   let result = '';
   for (const symbol of name) {
-    if (result.length + symbol.length > 32) {
+    if (result.length + symbol.length > maxLength) {
       break;
     }
     result += symbol;

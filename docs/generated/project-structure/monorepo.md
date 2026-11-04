@@ -27,6 +27,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── 2026-09-30-homebridge-feature-action-checklist.md
 │   │   ├── 2026-10-03-homebridge-scope-migration.md
 │   │   ├── 2026-10-03-homebridge-scope-transfer-request.md
+│   │   ├── 2026-11-03-device-personalization.md
 │   │   └── README.md
 │   ├── FRONTEND.md
 │   ├── generated
@@ -40,6 +41,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── PRODUCT_SENSE.md
 │   ├── product-specs
 │   │   ├── 3.0-beta-guide.md
+│   │   ├── 3.1-beta-guide.md
 │   │   ├── device-discovery-and-control.md
 │   │   ├── login-config-ui.md
 │   │   ├── README.md
@@ -86,6 +88,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   │   │   ├── Inspector.tsx
 │   │   │   │   ├── model.ts
 │   │   │   │   ├── navigation.ts
+│   │   │   │   ├── PersonalizationFields.tsx
 │   │   │   │   └── Status.tsx
 │   │   │   ├── Devices.tsx
 │   │   │   ├── Help.tsx
@@ -106,6 +109,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── capabilities.ts
 │   │   ├── hvac.ts
 │   │   ├── load.ts
+│   │   ├── personalization.ts
 │   │   ├── power.ts
 │   │   └── purifier.ts
 │   ├── discovery
@@ -161,6 +165,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── device-capabilities.test.ts
 │   ├── device-hvac.test.ts
 │   ├── device-load.test.ts
+│   ├── device-personalization.test.ts
 │   ├── device-snapshot-store.test.ts
 │   ├── device-support.test.ts
 │   ├── device-white-temperature.test.ts
@@ -176,6 +181,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── ir-hap-buttons.test.ts
 │   ├── ir-remote-commands.test.ts
 │   ├── log-store.test.ts
+│   ├── matter-additive-parts.test.ts
 │   ├── matter-cache-restore.test.ts
 │   ├── matter-conformance.test.ts
 │   ├── matter-dimming.test.ts
@@ -218,6 +224,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── beta-features.spec.ts
 │   │   ├── catalog-services.spec.ts
 │   │   ├── device-features.spec.ts
+│   │   ├── device-personalization.spec.ts
 │   │   ├── device-settings.spec.ts
 │   │   ├── diagnostics-transitions.spec.ts
 │   │   ├── host-fixture.ts
@@ -252,7 +259,9 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── inventory-doc-harness.mjs
 │   │   └── validate-doc-harness.mjs
 │   ├── homebridge
+│   │   ├── additive-matter-parts-runtime.mjs
 │   │   ├── dev-ui-logging.mjs
+│   │   ├── patch-additive-matter-parts.mjs
 │   │   ├── prepare-dev-plugins.mjs
 │   │   ├── run-dev-ui.mjs
 │   │   └── verify-pi-runtime.mjs
