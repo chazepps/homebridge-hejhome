@@ -18,8 +18,8 @@ export function sceneUuidSeed(scene: Pick<SceneContext, 'familyId' | 'sceneId'>)
   return `scene:${scene.familyId}:${scene.sceneId}`;
 }
 
-export function cachedScene(accessory: PlatformAccessory): SceneContext | undefined {
-  const scene = accessory.context.scene as Partial<SceneContext> | undefined;
+export function cachedScene(accessory: { context?: Record<string, unknown> }): SceneContext | undefined {
+  const scene = accessory.context?.scene as Partial<SceneContext> | undefined;
   return typeof scene?.familyId === 'number' && typeof scene.sceneId === 'string' && typeof scene.name === 'string'
     ? { familyId: scene.familyId, sceneId: scene.sceneId, name: scene.name } : undefined;
 }

@@ -20,8 +20,10 @@ Use lights, switches, plugs and sensors registered in the Hejhome app through Ap
 
 A Hejhome account and an internet connection are required. Device control uses the Hejhome cloud.
 
+> **New in the 3.1 beta** — Add recipes in the Hejhome app and enable them in the plugin settings to run them with one button press in Apple Home.
+
 > **Version 3.0 stable**
-> Stable **3.0.6** uses `latest`; the new-feature preview **3.1.0-beta.1** uses `beta`. Normal installation and updates use stable. **Homebridge 2.4 or later** is required. To keep using Homebridge 1.x or plugin v2, select **2.1.3** in the version picker.
+> Stable **3.0.6** uses `latest`; the new-feature preview **3.1.0-beta.2** uses `beta`. Normal installation and updates use stable. **Homebridge 2.4 or later** is required. To keep using Homebridge 1.x or plugin v2, select **2.1.3** in the version picker.
 
 3.0.6 restores existing Matter devices before slow cloud discovery and improves Matter-only cache recovery and initial battery reporting. Adding power-strip child ports while running requires the separate Homebridge 2.4.0 compatibility patch. See the [restart and administrator guide](docs/product-specs/3.0-beta-guide.md#재시작-뒤-장치-유지). A normal plugin update does not modify Homebridge core automatically.
 
@@ -220,7 +222,7 @@ Apple Home and Matter thermostat interfaces are not provided because actual air-
 
 ### Hejhome scenes (Recipes)
 
-Scenes (called "Recipes" in the Korean Hejhome app) created in the Hejhome app can be run from Apple Home switches. This is off by default. Add `"scenes": true` to `features` in `config.json` and restart Homebridge to get one switch per scene in the selected homes. Turning a switch on runs the scene once and it immediately returns to off. Device states inside a scene are not read, and the scene list is refreshed on every discovery. Turning the option off removes the switches. Creating or editing scenes is not supported.
+Scenes (called "Recipes" in the Korean Hejhome app) can be run from one-shot switches in Apple Home. This is off by default. In the plugin settings, open **Connections → Hejhome recipes**, enable the option, and select **Save recipes**. Restart Homebridge or its Hejhome child bridge to add one switch tile per recipe in the selected homes. Turning a switch on runs the recipe once, then it returns to off automatically. With Matter, it returns to off about one second after execution finishes. Device states inside a recipe are not read, and the list is refreshed on every discovery. Disable the option, save and restart to remove the switches while keeping your Hejhome recipes. Creating or editing recipes is not supported.
 
 ### Features not yet available
 

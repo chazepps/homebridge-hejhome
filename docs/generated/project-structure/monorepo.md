@@ -127,7 +127,8 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── matter
 │   │   ├── accessory.ts
 │   │   ├── adapter.ts
-│   │   └── metering.ts
+│   │   ├── metering.ts
+│   │   └── scenes.ts
 │   ├── media
 │   │   ├── cameraSignalling.ts
 │   │   ├── irHapButtons.ts
@@ -214,6 +215,7 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   ├── runtime-visibility.test.ts
 │   ├── scenes-host.test.ts
 │   ├── scenes-init.test.ts
+│   ├── scenes-matter.test.ts
 │   ├── scenes.test.ts
 │   ├── session-diagnostics.test.ts
 │   ├── session-store.test.ts

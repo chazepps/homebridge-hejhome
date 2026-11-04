@@ -8,7 +8,8 @@ export type Translate = (ko: string, en?: string) => string;
 export interface Scope { mode: string; includedFamilyIds?: number[]; includedRoomsByFamilyId?: Record<string, number[]> }
 export interface ScopeRoom { roomId: number; name: string; selected?: boolean }
 export interface ScopeFamily { familyId: number; name: string; selected?: boolean; rooms: ScopeRoom[] }
-export interface Features { matter?: boolean; adaptiveLighting?: boolean; meters?: MeterProfile[]; devices?: Record<string, DevicePreference> }
+export interface Features { matter?: boolean; adaptiveLighting?: boolean; scenes?: boolean;
+  meters?: MeterProfile[]; devices?: Record<string, DevicePreference> }
 export interface SupportedModel { deviceType: string; label?: string; modelName?: string; homekit?: string[]; matter?: string[]; [key: string]: unknown }
 export interface SessionStatus {
   configured: boolean; sessionValid: boolean; sessionCheckStatus?: string; uiSessionRevision?: string | null;

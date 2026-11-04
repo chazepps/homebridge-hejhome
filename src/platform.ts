@@ -27,6 +27,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 import { normalizeFeatures, type FeatureOptions } from './features.js';
 import { MatterAdapter } from './matter/adapter.js';
+import { MatterSceneAdapter } from './matter/scenes.js';
 
 interface DiscoveryPatch {
   state: NonNullable<HejDevice['deviceState']>;
@@ -42,13 +43,14 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
   public readonly features: FeatureOptions;
   private readonly matter: MatterAdapter | undefined;
+  private readonly matterScenes: MatterSceneAdapter | undefined;
   private stopping = false;
   private readonly commands = new Map<string, Promise<void>>();
   private readonly handlerSignatures = new Map<string, string>();
   private readonly accessoryHandlers: Map<string, HejhomePlatformAccessory> = new Map();
   private readonly sceneHandlers = new Map<string, HejhomeSceneSwitch>();
   /** Scenes confirmed by a successful list for the current session; cached switches are not trusted before this. */
-  private verifiedScenes = new Set<string>();
+  private verifiedScenes = new Map<string, number>();
   private readonly logStore: LogStore;
   private readonly snapshotStore: DeviceSnapshotStore;
   private readonly sessionStore: SessionStore;
@@ -107,6 +109,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.commandServer = new RuntimeCommandServer(api.user.storagePath(), (request, signal) => this.executeUiCommand(request, signal));
 
     if (api.matter) {
+      this.matterScenes = new MatterSceneAdapter(api.matter, (scene) => this.runScene(scene),
+        (error) => this.warn('scene.matter.failed', { error: String(error) }));
       this.matter = new MatterAdapter(api.matter, (id, requirements) => this.controlDevice(id, requirements, 'matter'),
         this.features.meters, (error) => this.warn('matter.update.failed', { error: String(error) }), this.features.devices ?? {},
         (device) => this.powerEstimates.project(device));
@@ -132,6 +136,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       this.realtime?.disconnect();
       this.client?.dispose();
       this.matter?.dispose();
+      this.matterScenes?.dispose();
       for (const handler of this.accessoryHandlers.values()) {
         handler.dispose('shutdown');
       }
@@ -144,7 +149,11 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   configureMatterAccessory(accessory: MatterAccessory): void {
-    this.matter?.restore(accessory);
+    if (cachedScene(accessory)) {
+      this.matterScenes?.restore(accessory);
+    } else {
+      this.matter?.restore(accessory);
+    }
   }
 
   public controlDevice(id: string, requirements: Record<string, unknown>, origin: 'hap' | 'matter' | 'ui', signal?: AbortSignal): Promise<void> {
@@ -399,7 +408,15 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private async pruneHiddenPublications(): Promise<void> {
-    if (this.localPublicationsPruned || this.stopping) {
+    if (this.stopping) {
+      return;
+    }
+    const scenesEnabled = this.features.scenes === true && this.features.matter === true;
+    // Retry failed recipe opt-outs on watcher ticks without repeating physical-device initialization.
+    if (!scenesEnabled) {
+      await this.matterScenes?.prune(false);
+    }
+    if (this.localPublicationsPruned) {
       return;
     }
     // Explicit local opt-outs are independent of remote discovery completeness.
@@ -420,6 +437,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       }
     }
     await this.matter?.pruneHidden((id) => id === undefined ? this.features.matter : this.matterVisible(id));
+    if (scenesEnabled) {
+      await this.matterScenes?.prune(true);
+    }
     this.localPublicationsPruned = true;
     this.persistStatus();
   }
@@ -482,6 +502,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.observations.clear();
     this.verifiedDevices.clear();
     this.verifiedScenes.clear();
+    await this.matterScenes?.prune(this.features.scenes === true && this.features.matter === true);
     this.reportedStates.clear();
     this.reportedAt.clear();
     this.health.retain(new Set());
@@ -746,7 +767,13 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       return;
     }
     const selected = new Set(families.map((family) => family.familyId));
-    const verified = new Set(wanted.keys());
+    const verified = new Map([...wanted].map(([uuid, scene]) => [uuid, scene.familyId]));
+    // Confirmation belongs to the cloud scene, independently of either transport's registration.
+    for (const [uuid, familyId] of this.verifiedScenes) {
+      if (selected.has(familyId) && !listed.has(familyId)) {
+        verified.set(uuid, familyId);
+      }
+    }
     // Remove first so a replacement still fits when the bridge is at its accessory limit.
     for (const [uuid, accessory] of this.accessories) {
       const scene = cachedScene(accessory);
@@ -754,10 +781,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         continue;
       }
       if (selected.has(scene.familyId) && !listed.has(scene.familyId)) {
-        // Only scenes this session has already confirmed stay runnable while their home cannot be listed.
-        if (this.verifiedScenes.has(uuid)) {
-          verified.add(uuid);
-        }
+        // Keep the publication; only this session's cloud confirmations remain runnable.
         continue;
       }
       this.removeSceneAccessory(uuid, accessory);
@@ -789,6 +813,10 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         }
         this.warn('scene.register.failed', { familyId: scene.familyId, sceneId: scene.sceneId, error: String(error) });
       }
+    }
+    if (this.features.matter) {
+      await this.matterScenes?.reconcile(wanted.values(), selected, listed,
+        (scene) => this.verifiedScenes.has(this.api.hap.uuid.generate(sceneUuidSeed(scene))));
     }
     this.info('scene.discovery.finished', { sceneCount: wanted.size });
   }

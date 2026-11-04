@@ -13,6 +13,10 @@ import { AccessoryManager, type AccessoryManagerDeps } from '../node_modules/hom
 import { StateManager } from '../node_modules/homebridge/dist/matter/server/StateManager.js';
 import { BehaviorRegistry, RegistryManager } from '../node_modules/homebridge/dist/matter/behaviors/index.js';
 import { MatterAdapter } from '../src/matter/adapter.js';
+import { MatterSceneAdapter } from '../src/matter/scenes.js';
+import { HomebridgeOnOffServer } from '../node_modules/homebridge/dist/matter/behaviors/OnOffBehavior.js';
+import { MatterAPIImpl } from '../node_modules/homebridge/dist/matter/MatterAPIImpl.js';
+import { HomebridgeAPI } from '../node_modules/homebridge/dist/api.js';
 import type { EstimatedElectricalState } from '../src/runtime/powerEstimates.js';
 import type { HejDevice } from '../src/types.js';
 
@@ -67,6 +71,111 @@ async function host(storage: string, cycle: number, estimate?: () => EstimatedEl
   });
   return { accessories, cache, deps, manager, states, adapter, api };
 }
+
+test('a recipe executes through the native Matter command, resets after its commit, and keeps its endpoint after cache restore', async () => {
+  const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-matter-recipe-cache-'));
+  cleanups.push(() => fs.rm(storage, { recursive: true, force: true }));
+  const recipe = { familyId: 100, sceneId: 's8-main', name: 'Recipe' };
+  const run = vi.fn().mockResolvedValue(undefined);
+  const onError = vi.fn();
+  const first = await host(storage, 50);
+  // Production uses a UUID generator; this host normally uses readable IDs for device assertions.
+  const hap = new HomebridgeAPI().hap;
+  first.api.uuid.generate = hap.uuid.generate;
+  const scenes = new MatterSceneAdapter(first.api, run, onError);
+  cleanups.push(async () => scenes.dispose());
+  await scenes.reconcile([recipe], new Set([100]), new Set([100]), () => true);
+  expect(onError).not.toHaveBeenCalled();
+  expect(first.accessories.size).toBe(1);
+  const [uuid, item] = [...first.accessories][0]!;
+  await item.endpoint.act((agent) => agent.get(HomebridgeOnOffServer).on());
+  expect(run).toHaveBeenCalledOnce();
+  expect(first.states.getAccessoryState(uuid, 'onOff')?.onOff).toBe(true);
+  // Matter batches reports for 50 ms. Keep On observable beyond that batch so an
+  // optimistic controller cannot commit On after receiving an already-coalesced Off.
+  await new Promise((resolve) => setTimeout(resolve, 75));
+  expect(first.states.getAccessoryState(uuid, 'onOff')?.onOff).toBe(true);
+  await vi.waitFor(() => expect(first.states.getAccessoryState(uuid, 'onOff')?.onOff).toBe(false), { timeout: 2000 });
+  await item.endpoint.act((agent) => agent.get(HomebridgeOnOffServer).off());
+  expect(run).toHaveBeenCalledOnce();
+  await item.endpoint.act((agent) => agent.get(HomebridgeOnOffServer).toggle());
+  expect(run).toHaveBeenCalledTimes(2);
+  await vi.waitFor(() => expect(first.states.getAccessoryState(uuid, 'onOff')?.onOff).toBe(false), { timeout: 2000 });
+  await first.cache.save(first.accessories);
+
+  const second = await host(storage, 51);
+  const cached = second.cache.getAllCached()[0]!;
+  second.api.uuid.generate = hap.uuid.generate;
+  const restored: MatterAccessory = { UUID: cached.uuid, displayName: cached.displayName, context: cached.context,
+    serialNumber: cached.serialNumber, manufacturer: cached.manufacturer, model: cached.model,
+    deviceType: deviceTypes.OnOffOutlet, clusters: cached.clusters ?? {}, handlers: { onOff: {} } };
+  await second.manager.registerAccessory('test-plugin', 'Hejhome', restored, second.deps);
+  second.accessories.get(uuid)!._restoredFromCache = true;
+  const endpoint = second.accessories.get(uuid)!.endpoint;
+  const restoredScenes = new MatterSceneAdapter(second.api, run, onError);
+  cleanups.push(async () => restoredScenes.dispose());
+  restoredScenes.restore(restored);
+  await restoredScenes.prune(true);
+  expect(second.states.getAccessoryState(uuid, 'bridgedDeviceBasicInformation')?.reachable).toBe(false);
+  await restoredScenes.reconcile([recipe], new Set([100]), new Set([100]), () => true);
+  expect(second.accessories.size).toBe(1);
+  expect(second.accessories.get(uuid)!.endpoint).toBe(endpoint);
+  await endpoint.act((agent) => agent.get(HomebridgeOnOffServer).on());
+  await vi.waitFor(() => expect(second.states.getAccessoryState(uuid, 'onOff')?.onOff).toBe(false), { timeout: 2000 });
+  expect(run).toHaveBeenCalledTimes(3);
+  run.mockRejectedValue(new Error('Cloud failed'));
+  await expect(endpoint.act((agent) => agent.get(HomebridgeOnOffServer).on())).rejects.toThrow();
+  expect(second.states.getAccessoryState(uuid, 'onOff')?.onOff).toBe(false);
+  expect(onError).not.toHaveBeenCalled();
+});
+
+test('recipe opt-out retries late native removal failure and can republish the same recipe', async () => {
+  const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-matter-recipe-removal-'));
+  cleanups.push(() => fs.rm(storage, { recursive: true, force: true }));
+  const runtime = await host(storage, 60);
+  const api = new HomebridgeAPI();
+  runtime.api.uuid.generate = api.hap.uuid.generate;
+  const recipe = { familyId: 100, sceneId: 'main', name: 'Recipe' };
+  const run = vi.fn();
+  const onError = vi.fn();
+  const publisher = new MatterSceneAdapter(runtime.api, run, onError);
+  cleanups.push(async () => publisher.dispose());
+  await publisher.reconcile([recipe], new Set([100]), new Set([100]), () => true);
+  const [uuid, accessory] = [...runtime.accessories][0]!;
+  const internals = api as unknown as { _matterManager: unknown; _matterServer: unknown };
+  internals._matterManager = { hasActiveMatter: () => true, getExternalServer: () => undefined, isBridgeServerStarting: () => false };
+  internals._matterServer = runtime.states;
+  const removals: Promise<unknown>[] = [];
+  const failures: unknown[] = [];
+  api.on('unregisterMatterPlatformAccessories', (_plugin, _platform, items: MatterAccessory[]) => {
+    for (const item of items) {
+      removals.push(new Promise<void>((resolve) => setImmediate(resolve))
+        .then(() => runtime.manager.unregisterAccessory(item.UUID, runtime.deps)).catch((error: unknown) => failures.push(error)));
+    }
+  });
+  api.on('registerMatterPlatformAccessories', (plugin, platform, items: MatterAccessory[]) => {
+    for (const item of items) {
+      void runtime.manager.registerAccessory(plugin, platform, item, runtime.deps).catch(onError);
+    }
+  });
+  const adapter = new MatterSceneAdapter(new MatterAPIImpl(api), run, onError);
+  cleanups.push(async () => adapter.dispose());
+  adapter.restore(accessory);
+  accessory._restoredFromCache = true;
+  await adapter.reconcile([recipe], new Set([100]), new Set([100]), () => true);
+  vi.spyOn(accessory.endpoint, 'close').mockRejectedValueOnce(new Error('Transient native close failure'));
+  await adapter.prune(false);
+  await Promise.all(removals.splice(0));
+  expect(failures).toHaveLength(1);
+  expect(runtime.accessories.has(uuid)).toBe(true);
+  await adapter.prune(false);
+  await Promise.all(removals.splice(0));
+  expect(runtime.accessories.has(uuid)).toBe(false);
+  await adapter.reconcile([recipe], new Set([100]), new Set([100]), () => true);
+  expect(runtime.accessories.has(uuid)).toBe(true);
+  expect(runtime.accessories.size).toBe(1);
+  expect(run).not.toHaveBeenCalled();
+});
 
 test('seven cached devices recover before cloud discovery and retain their native endpoints over two restarts', async () => {
   const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'hej-matter-startup-cache-'));

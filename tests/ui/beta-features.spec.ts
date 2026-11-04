@@ -28,6 +28,42 @@ test('connection and lighting options require separate explicit saves and surviv
   await expect(adaptive).toBeChecked();
 });
 
+for (const language of ['ko', 'en'] as const) {
+  test(`${language} recipe exposure can be enabled and disabled without changing other features`, async ({ page }) => {
+    await mountUi(page, { language, status: { features: { matter: true, adaptiveLighting: true,
+      meters: [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] } } });
+    const openConnections = () => page.getByRole('button', { name: language === 'ko' ? '연결' : 'Connections', exact: true }).click();
+    await openConnections();
+    const recipes = page.getByRole('switch', { name: language === 'ko' ? '헤이홈 레시피' : 'Hejhome recipes', exact: true });
+    const save = page.locator('#saveScenes');
+    await expect(recipes).toHaveCount(1);
+    await expect(recipes).not.toBeChecked();
+    await expect(save).toBeDisabled();
+    await recipes.check();
+    expect(await requestCalls(page, '/save-features')).toHaveLength(0);
+    await save.click();
+    await expect(page.locator('#scenesStatus')).toContainText(language === 'ko' ? '다시 시작' : 'Restart');
+    await expect(save).toBeDisabled();
+    expect((await requestCalls(page, '/save-features')).map((call) => call.payload)).toEqual([{ features: { scenes: true } }]);
+    expect(await page.evaluate(() => window.__hejHost.status.features)).toMatchObject({ scenes: true, matter: true, adaptiveLighting: true,
+      meters: [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] });
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await page.setContent(source);
+    await openConnections();
+    await expect(recipes).toBeChecked();
+    await recipes.uncheck();
+    await save.click();
+    await expect(save).toBeDisabled();
+    expect((await requestCalls(page, '/save-features')).map((call) => call.payload))
+      .toEqual([{ features: { scenes: true } }, { features: { scenes: false } }]);
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await page.setContent(source);
+    await openConnections();
+    await expect(recipes).not.toBeChecked();
+    await page.locator('#scenesSection').screenshot({ path: test.info().outputPath('recipes-settings.png') });
+  });
+}
+
 test('actual-meter expert JSON preserves custom fields and saves deletion of the last model', async ({ page }) => {
   await mountUi(page, { status: { features: { matter: true, adaptiveLighting: true,
     meters: [{ model: 'P1', power: { field: 'curPower', multiplier: 1 } }] } } });
