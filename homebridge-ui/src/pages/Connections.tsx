@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, Checkbox, Flex, Heading, Separator, Switch, Text } from '@radix-ui/themes';
-import { ChevronDownIcon, HomeIcon, Link2Icon, PersonIcon, SunIcon } from '@radix-ui/react-icons';
-import { useApp, useDraft } from '../core';
+import { ChevronDownIcon, HomeIcon, Link2Icon, PersonIcon, PlayIcon, SunIcon } from '@radix-ui/react-icons';
+import { useApp, useDraft, type Features } from '../core';
 import { Badge, Button } from '../core/radix';
 import { choicesScope, errorCode, formatDate, scopeChoices, scopeSourceKey, type Family, type Scope } from './settings-helpers';
 
@@ -14,17 +14,55 @@ type ConnectionStatus = {
   scope?: Scope;
   scopeOptions?: { complete?: boolean; families?: Family[]; defaultMode?: Scope['mode'] };
   scopeEditToken?: string | null;
-  features?: { matter?: boolean; adaptiveLighting?: boolean };
+  features?: Features;
 };
 
-function FeatureCard({ kind }: { kind: 'matter' | 'adaptiveLighting' }) {
+function FeatureCard({ kind }: { kind: 'matter' | 'adaptiveLighting' | 'scenes' }) {
   const app = useApp();
   const { t } = app;
   const status = app.status as ConnectionStatus | null;
   const draft = useDraft<boolean>(`feature:${kind}`, status?.features?.[kind] === true);
   const [feedback, setFeedback] = useState('');
-  const matter = kind === 'matter';
-  const title = matter ? t('Matter 연결', 'Matter connection') : t('적응형 조명', 'Adaptive lighting');
+  const feature = {
+    matter: {
+      title: t('Matter 연결', 'Matter connection'),
+      icon: Link2Icon,
+      sectionId: 'featureSection', switchId: 'matterFeature', saveId: 'saveFeatures', statusId: 'featuresStatus',
+      saveLabel: t('연결 설정 저장', 'Save connection'),
+      description: t('Google Home·SmartThings 등에서 사용할 장치를 준비합니다.', 'Prepare devices for Google Home, SmartThings and other apps.'),
+      details: t(
+        'Homebridge의 해당 브리지에서도 Matter를 켜고 표시된 QR로 연결하세요. 같은 장치를 같은 앱에 HomeKit과 Matter로 모두 추가하면 중복 표시될 수 있습니다. 헤이홈 클라우드는 계속 필요합니다.',
+        'Enable Matter on this bridge and pair using its QR code. HomeKit and Matter may duplicate devices in one app. Hejhome cloud is still required.',
+      ),
+    },
+    adaptiveLighting: {
+      title: t('적응형 조명', 'Adaptive lighting'),
+      icon: SunIcon,
+      sectionId: 'lightingSection', switchId: 'adaptiveFeature', saveId: 'saveLighting', statusId: 'lightingStatus',
+      saveLabel: t('조명 설정 저장', 'Save lighting'),
+      description: t('지원하는 색온도 조명을 시간대에 맞춰 조절합니다.', 'Adjust supported color-temperature lights throughout the day.'),
+      details: t(
+        'Apple Home에서도 적응형 조명을 켜야 합니다. 주기적으로 클라우드 명령을 보내며 꺼진 조명에도 색온도 요청이 생길 수 있습니다. 수동 색온도·컬러·장면 전환은 자동 조명을 해제할 수 있습니다.',
+        'Enable this in Apple Home too. Cloud commands may reach lights that are off. Manual color or scene changes can end automatic lighting.',
+      ),
+    },
+    scenes: {
+      title: t('헤이홈 레시피', 'Hejhome recipes'),
+      icon: PlayIcon,
+      sectionId: 'scenesSection', switchId: 'scenesFeature', saveId: 'saveScenes', statusId: 'scenesStatus',
+      saveLabel: t('레시피 설정 저장', 'Save recipes'),
+      description: t('선택한 집의 헤이홈 레시피를 Apple Home에 일회 실행 스위치로 표시합니다.',
+        'Show Hejhome recipes from the selected homes as one-shot switches in Apple Home.'),
+      details: t(
+        '홈 앱에서는 스위치 타일로 표시됩니다. 켜면 레시피를 한 번 실행하고 자동으로 꺼지며, Matter에서는 실행 완료 후 약 1초 뒤 꺼집니다. '
+          + '이 설정을 끄면 스위치가 제거되며, 헤이홈 앱의 레시피는 유지됩니다. 저장 후 Homebridge 또는 Hejhome 자식 브리지를 다시 시작하세요.',
+        'Home shows switch tiles. Turning one on runs its recipe once, then it returns to off automatically; '
+          + 'with Matter, about one second after execution finishes. Disabling removes the switches and keeps your Hejhome recipes. '
+          + 'Restart the bridge after saving.',
+      ),
+    },
+  }[kind];
+  const Icon = feature.icon;
   const save = async () => {
     setFeedback('');
     await draft.save(async (value) => {
@@ -42,18 +80,18 @@ function FeatureCard({ kind }: { kind: 'matter' | 'adaptiveLighting' }) {
     });
   };
   return (
-    <Card className="section-card feature-card" id={matter ? 'featureSection' : 'lightingSection'}>
+    <Card className="section-card feature-card" id={feature.sectionId}>
       <div className="section-header">
         <Flex align="center" gap="2">
-          {matter ? <Link2Icon /> : <SunIcon />}
+          <Icon />
           <Heading as="h2" size="4">
-            {title}
+            {feature.title}
           </Heading>
         </Flex>
-        <label className="feature-switch-target" htmlFor={matter ? 'matterFeature' : 'adaptiveFeature'}>
+        <label className="feature-switch-target" htmlFor={feature.switchId}>
           <Switch
-            id={matter ? 'matterFeature' : 'adaptiveFeature'}
-            aria-label={title}
+            id={feature.switchId}
+            aria-label={feature.title}
             checked={draft.value}
             disabled={!app.ready || app.accountChangePending}
             onCheckedChange={(value) => {
@@ -64,9 +102,7 @@ function FeatureCard({ kind }: { kind: 'matter' | 'adaptiveLighting' }) {
         </label>
       </div>
       <Text as="p" size="2" color="gray" className="feature-copy">
-        {matter
-          ? t('Google Home·SmartThings 등에서 사용할 장치를 준비합니다.', 'Prepare devices for Google Home, SmartThings and other apps.')
-          : t('지원하는 색온도 조명을 시간대에 맞춰 조절합니다.', 'Adjust supported color-temperature lights throughout the day.')}
+        {feature.description}
       </Text>
       <details className="guidance-details">
         <summary>
@@ -74,30 +110,22 @@ function FeatureCard({ kind }: { kind: 'matter' | 'adaptiveLighting' }) {
           {t('설정 방법과 알아둘 점', 'Setup and details')}
         </summary>
         <Text as="p" size="2" color="gray">
-          {matter
-            ? t(
-              'Homebridge의 해당 브리지에서도 Matter를 켜고 표시된 QR로 연결하세요. 같은 장치를 같은 앱에 HomeKit과 Matter로 모두 추가하면 중복 표시될 수 있습니다. 헤이홈 클라우드는 계속 필요합니다.',
-              'Enable Matter on this bridge and pair using its QR code. HomeKit and Matter may duplicate devices in one app. Hejhome cloud is still required.',
-            )
-            : t(
-              'Apple Home에서도 적응형 조명을 켜야 합니다. 주기적으로 클라우드 명령을 보내며 꺼진 조명에도 색온도 요청이 생길 수 있습니다. 수동 색온도·컬러·장면 전환은 자동 조명을 해제할 수 있습니다.',
-              'Enable this in Apple Home too. Cloud commands may reach lights that are off. Manual color or scene changes can end automatic lighting.',
-            )}
+          {feature.details}
         </Text>
       </details>
       <div className="section-footer">
         <Button
-          id={matter ? 'saveFeatures' : 'saveLighting'}
+          id={feature.saveId}
           variant="soft" highContrast
           disabled={!app.ready || app.accountChangePending || !draft.dirty || draft.pending}
           loading={draft.pending}
           onClick={() => void save().catch(() => undefined)}
         >
-          {matter ? t('연결 설정 저장', 'Save connection') : t('조명 설정 저장', 'Save lighting')}
+          {feature.saveLabel}
         </Button>
         {draft.dirty && <Badge highContrast color="amber">{t('저장 전', 'Unsaved')}</Badge>}
       </div>
-      <Text as="p" size="2" role="status" id={matter ? 'featuresStatus' : 'lightingStatus'} color={draft.error ? 'red' : 'gray'}>
+      <Text as="p" size="2" role="status" id={feature.statusId} color={draft.error ? 'red' : 'gray'}>
         {draft.error || feedback}
       </Text>
     </Card>
@@ -383,6 +411,7 @@ export default function Connections() {
       <div className="settings-grid">
         <FeatureCard kind="matter" />
         <FeatureCard kind="adaptiveLighting" />
+        <FeatureCard kind="scenes" />
       </div>
     </div>
   );
