@@ -276,6 +276,10 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     }
     try {
       await client.runScene(scene.familyId, scene.sceneId);
+      // The cloud call cannot be undone, but a result from a replaced session must not be reported as success.
+      if ((this.initialized && !await this.currentSessionMatches()) || generation !== this.generation || this.stopping || this.client !== client) {
+        throw new Error('Hejhome session changed. Try again.');
+      }
       this.info('scene.run', { familyId: scene.familyId, sceneId: scene.sceneId });
     } catch (error) {
       this.warn('scene.run.failed', { familyId: scene.familyId, sceneId: scene.sceneId, error: String(error) });

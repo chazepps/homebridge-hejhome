@@ -60,11 +60,14 @@ async function launched() {
   });
   return {
     platform,
+    log,
     launch: async () => {
       await internal.initialize();
       // The test drives session checks itself, so a watcher tick cannot reorder them.
       internal.stopSessionWatcher();
     },
+    /** Replaces the session file only, so the platform has not noticed the new account yet. */
+    replaceSessionFile: () => sessions.save(account('other')),
     /** Saves another account's session, then waits for the platform to adopt it and finish its discovery. */
     switchAccount: async () => {
       await sessions.save(account('other'));
@@ -114,4 +117,28 @@ test.each([
   expect(rest.getFamilies.mock.calls.length).toBeGreaterThan(families);
   await expect(f.platform.runScene(cachedSeed)).rejects.toThrow('not confirmed');
   expect(rest.runScene).toHaveBeenCalledTimes(1);
+});
+
+test('a scene run still pending when the account is replaced is not reported as a success', async () => {
+  rest.getFamilies.mockResolvedValue([{ familyId: 100, name: 'Home' }]);
+  rest.getDevices.mockResolvedValue([]);
+  rest.getScenes.mockResolvedValue([{ name: 'Main', sceneId: 's8-main' }]);
+  let finish!: () => void;
+  rest.runScene.mockReturnValue(new Promise<void>((resolve) => {
+    finish = resolve;
+  }));
+  const f = await launched();
+  await f.launch();
+  const first = f.platform.runScene(cachedSeed);
+  const second = f.platform.runScene(cachedSeed);
+  const outcomes = Promise.allSettled([first, second]);
+  await vi.waitFor(() => expect(rest.runScene).toHaveBeenCalled());
+  await f.replaceSessionFile();
+  finish();
+  const results = await outcomes;
+  expect(results.map((result) => result.status)).toEqual(['rejected', 'rejected']);
+  for (const result of results) {
+    expect(String((result as PromiseRejectedResult).reason)).toContain('session changed');
+  }
+  expect(f.log.info).not.toHaveBeenCalledWith(expect.stringContaining('scene.run'), expect.anything());
 });
