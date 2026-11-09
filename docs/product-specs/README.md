@@ -8,5 +8,5 @@ Product specs describe user-visible plugin behavior.
 - `device-discovery-and-control.md`
 
 - [3.0 사용 및 업데이트 안내](3.0-beta-guide.md)
-- [3.1 베타 설치·시험·복귀 안내](3.1-beta-guide.md)
+- [3.1 설치·시험·이전 버전 복귀 안내](3.1-beta-guide.md)
 - [Smart Automation 사용 안내](smart-automation-guide.md)
