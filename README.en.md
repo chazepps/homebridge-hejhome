@@ -20,12 +20,12 @@ Use lights, switches, plugs and sensors registered in the Hejhome app through Ap
 
 A Hejhome account and an internet connection are required. Device control uses the Hejhome cloud.
 
-> **New in the 3.1 beta** — Add recipes in the Hejhome app and enable them in the plugin settings to run them with one button press in Apple Home.
+> **New in 3.1** — Add recipes in the Hejhome app and enable them in the plugin settings to run them with one button press in Apple Home.
 
-> **Version 3.0 stable**
-> Stable **3.0.6** uses `latest`; the new-feature preview **3.1.0-beta.2** uses `beta`. Normal installation and updates use stable. **Homebridge 2.4 or later** is required. To keep using Homebridge 1.x or plugin v2, select **2.1.3** in the version picker.
+> **Version 3.1 stable**
+> Stable **3.1.0** uses `latest` and includes recipes and device personalization from the 3.1 beta. **Homebridge 2.4 or later** is required. To keep using Homebridge 1.x or plugin v2, select **2.1.3** in the version picker.
 
-3.0.6 restores existing Matter devices before slow cloud discovery and improves Matter-only cache recovery and initial battery reporting. Adding power-strip child ports while running requires the separate Homebridge 2.4.0 compatibility patch. See the [restart and administrator guide](docs/product-specs/3.0-beta-guide.md#재시작-뒤-장치-유지). A normal plugin update does not modify Homebridge core automatically.
+Existing Matter-device restoration and initial battery-reporting improvements are retained. Adding power-strip child ports while running requires the separate Homebridge 2.4.0 compatibility patch. See the [restart and administrator guide](docs/product-specs/3.0-beta-guide.md#재시작-뒤-장치-유지). A normal plugin update does not modify Homebridge core automatically.
 
 [Getting started](#user-content-getting-started) · [Settings](#user-content-settings) · [Supported devices](#user-content-supported-devices-and-features) · [Upgrading](#user-content-upgrading-from-2x) · [Troubleshooting](#user-content-troubleshooting)
 
@@ -76,7 +76,7 @@ Version 3.0.2 stable in dark mode, shown in Korean with sample devices. Click an
 
 ### 1. Check the requirements
 
-| Component | Requirements for 3.0 |
+| Component | Requirements for 3.1 |
 | --- | --- |
 | Homebridge | Version 2.4 or later within the 2.x series |
 | Homebridge UI | Version 5.29 or later |
@@ -90,20 +90,19 @@ Remote, air-conditioner and air-purifier controls on the plugin settings page re
 
 ### 2. Install the plugin
 
-Find `@chazepps/homebridge-hejhome` in the **Plugins** section of Homebridge UI and install it, or select **Update**. The stable `latest` channel installs **3.0.6**.
+Find `@chazepps/homebridge-hejhome` in the **Plugins** section of Homebridge UI and install it, or select **Update**. The stable `latest` channel installs **3.1.0**.
 
 | Choice | Version | How to install |
 | --- | --- | --- |
-| Stable v3 | `3.0.6` (`latest`) | Normal installation or update |
+| Stable v3 | `3.1.0` (`latest`) | Normal installation or update |
 | Previous v2 | `2.1.3` | Choose Install Previous Version from the plugin menu |
-| 3.1 feature beta | `3.1.0-beta.1` (`beta`) | Select explicitly in the version picker. [Testing and rollback guide](docs/product-specs/3.1-beta-guide.md) |
 
-Open **Install Previous Version** (or Install Alternate Version, depending on the UI) from the plugin menu to choose a version. If you currently use the beta, select **3.0.6** to move to stable. Each installation runs one selected version.
+Open **Install Previous Version** (or Install Alternate Version, depending on the UI) from the plugin menu to choose a version. If you currently use the 3.1 beta, select **3.1.0** to move to stable. Each installation runs one selected version.
 
 <details>
 <summary>Build and test a package from source</summary>
 
-Back up your test Homebridge configuration, then run these commands from a checkout containing the 3.0 source.
+Back up your test Homebridge configuration, then run these commands from a checkout containing the 3.1 source.
 
 ```sh
 nvm use
@@ -116,7 +115,7 @@ npm pack --ignore-scripts
 Transfer the generated package to the Homebridge installation environment and install it.
 
 ```sh
-npm install -g ./chazepps-homebridge-hejhome-3.1.0-beta.1.tgz
+npm install -g ./chazepps-homebridge-hejhome-3.1.0.tgz
 ```
 
 Restart Homebridge or the relevant child bridge, then reopen the plugin settings. This installs a local package without publishing it to npm.
@@ -153,9 +152,9 @@ If editing `config.json` directly, the minimum configuration is shown below. Com
 
 Save changes using the button in each section. Settings that require a restart are identified on screen. **“Prepared” means Homebridge has prepared a connection; it does not confirm that Apple Home pairing is complete.**
 
-### Device personalization in the 3.1 beta
+### Device personalization in 3.1
 
-These preview features are in **3.1.0-beta.1** and are not included in stable 3.0.6. Edit them under **Devices → select a device → Settings**, save, and restart Homebridge. Read the [beta installation and 3.0.6 rollback guide](docs/product-specs/3.1-beta-guide.md) first.
+These features are included in **3.1.0**. Edit them under **Devices → select a device → Settings**, save, and restart Homebridge. See the [3.1 installation and rollback guide](docs/product-specs/3.1-beta-guide.md).
 
 - **Favorite channels:** Add up to eight TV or set-top box favorites, each with a name and whole channel number from 0 to 999. Each creates a momentary Apple Home button. Editing an existing entry keeps its identity; deleting and adding it again creates a new button.
 - **Air purifier mode buttons:** Opt in to auto, manual and sleep requests for the supported `Airpurifier` type. Each button sends one command and returns to off, without reporting operating state.
