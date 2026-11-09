@@ -1,5 +1,7 @@
 import type { Characteristic, PlatformAccessory, Service } from 'homebridge';
 import type { IrRemoteCommand } from './irRemoteCommands.js';
+import type { FavoriteChannel } from '../devices/personalization.js';
+import type { AirPurifierMode } from '../devices/purifier.js';
 
 interface IrHapButtonsOptions {
   accessory: PlatformAccessory;
@@ -7,6 +9,9 @@ interface IrHapButtonsOptions {
   Characteristic: typeof Characteristic;
   deviceType: string;
   enabled: boolean;
+  favoriteChannels?: FavoriteChannel[];
+  purifierModeButtons?: boolean;
+  sendPurifierMode?(mode: AirPurifierMode): Promise<void>;
   send(command: IrRemoteCommand): Promise<void>;
   ensureAvailable?(): void;
 }
@@ -14,7 +19,7 @@ interface IrHapButtonsOptions {
 interface Button {
   subtype: string;
   name: string;
-  command: IrRemoteCommand;
+  command: IrRemoteCommand | { type: 'purifier-mode'; mode: AirPurifierMode };
 }
 
 const TV_BUTTONS: readonly Button[] = [
@@ -42,14 +47,31 @@ export class IrHapButtons {
 
   constructor(private readonly options: IrHapButtonsOptions) {
     const { accessory, Service, Characteristic, deviceType, enabled } = options;
-    const buttons = !enabled ? [] : deviceType === 'IrTv' || deviceType === 'IrSettopbox'
-      ? TV_BUTTONS : deviceType === 'IrFan' ? FAN_BUTTONS : [];
+    const buttons: Button[] = [...(!enabled ? [] : deviceType === 'IrTv' || deviceType === 'IrSettopbox'
+      ? TV_BUTTONS : deviceType === 'IrFan' ? FAN_BUTTONS : [])];
+    if (deviceType === 'IrTv' || deviceType === 'IrSettopbox') {
+      for (const favorite of options.favoriteChannels ?? []) {
+        buttons.push({ subtype: `favorite-channel-${favorite.id}`, name: favorite.name,
+          command: { type: 'setChannel', channel: favorite.channel } });
+      }
+    }
+    if (deviceType === 'Airpurifier' && options.purifierModeButtons) {
+      for (const [mode, name] of [['auto', '자동 모드 요청'], ['manual', '수동 모드 요청'], ['sleep', '취침 모드 요청']] as const) {
+        buttons.push({ subtype: `purifier-mode-${mode}`, name, command: { type: 'purifier-mode', mode } });
+      }
+    }
     const wanted = new Set(buttons.map((button) => button.subtype));
 
     for (const button of ALL_BUTTONS) {
       const cached = accessory.getServiceById(Service.Switch, button.subtype);
       if (cached && !wanted.has(button.subtype)) {
         accessory.removeService(cached);
+      }
+    }
+    for (const service of [...accessory.services]) {
+      if (service.UUID === Service.Switch.UUID && service.subtype
+        && /^(favorite-channel-|purifier-mode-)/.test(service.subtype) && !wanted.has(service.subtype)) {
+        accessory.removeService(service);
       }
     }
 
@@ -77,7 +99,14 @@ export class IrHapButtons {
             return;
           }
           this.options.ensureAvailable?.();
-          await this.options.send(button.command);
+          if (button.command.type === 'purifier-mode') {
+            if (!this.options.sendPurifierMode) {
+              throw new Error('Purifier mode control is unavailable.');
+            }
+            await this.options.sendPurifierMode(button.command.mode);
+          } else {
+            await this.options.send(button.command);
+          }
           this.assertActive();
           const previous = this.resetTimers.get(button.subtype);
           if (previous) {

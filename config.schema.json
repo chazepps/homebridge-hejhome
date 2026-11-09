@@ -107,7 +107,12 @@
               "properties": {
                 "visibility": {
                   "type": "string",
-                  "enum": ["both", "homekit", "matter", "hidden"]
+                  "enum": [
+                    "both",
+                    "homekit",
+                    "matter",
+                    "hidden"
+                  ]
                 },
                 "name": {
                   "type": "string",
@@ -116,7 +121,12 @@
                 },
                 "role": {
                   "type": "string",
-                  "enum": ["original", "light", "outlet", "switch"]
+                  "enum": [
+                    "original",
+                    "light",
+                    "outlet",
+                    "switch"
+                  ]
                 },
                 "temperatureSensorId": {
                   "type": "string",
@@ -154,6 +164,49 @@
                       "maximum": 1000000
                     }
                   }
+                },
+                "favoriteChannels": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "name",
+                      "channel"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9-]{0,23}$"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 32
+                      },
+                      "channel": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 999
+                      }
+                    }
+                  }
+                },
+                "purifierModeButtons": {
+                  "type": "boolean"
+                },
+                "channelNames": {
+                  "type": "object",
+                  "propertyNames": {
+                    "pattern": "^power[1-6]$"
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
                 }
               }
             }
@@ -163,6 +216,12 @@
             "default": false
           },
           "adaptiveLighting": {
+            "type": "boolean",
+            "default": false
+          },
+          "scenes": {
+            "title": "헤이홈 레시피 노출 / Expose Hejhome scenes (Recipes)",
+            "description": "선택한 집의 레시피마다 스위치를 만듭니다. 켜면 레시피가 실행되고 곧바로 꺼집니다. / Creates a switch per scene in the selected homes. Turning it on runs the scene, then it returns to off.",
             "type": "boolean",
             "default": false
           },

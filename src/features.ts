@@ -1,5 +1,6 @@
 import { isReservedMeasurementField } from './runtime/measurementFields.js';
 import { MAX_POWER_ESTIMATE_WATTS } from './runtime/powerEstimates.js';
+import { normalizePersonalization, type Personalization } from './devices/personalization.js';
 
 export interface MeterSource { field: string; multiplier: number }
 export interface MeterProfile {
@@ -9,7 +10,7 @@ export interface MeterProfile {
   current?: MeterSource;
   energy?: MeterSource;
 }
-export interface DevicePreference {
+export interface DevicePreference extends Personalization {
   visibility?: 'both' | 'homekit' | 'matter' | 'hidden';
   name?: string;
   role?: 'original' | 'light' | 'outlet' | 'switch';
@@ -22,6 +23,8 @@ export interface DevicePreference {
 export interface FeatureOptions {
   matter: boolean;
   adaptiveLighting: boolean;
+  /** Publishes each Hejhome scene as a momentary HomeKit switch. Off unless explicitly enabled. */
+  scenes?: boolean;
   meters: MeterProfile[];
   devices?: Record<string, DevicePreference>;
 }
@@ -29,11 +32,11 @@ export interface FeatureOptions {
 export function normalizeFeatures(input: unknown): FeatureOptions {
   const value = object(input ?? {});
   for (const key of Object.keys(value)) {
-    if (!['matter', 'adaptiveLighting', 'meters', 'devices'].includes(key)) {
+    if (!['matter', 'adaptiveLighting', 'scenes', 'meters', 'devices'].includes(key)) {
       throw new Error(`Unknown feature option: ${key}`);
     }
   }
-  for (const key of ['matter', 'adaptiveLighting']) {
+  for (const key of ['matter', 'adaptiveLighting', 'scenes']) {
     if (value[key] !== undefined && typeof value[key] !== 'boolean') {
       throw new Error(`${key} must be a boolean.`);
     }
@@ -72,6 +75,9 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
     return result;
   });
   const result: FeatureOptions = { matter: value.matter === true, adaptiveLighting: value.adaptiveLighting === true, meters };
+  if (value.scenes === true) {
+    result.scenes = true;
+  }
   if (value.devices !== undefined) {
     const devices = object(value.devices);
     const normalized: Record<string, DevicePreference> = Object.create(null);
@@ -81,11 +87,12 @@ export function normalizeFeatures(input: unknown): FeatureOptions {
       }
       const preference = object(rawPreference);
       for (const key of Object.keys(preference)) {
-        if (!['visibility', 'name', 'role', 'temperatureSensorId', 'freshnessMinutes', 'remoteButtons', 'pm25Multiplier', 'powerSpec'].includes(key)) {
+        if (!['visibility', 'name', 'role', 'temperatureSensorId', 'freshnessMinutes', 'remoteButtons', 'pm25Multiplier', 'powerSpec',
+          'favoriteChannels', 'purifierModeButtons', 'channelNames'].includes(key)) {
           throw new Error(`Unknown device option: ${key}`);
         }
       }
-      const entry: DevicePreference = {};
+      const entry: DevicePreference = normalizePersonalization(preference);
       if (preference.visibility !== undefined) {
         if (!['both', 'homekit', 'matter', 'hidden'].includes(preference.visibility as string)) {
           throw new Error('Invalid device visibility.');

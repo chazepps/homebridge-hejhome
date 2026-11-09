@@ -20,6 +20,7 @@ import {
 import { sanitizeForLog } from '../dist/utils/redact.js';
 import { createSessionLogContext } from '../dist/utils/sessionDiagnostics.js';
 import { getDeviceCapability, supportsDeviceRole } from '../dist/devices/capabilities.js';
+import { validateDevicePersonalization, nameablePowerChannels } from '../dist/devices/personalization.js';
 import { MAX_POWER_ESTIMATE_WATTS, powerEstimateSupport } from '../dist/runtime/powerEstimates.js';
 
 class HejhomeUiServer extends HomebridgePluginUiServer {
@@ -270,6 +271,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
       if (!device) {
         throw new Error('장비 목록에서 이 장비를 찾을 수 없습니다. 목록을 새로 확인해 주세요.');
       }
+      validateDevicePersonalization(device, preference ?? {});
       if (preference?.role && preference.role !== 'original'
         && !supportsDeviceRole(device.deviceType)) {
         throw new Error('이 장비는 표시 형태 변경을 지원하지 않습니다.');
@@ -409,6 +411,7 @@ class HejhomeUiServer extends HomebridgePluginUiServer {
           preference: features.devices?.[device.id] ?? {},
           inScope: Boolean(inScope),
           roleChangeSupported: supportsDeviceRole(device.deviceType),
+          powerChannels: nameablePowerChannels(device),
         };
       }));
       if (!await this.isSameOwner(owner)) {

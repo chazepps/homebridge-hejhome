@@ -8,7 +8,8 @@ export type Translate = (ko: string, en?: string) => string;
 export interface Scope { mode: string; includedFamilyIds?: number[]; includedRoomsByFamilyId?: Record<string, number[]> }
 export interface ScopeRoom { roomId: number; name: string; selected?: boolean }
 export interface ScopeFamily { familyId: number; name: string; selected?: boolean; rooms: ScopeRoom[] }
-export interface Features { matter?: boolean; adaptiveLighting?: boolean; meters?: MeterProfile[]; devices?: Record<string, DevicePreference> }
+export interface Features { matter?: boolean; adaptiveLighting?: boolean; scenes?: boolean;
+  meters?: MeterProfile[]; devices?: Record<string, DevicePreference> }
 export interface SupportedModel { deviceType: string; label?: string; modelName?: string; homekit?: string[]; matter?: string[]; [key: string]: unknown }
 export interface SessionStatus {
   configured: boolean; sessionValid: boolean; sessionCheckStatus?: string; uiSessionRevision?: string | null;
@@ -21,6 +22,7 @@ export interface Device {
   inScope?: boolean; online?: boolean | null; homekit?: boolean; matter?: boolean; lastControl?: string;
   lastControlAt?: string | null; lastSeenAt?: string | null; temperatureCelsius?: number | null;
   meterProfileApplied?: boolean; roleChangeSupported?: boolean; preference?: DevicePreference;
+  powerChannels?: string[];
   powerEstimateMeterPriority?: boolean; powerSpecEligibility?: { supported?: boolean; reason?: string; channelCount?: number };
   hvacSettings?: Record<string, unknown> | null; purifierSettings?: Record<string, unknown> | null;
   [key: string]: unknown;

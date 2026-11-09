@@ -1,5 +1,6 @@
 import type { Device, DevicePreference, Translate } from '../../core/types';
 import { getDeviceCapability } from '../../../../src/devices/capabilities';
+import { normalizePersonalization, validateDevicePersonalization, type FavoriteChannel } from '../../../../src/devices/personalization';
 
 export const sensorTypes = new Set(['SensorTh', 'SensorTh2', 'SensorRefTh', 'SensorRefTh2']);
 export const remoteTypes = new Set(['IrTv', 'IrSettopbox', 'IrFan']);
@@ -12,6 +13,9 @@ export interface DeviceEditorValue {
   freshnessMinutes: string;
   remoteButtons: boolean;
   pm25Multiplier: string;
+  favoriteChannels: Array<Omit<FavoriteChannel, 'channel'> & { channel: string }>;
+  purifierModeButtons: boolean;
+  channelNames: Record<string, string>;
 }
 
 export function editorValue(preference: DevicePreference = {}): DeviceEditorValue {
@@ -19,6 +23,8 @@ export function editorValue(preference: DevicePreference = {}): DeviceEditorValu
     name: preference.name ?? '', visibility: preference.visibility ?? 'both', role: preference.role ?? 'original',
     temperatureSensorId: preference.temperatureSensorId ?? '', freshnessMinutes: String(preference.freshnessMinutes ?? ''),
     remoteButtons: preference.remoteButtons ?? false, pm25Multiplier: String(preference.pm25Multiplier ?? ''),
+    favoriteChannels: (preference.favoriteChannels ?? []).map((item) => ({ ...item, channel: String(item.channel) })),
+    purifierModeButtons: preference.purifierModeButtons ?? false, channelNames: { ...preference.channelNames },
   };
 }
 
@@ -79,6 +85,15 @@ export function serializePreference(
     }
     preference.freshnessMinutes = minutes;
   }
+  const extra = normalizePersonalization({
+    ...(value.favoriteChannels.length ? { favoriteChannels: value.favoriteChannels.map((item) => ({ ...item,
+      channel: /^\d{1,3}$/.test(item.channel.trim()) ? Number(item.channel) : NaN })) } : {}),
+    ...(value.purifierModeButtons ? { purifierModeButtons: true } : {}),
+    ...(Object.values(value.channelNames).some((name) => name.trim())
+      ? { channelNames: Object.fromEntries(Object.entries(value.channelNames).filter(([, name]) => name.trim())) } : {}),
+  });
+  validateDevicePersonalization(device, { ...preference, ...extra });
+  Object.assign(preference, extra);
   return preference;
 }
 

@@ -24,7 +24,7 @@ jobs:
           - 22.13.0
           - 24.x
           - 26.x
-        homebridge-channel: [latest, beta]
+        homebridge-channel: ['2.4.0', latest, beta]
 
     steps:
       - name: Checkout

@@ -16,9 +16,10 @@ import { PowerEstimates } from './runtime/powerEstimates.js';
 import { EstimatedEnergyStore, estimatedEnergyOwner } from './storage/estimatedEnergyStore.js';
 import { RuntimeCommandServer, type RuntimeCommandRequest } from './runtime/commands.js';
 import { createIrRemoteRequirements } from './media/irRemoteCommands.js';
+import { HejhomeSceneSwitch, cachedScene, sceneUuidSeed, type SceneContext } from './scenes.js';
 import { getDeviceCapability } from './devices/capabilities.js';
 import { isMomentaryPowerDevice } from './devices/power.js';
-import { encodePurifierControl, decodePurifierSettings } from './devices/purifier.js';
+import { encodePurifierControl, decodePurifierSettings, type AirPurifierMode } from './devices/purifier.js';
 import { encodeHvacControl, decodeHvacSettings, type HvacCommand } from './devices/hvac.js';
 import { RuntimeHealth, measurementFreshnessMs, type HealthResult } from './runtime/health.js';
 import { RuntimeStatusStore, type RuntimeStatus } from './runtime/status.js';
@@ -26,6 +27,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 import { normalizeFeatures, type FeatureOptions } from './features.js';
 import { MatterAdapter } from './matter/adapter.js';
+import { MatterSceneAdapter } from './matter/scenes.js';
 
 interface DiscoveryPatch {
   state: NonNullable<HejDevice['deviceState']>;
@@ -41,10 +43,14 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
   public readonly features: FeatureOptions;
   private readonly matter: MatterAdapter | undefined;
+  private readonly matterScenes: MatterSceneAdapter | undefined;
   private stopping = false;
   private readonly commands = new Map<string, Promise<void>>();
   private readonly handlerSignatures = new Map<string, string>();
   private readonly accessoryHandlers: Map<string, HejhomePlatformAccessory> = new Map();
+  private readonly sceneHandlers = new Map<string, HejhomeSceneSwitch>();
+  /** Scenes confirmed by a successful list for the current session; cached switches are not trusted before this. */
+  private verifiedScenes = new Map<string, number>();
   private readonly logStore: LogStore;
   private readonly snapshotStore: DeviceSnapshotStore;
   private readonly sessionStore: SessionStore;
@@ -103,6 +109,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.commandServer = new RuntimeCommandServer(api.user.storagePath(), (request, signal) => this.executeUiCommand(request, signal));
 
     if (api.matter) {
+      this.matterScenes = new MatterSceneAdapter(api.matter, (scene) => this.runScene(scene),
+        (error) => this.warn('scene.matter.failed', { error: String(error) }));
       this.matter = new MatterAdapter(api.matter, (id, requirements) => this.controlDevice(id, requirements, 'matter'),
         this.features.meters, (error) => this.warn('matter.update.failed', { error: String(error) }), this.features.devices ?? {},
         (device) => this.powerEstimates.project(device));
@@ -128,8 +136,12 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       this.realtime?.disconnect();
       this.client?.dispose();
       this.matter?.dispose();
+      this.matterScenes?.dispose();
       for (const handler of this.accessoryHandlers.values()) {
         handler.dispose('shutdown');
+      }
+      for (const handler of this.sceneHandlers.values()) {
+        handler.dispose();
       }
       return Promise.all([this.commandServer.stop(), this.statusStore.flush(), this.powerEstimates.flush()])
         .catch((error) => this.warn('runtime.status.failed', { error: String(error) }));
@@ -137,7 +149,11 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   configureMatterAccessory(accessory: MatterAccessory): void {
-    this.matter?.restore(accessory);
+    if (cachedScene(accessory)) {
+      this.matterScenes?.restore(accessory);
+    } else {
+      this.matter?.restore(accessory);
+    }
   }
 
   public controlDevice(id: string, requirements: Record<string, unknown>, origin: 'hap' | 'matter' | 'ui', signal?: AbortSignal): Promise<void> {
@@ -252,7 +268,39 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     await this.controlDevice(id, requirements, 'ui', signal);
   }
 
-  private executeUiCommand(request: RuntimeCommandRequest, signal: AbortSignal): Promise<void> {
+  public async runScene(scene: SceneContext): Promise<void> {
+    const generation = this.generation;
+    const client = this.client;
+    if (this.stopping || !client || !this.features.scenes) {
+      throw new Error('Hejhome is not ready.');
+    }
+    if (this.initialized && !await this.currentSessionMatches()) {
+      throw new Error('Hejhome session changed. Try again.');
+    }
+    if (generation !== this.generation || this.stopping || this.client !== client) {
+      throw new Error('Hejhome session changed. Try again.');
+    }
+    if (!this.verifiedScenes.has(this.api.hap.uuid.generate(sceneUuidSeed(scene)))) {
+      throw new Error('Hejhome scene is not confirmed for this account yet. Try again.');
+    }
+    try {
+      await client.runScene(scene.familyId, scene.sceneId);
+      // The cloud call cannot be undone, but a result from a replaced session must not be reported as success.
+      if ((this.initialized && !await this.currentSessionMatches()) || generation !== this.generation || this.stopping || this.client !== client) {
+        throw new Error('Hejhome session changed. Try again.');
+      }
+      this.info('scene.run', { familyId: scene.familyId, sceneId: scene.sceneId });
+    } catch (error) {
+      this.warn('scene.run.failed', { familyId: scene.familyId, sceneId: scene.sceneId, error: String(error) });
+      throw error;
+    }
+  }
+
+  public controlPurifierMode(id: string, mode: AirPurifierMode): Promise<void> {
+    return this.executeUiCommand({ deviceId: id, kind: 'purifier', command: { mode } });
+  }
+
+  private executeUiCommand(request: RuntimeCommandRequest, signal?: AbortSignal): Promise<void> {
     const device = this.devices.get(request.deviceId);
     if (!device) {
       return Promise.reject(new Error('기기를 찾을 수 없습니다.'));
@@ -315,6 +363,13 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   configureAccessory(accessory: PlatformAccessory): void {
     this.info('accessory.cache.loaded', { displayName: accessory.displayName, uuid: accessory.UUID });
     this.accessories.set(accessory.UUID, accessory);
+    const scene = cachedScene(accessory);
+    if (scene) {
+      if (this.features.scenes) {
+        this.createSceneHandler(accessory, scene);
+      }
+      return;
+    }
     const device = accessory.context.device as HejDevice | undefined;
     if (typeof device?.id === 'string' && device.id) {
       this.devices.set(device.id, device);
@@ -353,11 +408,25 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   }
 
   private async pruneHiddenPublications(): Promise<void> {
-    if (this.localPublicationsPruned || this.stopping) {
+    if (this.stopping) {
+      return;
+    }
+    const scenesEnabled = this.features.scenes === true && this.features.matter === true;
+    // Retry failed recipe opt-outs on watcher ticks without repeating physical-device initialization.
+    if (!scenesEnabled) {
+      await this.matterScenes?.prune(false);
+    }
+    if (this.localPublicationsPruned) {
       return;
     }
     // Explicit local opt-outs are independent of remote discovery completeness.
     for (const [uuid, accessory] of this.accessories) {
+      if (cachedScene(accessory)) {
+        if (!this.features.scenes) {
+          this.removeSceneAccessory(uuid, accessory);
+        }
+        continue;
+      }
       const id = (accessory.context.device as HejDevice | undefined)?.id;
       if (typeof id === 'string' && id && !this.homekitVisible(id)) {
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
@@ -368,6 +437,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       }
     }
     await this.matter?.pruneHidden((id) => id === undefined ? this.features.matter : this.matterVisible(id));
+    if (scenesEnabled) {
+      await this.matterScenes?.prune(true);
+    }
     this.localPublicationsPruned = true;
     this.persistStatus();
   }
@@ -429,6 +501,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.cancelMatterSettlements();
     this.observations.clear();
     this.verifiedDevices.clear();
+    this.verifiedScenes.clear();
+    await this.matterScenes?.prune(this.features.scenes === true && this.features.matter === true);
     this.reportedStates.clear();
     this.reportedAt.clear();
     this.health.retain(new Set());
@@ -668,6 +742,106 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.inventoryOwnerFingerprint = ownerFingerprint;
     this.persistStatus();
     this.info('discovery.finished', { activeAccessories: this.accessories.size, deviceCount: devices.length });
+    await this.reconcileScenes(client, snapshotFamilies.map((entry) => entry.family), generation);
+  }
+
+  /** Scene failures never affect device discovery; a home whose list fails keeps its scene accessories. */
+  private async reconcileScenes(client: HejRestClient, families: HejFamily[], generation: number): Promise<void> {
+    if (!this.features.scenes || this.stopping) {
+      return;
+    }
+    const wanted = new Map<string, SceneContext>();
+    const listed = new Set<number>();
+    for (const family of families) {
+      try {
+        for (const scene of await client.getScenes(family.familyId)) {
+          wanted.set(this.api.hap.uuid.generate(sceneUuidSeed({ familyId: family.familyId, sceneId: scene.sceneId })),
+            { familyId: family.familyId, sceneId: scene.sceneId, name: scene.name });
+        }
+        listed.add(family.familyId);
+      } catch (error) {
+        this.warn('scene.discovery.failed', { familyId: family.familyId, error: String(error) });
+      }
+    }
+    if (generation !== this.generation || this.stopping) {
+      return;
+    }
+    const selected = new Set(families.map((family) => family.familyId));
+    const verified = new Map([...wanted].map(([uuid, scene]) => [uuid, scene.familyId]));
+    // Confirmation belongs to the cloud scene, independently of either transport's registration.
+    for (const [uuid, familyId] of this.verifiedScenes) {
+      if (selected.has(familyId) && !listed.has(familyId)) {
+        verified.set(uuid, familyId);
+      }
+    }
+    // Remove first so a replacement still fits when the bridge is at its accessory limit.
+    for (const [uuid, accessory] of this.accessories) {
+      const scene = cachedScene(accessory);
+      if (!scene || wanted.has(uuid)) {
+        continue;
+      }
+      if (selected.has(scene.familyId) && !listed.has(scene.familyId)) {
+        // Keep the publication; only this session's cloud confirmations remain runnable.
+        continue;
+      }
+      this.removeSceneAccessory(uuid, accessory);
+    }
+    this.verifiedScenes = verified;
+    for (const [uuid, scene] of wanted) {
+      const existing = this.accessories.get(uuid);
+      let created: PlatformAccessory | undefined;
+      try {
+        if (existing) {
+          this.createSceneHandler(existing, scene);
+          this.api.updatePlatformAccessories([existing]);
+        } else {
+          created = new this.api.platformAccessory(scene.name, uuid);
+          this.createSceneHandler(created, scene);
+          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [created]);
+          this.accessories.set(uuid, created);
+        }
+      } catch (error) {
+        if (created) {
+          // Homebridge caches an accessory before its bridge accepts it; take that copy back, or a retry is skipped as a duplicate.
+          try {
+            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [created]);
+          } catch {
+            // The bridge never held it, and Homebridge has already dropped its cached copy.
+          }
+          this.sceneHandlers.get(uuid)?.dispose();
+          this.sceneHandlers.delete(uuid);
+        }
+        this.warn('scene.register.failed', { familyId: scene.familyId, sceneId: scene.sceneId, error: String(error) });
+      }
+    }
+    if (this.features.matter) {
+      await this.matterScenes?.reconcile(wanted.values(), selected, listed,
+        (scene) => this.verifiedScenes.has(this.api.hap.uuid.generate(sceneUuidSeed(scene))));
+    }
+    this.info('scene.discovery.finished', { sceneCount: wanted.size });
+  }
+
+  private createSceneHandler(accessory: PlatformAccessory, scene: SceneContext): void {
+    const existing = this.sceneHandlers.get(accessory.UUID);
+    if (existing) {
+      existing.update(scene);
+      return;
+    }
+    this.sceneHandlers.set(accessory.UUID, new HejhomeSceneSwitch({
+      accessory, hap: this.api.hap, scene, run: (target) => this.runScene(target),
+    }));
+  }
+
+  private removeSceneAccessory(uuid: string, accessory: PlatformAccessory): void {
+    try {
+      this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    } catch (error) {
+      // Homebridge drops its cached copy before the bridge refuses one it does not hold, so the accessory is gone either way.
+      this.warn('scene.unregister.failed', { uuid, error: String(error) });
+    }
+    this.sceneHandlers.get(uuid)?.dispose();
+    this.sceneHandlers.delete(uuid);
+    this.accessories.delete(uuid);
   }
 
   private async getScopedDevices(client: HejRestClient, familyId: number, roomIds: number[] | undefined): Promise<HejDevice[]> {
@@ -689,7 +863,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private createAccessoryHandler(accessory: PlatformAccessory, device: HejDevice): void {
     const signature = JSON.stringify([device.deviceType, device.modelName ?? null, isMomentaryPowerDevice(device),
       this.features.devices?.[device.id]?.remoteButtons === true, this.features.devices?.[device.id]?.freshnessMinutes ?? null,
-      this.features.devices?.[device.id]?.pm25Multiplier ?? null]);
+      this.features.devices?.[device.id]?.pm25Multiplier ?? null,
+      this.features.devices?.[device.id]?.favoriteChannels ?? [], this.features.devices?.[device.id]?.purifierModeButtons ?? false,
+      this.features.devices?.[device.id]?.channelNames ?? {}]);
     const existing = this.accessoryHandlers.get(accessory.UUID);
     if (existing && this.handlerSignatures.get(accessory.UUID) === signature) {
       existing.rebindClient(this.client);
