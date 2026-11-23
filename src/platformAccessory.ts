@@ -9,6 +9,7 @@ import { isMomentaryPowerDevice, readVendorPower } from './devices/power.js';
 import { decodeAirPurifierPower } from './devices/purifier.js';
 import { calibratePm25 } from './devices/airQuality.js';
 import { OutletLoadTracker } from './devices/load.js';
+import { coveringPercent, readCoveringState } from './devices/windowCovering.js';
 import { measurementFreshnessMs } from './runtime/health.js';
 import { IrHapButtons } from './media/irHapButtons.js';
 
@@ -517,7 +518,14 @@ export class HejhomePlatformAccessory {
   private configureWindowCovering(): void {
     const covering = this.service(this.platform.Service.WindowCovering, this.device.name);
     covering.getCharacteristic(this.platform.Characteristic.CurrentPosition)
-      .onGet(() => this.readMeasurement('percentState'));
+      .onGet(() => {
+        const device = this.readDevice();
+        const position = coveringPercent(device.deviceState?.percentState);
+        if (position === undefined || this.platform.getMeasurementHealth?.(device.id, 'percentState')?.reachable === false) {
+          throw this.communicationError();
+        }
+        return Math.round(position);
+      });
     covering.getCharacteristic(this.platform.Characteristic.TargetPosition)
       .onGet(() => {
         const value = readTargetPosition(this.readDevice());
@@ -881,9 +889,9 @@ export class HejhomePlatformAccessory {
     if (!covering) {
       return;
     }
-    const position = numericState(device, 'percentState');
-    if (position !== null) {
-      covering.updateCharacteristic(this.platform.Characteristic.CurrentPosition, clampNumber(position, 0, 100));
+    const position = coveringPercent(device.deviceState?.percentState);
+    if (position !== undefined) {
+      covering.updateCharacteristic(this.platform.Characteristic.CurrentPosition, Math.round(position));
     }
     const target = readTargetPosition(device);
     if (target !== undefined) {
@@ -1242,16 +1250,16 @@ function readSmokeState(platform: HejhomePlatform, device: HejDevice): number {
 }
 
 function readTargetPosition(device: HejDevice): number | undefined {
-  const value = numericState(device, 'percentControl') ?? numericState(device, 'percentState');
-  return value === null ? undefined : clampNumber(value, 0, 100);
+  const value = coveringPercent(device.deviceState?.percentControl) ?? coveringPercent(device.deviceState?.percentState);
+  return value === undefined ? undefined : Math.round(value);
 }
 
 function readPositionState(platform: HejhomePlatform, device: HejDevice): number | undefined {
-  const workState = String(device.deviceState?.workState ?? '').toLowerCase();
+  const { workState } = readCoveringState(device.deviceState);
   if (workState === 'open') {
     return platform.Characteristic.PositionState.INCREASING;
   }
-  if (workState === 'close' || workState === 'closing') {
+  if (workState === 'close') {
     return platform.Characteristic.PositionState.DECREASING;
   }
   return workState === 'stop' ? platform.Characteristic.PositionState.STOPPED : undefined;

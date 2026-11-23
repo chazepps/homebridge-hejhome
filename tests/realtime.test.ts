@@ -210,6 +210,27 @@ function dispatchMessage(client: HejRealtimeClient, payload: unknown): void {
     .handleMessage(JSON.stringify(payload));
 }
 
+test('validates curtain percentages and normalizes movement independently of commands', () => {
+  const updates: Array<Partial<HejDevice> & { id: string }> = [];
+  const client = new HejRealtimeClient(session, { onDeviceUpdate: (d) => updates.push(d), onError: () => undefined });
+  for (const raw of [null, '', '  ', false, [], true, -1, 101, 'unknown', '0x0', '1e-99999']) {
+    dispatchMessage(client, { deviceDataReport: { devId: 'curtain', status: [
+      { code: 'percent_state', value: raw }, { code: 'percent_control', value: raw },
+      { code: 'control', value: 'open' },
+    ] } });
+    expect(updates.at(-1)?.deviceState).toEqual({ control: 'open' });
+  }
+  dispatchMessage(client, { deviceDataReport: { devId: 'curtain', status: [
+    { code: 'percent_state', value: '0' }, { code: 'percent_control', value: 100 },
+    { code: 'work_state', value: 'stopped' }, { code: 'control', value: 'open' },
+  ] } });
+  expect(updates.at(-1)?.deviceState).toEqual({ percentState: 0, percentControl: 100, workState: 'stop', control: 'open' });
+  dispatchMessage(client, { deviceDataReport: { devId: 'curtain', status: [
+    { code: 'percentState', value: ' 75.5 ' }, { code: 'workState', value: 'OPENING' },
+  ] } });
+  expect(updates.at(-1)?.deviceState).toEqual({ percentState: 75.5, workState: 'open' });
+});
+
 test('invalid meter reports remain unknown instead of appearing as zero power', () => {
   const updates: Array<Partial<HejDevice> & { id: string }> = [];
   const client = new HejRealtimeClient(session, { onDeviceUpdate: (d) => updates.push(d), onError: () => undefined });

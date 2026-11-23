@@ -153,6 +153,9 @@ export class MatterAdapter {
   }
 
   async reconcile(devices: HejDevice[]): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
     for (const key of this.reported.keys()) {
       if (!key.endsWith('/electricalEnergyMeasurement')) {
         this.reported.delete(key);
@@ -162,12 +165,16 @@ export class MatterAdapter {
       clearTimeout(timer);
     }
     this.timers.clear();
+    // Seed the whole snapshot before awaiting any host I/O. Live updates can
+    // then replace it even for a device whose endpoint is still being reconciled.
+    for (const device of devices) {
+      this.devices.set(device.id, device);
+    }
     const retained = new Set<string>();
     for (const device of devices) {
       if (this.disposed) {
         return;
       }
-      this.devices.set(device.id, device);
       const accessory = this.build(device.id);
       if (!accessory) {
         continue;
@@ -226,9 +233,12 @@ export class MatterAdapter {
       } else {
         await this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
       }
+      if (this.disposed) {
+        return;
+      }
       this.active.add(accessory.UUID);
       this.accessories.set(accessory.UUID, accessory);
-      await this.update(device);
+      await this.publishDevice(device.id);
     }
     for (const [uuid, accessory] of this.accessories) {
       if (!retained.has(uuid)) {
@@ -269,11 +279,15 @@ export class MatterAdapter {
       dimmer.cancel(true);
     }
     this.devices.set(device.id, device);
+    return this.publishDevice(device.id);
+  }
+
+  private publishDevice(id: string): Promise<void> {
     this.queue = this.queue.catch(this.onError).then(async () => {
       if (this.disposed) {
         return;
       }
-      const accessory = this.build(device.id);
+      const accessory = this.build(id);
       if (!accessory || !this.accessories.has(accessory.UUID)) {
         return;
       }

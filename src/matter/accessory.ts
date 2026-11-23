@@ -3,6 +3,7 @@ import { getDeviceCapability } from '../devices/capabilities.js';
 import { isMomentaryPowerDevice, readVendorPower } from '../devices/power.js';
 import { decodeAirPurifierPower } from '../devices/purifier.js';
 import { calibratePm25 } from '../devices/airQuality.js';
+import { coveringPercent } from '../devices/windowCovering.js';
 import { whiteMiredToTemperaturePercent, whiteTemperaturePercentToMired } from '../lighting/temperature.js';
 import type { MeterProfile } from '../features.js';
 import type { HejDevice } from '../types.js';
@@ -364,12 +365,14 @@ export function createMatterAccessory(
       }
       break;
     }
-    case 'window-covering':
+    case 'window-covering': {
+      const current = coveringPercent(state.percentState);
+      const target = coveringPercent(state.percentControl) ?? current;
       accessory.deviceType = types.WindowCovering;
       clusters.windowCovering = {
         type: 0, endProductType: 0, configStatus: { operational: true, onlineReserved: true, liftPositionAware: true },
-        currentPositionLiftPercent100ths: closedPercent(state.percentState),
-        targetPositionLiftPercent100ths: closedPercent(state.percentControl ?? state.percentState),
+        currentPositionLiftPercent100ths: closedPercent(current),
+        targetPositionLiftPercent100ths: closedPercent(target),
       };
       handlers.windowCovering = {
         upOrOpen: () => actuate({ percentControl: 100 }), downOrClose: () => actuate({ percentControl: 0 }),
@@ -379,6 +382,7 @@ export function createMatterAccessory(
         },
       };
       break;
+    }
     case 'temperature-humidity-sensor':
       accessory.parts = [
         { id: 'temperature', deviceType: types.TemperatureSensor, clusters: {
@@ -469,9 +473,8 @@ function measurement(value: unknown, min: number, max: number): number | null {
   const parsed = number(value);
   return parsed === null || parsed < min || parsed > max ? null : Math.round(parsed * 100);
 }
-function closedPercent(value: unknown): number | null {
-  const parsed = number(value);
-  return parsed === null ? null : Math.round((100 - Math.max(0, Math.min(100, parsed))) * 100);
+function closedPercent(openPercent: number | undefined): number | null {
+  return openPercent === undefined ? null : Math.round((100 - openPercent) * 100);
 }
 function isColorMode(mode: unknown): boolean {
   return mode === 'COLOR' || mode === 'COLOUR';

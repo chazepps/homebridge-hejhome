@@ -111,7 +111,8 @@ Generated from the current repository tree. Generated project-structure snapshot
 │   │   ├── load.ts
 │   │   ├── personalization.ts
 │   │   ├── power.ts
-│   │   └── purifier.ts
+│   │   ├── purifier.ts
+│   │   └── windowCovering.ts
 │   ├── discovery
 │   │   ├── realtimeHints.ts
 │   │   └── scope.ts

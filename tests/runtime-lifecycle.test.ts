@@ -643,6 +643,282 @@ test('an actuator MQTT guard expires so a later REST snapshot can reconcile stat
   expect(platform.accessories.values().next().value?.context.device.deviceState.power).toBe(true);
 });
 
+test('curtain discovery preserves live fields across repeated or incomplete REST snapshots and accepts changed REST fields', async () => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, percentControl: 20, workState: 'open' } };
+  mocks.devices = [curtain];
+  const { platform, internal } = await fixture();
+  const service = platform.accessories.get(platform.api.hap.uuid.generate(curtain.id))!.getService(platform.Service.WindowCovering)!;
+  const { CurrentPosition, TargetPosition, PositionState } = platform.Characteristic;
+  const read = () => Promise.all([CurrentPosition, TargetPosition, PositionState].map((characteristic) =>
+    service.getCharacteristic(characteristic).handleGetRequest()));
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: curtain.id, deviceState: { percentState: 80, percentControl: 80, workState: 'stop' } });
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.now() + 300001);
+  mocks.devices = [{ ...curtain, deviceState: { percentState: '20', percentControl: '20', work_state: 'opening' } }];
+  await internal.discoverDevices();
+  expect(await read()).toEqual([80, 80, PositionState.STOPPED]);
+
+  mocks.devices = [{ ...curtain, deviceState: { percentControl: '' } }];
+  await internal.discoverDevices();
+  expect(await read()).toEqual([80, 80, PositionState.STOPPED]);
+
+  mocks.devices = [{ ...curtain, deviceState: { percentState: '30', work_state: 'closing' } }];
+  await internal.discoverDevices();
+  expect(await read()).toEqual([30, 80, PositionState.DECREASING]);
+
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: curtain.id, deviceState: { percentState: 55, workState: 'stop' } });
+  mocks.realtime[0]!.events.onStatus?.('connect.closed');
+  mocks.realtime[0]!.events.onStatus?.('connect.success');
+  await internal.discoverDevices();
+  expect(await read()).toEqual([55, 80, PositionState.STOPPED]);
+
+  mocks.devices = [{ ...curtain, deviceState: { percentState: 40, workState: 'opening' } }];
+  await internal.discoverDevices();
+  expect(await read()).toEqual([40, 80, PositionState.INCREASING]);
+});
+
+test.each(['acknowledgement', 'realtime'] as const)('confirmed REST repairs a curtain state held from %s', async (source) => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, percentControl: 20, workState: 'stop' } };
+  mocks.devices = [curtain];
+  const { platform, internal } = await fixture();
+  const id = curtain.id;
+  const service = platform.accessories.get(platform.api.hap.uuid.generate(id))!.getService(platform.Service.WindowCovering)!;
+  const { CurrentPosition, TargetPosition } = platform.Characteristic;
+  const read = () => Promise.all([CurrentPosition, TargetPosition].map((characteristic) => service.getCharacteristic(characteristic).handleGetRequest()));
+  if (source === 'acknowledgement') {
+    await platform.controlDevice(id, { percentControl: 85 }, 'hap');
+    mocks.realtime[0]!.events.onDeviceUpdate({ id, deviceState: { percentState: 20, workState: 'stop' } });
+  } else {
+    mocks.realtime[0]!.events.onDeviceUpdate({ id, deviceState: { percentState: 80, percentControl: 80 } });
+  }
+  vi.useFakeTimers();
+  const now = Date.now();
+  vi.setSystemTime(now + 300001);
+  const held = source === 'acknowledgement' ? [20, 85] : [80, 80];
+  await internal.discoverDevices();
+  expect(await read()).toEqual(held);
+
+  await internal.discoverDevices();
+  expect(await read()).toEqual(held);
+
+  vi.setSystemTime(now + 303001);
+  mocks.devices = [{ ...curtain, deviceState: {} }];
+  await internal.discoverDevices();
+  expect(await read()).toEqual(held);
+
+  vi.setSystemTime(now + 305001);
+  mocks.devices = [curtain];
+  await internal.discoverDevices();
+  expect(await read()).toEqual([20, 20]);
+});
+
+test('a REST snapshot confirming arrival at the curtain target also applies its explicit stop', async () => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, percentControl: 80, workState: 'stop' } };
+  mocks.devices = [curtain];
+  const { platform, internal } = await fixture();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: curtain.id, deviceState: { percentState: 35, workState: 'open' } });
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.now() + 5001);
+  mocks.devices = [{ ...curtain, deviceState: { percentState: 80, percentControl: 80, workState: 'stop' } }];
+  await internal.discoverDevices();
+  const service = platform.accessories.get(platform.api.hap.uuid.generate(curtain.id))!.getService(platform.Service.WindowCovering)!;
+  const { CurrentPosition, TargetPosition, PositionState } = platform.Characteristic;
+  const read = () => Promise.all([CurrentPosition, TargetPosition, PositionState].map((characteristic) =>
+    service.getCharacteristic(characteristic).handleGetRequest()));
+  expect(await read()).toEqual([80, 80, PositionState.STOPPED]);
+});
+
+test('only a new observation of the same curtain field restarts REST confirmation', async () => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, percentControl: 20 } };
+  mocks.devices = [curtain];
+  const { platform, internal } = await fixture();
+  const id = curtain.id;
+  const service = platform.accessories.get(platform.api.hap.uuid.generate(id))!.getService(platform.Service.WindowCovering)!;
+  const { CurrentPosition, TargetPosition } = platform.Characteristic;
+  const read = () => Promise.all([CurrentPosition, TargetPosition].map((characteristic) => service.getCharacteristic(characteristic).handleGetRequest()));
+  const emit = (deviceState: HejDevice['deviceState']) => mocks.realtime[0]!.events.onDeviceUpdate({ id, deviceState });
+  emit({ percentState: 80, percentControl: 80 });
+  vi.useFakeTimers();
+  const now = Date.now();
+  vi.setSystemTime(now + 10000);
+  await internal.discoverDevices();
+  emit({ percentState: 80 });
+  vi.setSystemTime(now + 16000);
+  await internal.discoverDevices();
+  expect(await read()).toEqual([80, 20]);
+
+  vi.setSystemTime(now + 21000);
+  await internal.discoverDevices();
+  expect(await read()).toEqual([20, 20]);
+});
+
+test('a curtain report during credential renewal restarts confirmation, even if its buffered value expires', async () => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20 } };
+  mocks.devices = [curtain];
+  const { platform, internal, store, session } = await fixture();
+  const id = curtain.id;
+  const service = platform.accessories.get(platform.api.hap.uuid.generate(id))!.getService(platform.Service.WindowCovering)!;
+  const position = service.getCharacteristic(platform.Characteristic.CurrentPosition);
+  mocks.realtime[0]!.events.onDeviceUpdate({ id, deviceState: { percentState: 80 } });
+  vi.useFakeTimers();
+  const now = Date.now();
+  vi.setSystemTime(now + 6000);
+  await internal.discoverDevices();
+  expect(await position.handleGetRequest()).toBe(80);
+
+  vi.setSystemTime(now + 12000);
+  let release!: (families: typeof mocks.families) => void;
+  mocks.familyGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await store.save({ ...session, accessToken: 'rotated' });
+  const renewal = internal.checkSessionAndInitialize();
+  try {
+    await vi.waitFor(() => expect(mocks.clients[1]?.getFamilies).toHaveBeenCalled());
+    mocks.realtime[1]!.events.onDeviceUpdate({ id, deviceState: { percentState: 90 } });
+    vi.setSystemTime(Date.now() + 5001);
+  } finally {
+    mocks.familyGate = undefined;
+    release(mocks.families);
+    await renewal;
+  }
+  expect(await position.handleGetRequest()).toBe(80);
+
+  vi.setSystemTime(Date.now() + 5000);
+  await internal.discoverDevices();
+  expect(await position.handleGetRequest()).toBe(20);
+});
+
+test('a confirmed REST repeat can repair a curtain target without suppressing a newer pending command', async () => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, percentControl: 20, workState: 'stop' } };
+  mocks.devices = [curtain];
+  const { platform, internal } = await fixture();
+  const service = platform.accessories.get(platform.api.hap.uuid.generate(curtain.id))!.getService(platform.Service.WindowCovering)!;
+  const target = service.getCharacteristic(platform.Characteristic.TargetPosition);
+  await platform.controlDevice(curtain.id, { percentControl: 85 }, 'hap');
+  vi.useFakeTimers();
+  const now = Date.now();
+  await internal.discoverDevices();
+  expect(await target.handleGetRequest()).toBe(85);
+
+  let release!: () => void;
+  mocks.clients[0]!.controlDevice!.mockImplementationOnce(() => new Promise<void>((resolve) => {
+    release = resolve;
+  }));
+  const command = platform.controlDevice(curtain.id, { percentControl: 95 }, 'hap');
+  await vi.waitFor(() => expect(release).toBeDefined());
+  vi.setSystemTime(now + 5000);
+  await internal.discoverDevices();
+  expect(await target.handleGetRequest()).toBe(20);
+  release();
+  await command;
+  expect(await target.handleGetRequest()).toBe(95);
+});
+
+test.each([false, true])('a known curtain REST target cannot suppress a pending HAP acknowledgement (first seen over MQTT: %s)', async (fromMqtt) => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, percentControl: 20, workState: 'stop' } };
+  mocks.devices = [curtain];
+  const { platform, internal } = await fixture();
+  if (fromMqtt) {
+    mocks.realtime[0]!.events.onDeviceUpdate({ id: curtain.id, deviceState: { percentControl: 30 } });
+    mocks.devices = [{ ...curtain, deviceState: { ...curtain.deviceState, percentControl: 30 } }];
+  }
+  let release!: () => void;
+  mocks.clients[0]!.controlDevice!.mockImplementationOnce(() => new Promise<void>((resolve) => {
+    release = resolve;
+  }));
+  const command = platform.controlDevice(curtain.id, { percentControl: 85 }, 'hap');
+  await vi.waitFor(() => expect(release).toBeDefined());
+  mocks.realtime[0]!.events.onStatus?.('connect.closed');
+  mocks.realtime[0]!.events.onStatus?.('connect.success');
+  await internal.discoverDevices();
+  release();
+  await command;
+  const accessory = platform.accessories.get(platform.api.hap.uuid.generate(curtain.id))!;
+  const service = accessory.getService(platform.Service.WindowCovering)!;
+  expect(await service.getCharacteristic(platform.Characteristic.TargetPosition).handleGetRequest()).toBe(85);
+  expect(await service.getCharacteristic(platform.Characteristic.CurrentPosition).handleGetRequest()).toBe(20);
+});
+
+test.each([
+  { restTarget: 20, mqttTarget: 30, followUpFails: false },
+  { restTarget: 45, mqttTarget: undefined, followUpFails: false },
+  { restTarget: 45, mqttTarget: undefined, followUpFails: true },
+])('curtain discovery cannot overwrite a target acknowledged during the request (%o)', async ({ restTarget, mqttTarget, followUpFails }) => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, percentControl: 20 } };
+  mocks.devices = [curtain];
+  const { platform, internal } = await fixture();
+  let release!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((resolve) => {
+    release = resolve;
+  }));
+  const pending = internal.discoverDevices();
+  await vi.waitFor(() => expect(release).toBeDefined());
+  if (mqttTarget !== undefined) {
+    mocks.realtime[0]!.events.onDeviceUpdate({ id: curtain.id, deviceState: { percentControl: mqttTarget } });
+  }
+  await platform.controlDevice(curtain.id, { percentControl: 85 }, 'hap');
+  if (followUpFails) {
+    mocks.clients[0]!.controlDevice!.mockRejectedValueOnce(new Error('command failed'));
+    await expect(platform.controlDevice(curtain.id, { percentControl: 95 }, 'hap')).rejects.toThrow('command failed');
+  }
+  release([{ ...curtain, deviceState: { percentState: 25, percentControl: restTarget } }]);
+  await pending;
+  const accessory = platform.accessories.get(platform.api.hap.uuid.generate(curtain.id))!;
+  const service = accessory.getService(platform.Service.WindowCovering)!;
+  expect(await service.getCharacteristic(platform.Characteristic.CurrentPosition).handleGetRequest()).toBe(25);
+  expect(await service.getCharacteristic(platform.Characteristic.TargetPosition).handleGetRequest()).toBe(85);
+});
+
+test('curtain discovery can accept a REST position that previously lost to an overlapping MQTT report', async () => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20 } };
+  mocks.devices = [curtain];
+  const { platform, internal } = await fixture();
+  const latest = { ...curtain, deviceState: { percentState: 60 } };
+  let release!: (devices: HejDevice[]) => void;
+  mocks.clients[0]!.getDevices!.mockImplementationOnce(() => new Promise<HejDevice[]>((resolve) => {
+    release = resolve;
+  }));
+  const pending = internal.discoverDevices();
+  await vi.waitFor(() => expect(release).toBeDefined());
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: curtain.id, deviceState: { percentState: 35 } });
+  release([latest]);
+  await pending;
+  const accessory = platform.accessories.get(platform.api.hap.uuid.generate(curtain.id))!;
+  const position = accessory.getService(platform.Service.WindowCovering)!.getCharacteristic(platform.Characteristic.CurrentPosition);
+  expect(await position.handleGetRequest()).toBe(35);
+
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.now() + 5001);
+  mocks.devices = [latest];
+  await internal.discoverDevices();
+  expect(await position.handleGetRequest()).toBe(60);
+});
+
+test.each([true, false])('curtain discovery respects the account boundary after replacing credentials (same account: %s)', async (sameAccount) => {
+  const curtain: HejDevice = { id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, workState: 'open' } };
+  mocks.devices = [curtain];
+  const { platform, internal, store, session } = await fixture();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: curtain.id, deviceState: { percentState: 80, workState: 'stop' } });
+  await store.save({ ...session, identifier: sameAccount ? session.identifier : 'different-account', accessToken: 'rotated' });
+  await internal.checkSessionAndInitialize();
+  const accessory = platform.accessories.get(platform.api.hap.uuid.generate(curtain.id))!;
+  const service = accessory.getService(platform.Service.WindowCovering)!;
+  const { CurrentPosition, PositionState } = platform.Characteristic;
+  expect(await service.getCharacteristic(CurrentPosition).handleGetRequest()).toBe(sameAccount ? 80 : 20);
+  expect(await service.getCharacteristic(PositionState).handleGetRequest()).toBe(sameAccount ? PositionState.STOPPED : PositionState.INCREASING);
+});
+
 test('diagnostics expose only fresh measured sensor temperature, never the HVAC target', async () => {
   mocks.devices = [{ id: 'ac', name: 'AC', deviceType: 'IrAirconditioner', deviceState: { temperature: 27 } },
     { id: 'th', name: 'TH', deviceType: 'SensorTh', deviceState: { temperature: 20 } }];
@@ -740,6 +1016,29 @@ test('Matter host post-handler auto-commit is corrected to the latest observed c
   await new Promise((resolve) => setImmediate(resolve));
   expect(platform.accessories.values().next().value?.context.device.deviceState.brightness).toBe(70);
   expect(hostBrightness).toBe(70);
+});
+
+test('Matter curtain acknowledgement republishes the measured current position after the host auto-commit', async () => {
+  mocks.devices = [{ id: 'curtain', name: 'Curtain', deviceType: 'Curtain', online: true,
+    deviceState: { percentState: 20, percentControl: 20 } }];
+  let hostCurrent: unknown;
+  let hostTarget: unknown;
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(), updatePlatformAccessories: vi.fn(), unregisterPlatformAccessories: vi.fn(),
+    updateAccessoryState: vi.fn((_uuid, cluster, state) => {
+      if (cluster === 'windowCovering') {
+        hostCurrent = state.currentPositionLiftPercent100ths;
+        hostTarget = state.targetPositionLiftPercent100ths;
+      }
+    }),
+  } as unknown as MatterAPI;
+  await fixture(undefined, { mode: 'all' }, matter);
+  const registered = vi.mocked(matter.registerPlatformAccessories).mock.calls[0]![2][0];
+  await registered.handlers!.windowCovering!.goToLiftPercentage!({ liftPercent100thsValue: 1500 });
+  hostCurrent = 1500;
+  hostTarget = 1500;
+  await vi.waitFor(() => expect(hostCurrent).toBe(8000));
+  expect(hostTarget).toBe(1500);
 });
 
 test('a newer color report protects both HSV brightness and its normalized brightness field', async () => {
