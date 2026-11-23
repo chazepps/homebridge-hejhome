@@ -5,9 +5,9 @@ import { HejRealtimeClient } from './hej/realtime.js';
 import { HejhomePlatformAccessory, mergeDeviceState } from './platformAccessory.js';
 import { resolveDiscoveryScope } from './discovery/scope.js';
 import { RealtimeDiscoveryHints } from './discovery/realtimeHints.js';
-import { DeviceSnapshotStore } from './storage/deviceSnapshotStore.js';
+import { DeviceSnapshotStore, type HejDeviceSnapshot } from './storage/deviceSnapshotStore.js';
 import { LogStore, type LogLevel } from './storage/logStore.js';
-import { SessionStore, sessionFingerprint } from './storage/sessionStore.js';
+import { SessionStore, discoveryAccountFingerprint, sessionFingerprint } from './storage/sessionStore.js';
 import type { HejDevice, HejFamily, HejhomePlatformConfig, HejSession } from './types.js';
 import { sanitizeForLog } from './utils/redact.js';
 import { createSessionLogContext } from './utils/sessionDiagnostics.js';
@@ -29,11 +29,19 @@ import { normalizeFeatures, type FeatureOptions } from './features.js';
 import { MatterAdapter } from './matter/adapter.js';
 import { MatterSceneAdapter } from './matter/scenes.js';
 
+const ROOM_INVENTORY_BUDGET_MS = 5000;
+
 interface DiscoveryPatch {
   state: NonNullable<HejDevice['deviceState']>;
   receivedAt: Map<string, number>;
   online: boolean | undefined;
   onlineAt: number;
+}
+
+interface ScopedDeviceInventory {
+  devices: HejDevice[];
+  roomOutletIds: string[];
+  retainedOutlets: HejDevice[];
 }
 
 export class HejhomePlatform implements DynamicPlatformPlugin {
@@ -67,6 +75,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private readonly controls = new Map<string, { at: string; success: boolean }>();
   private connection: RuntimeStatus['connection'] = { session: 'unknown', realtime: 'unknown' };
   private sessionFingerprint = '';
+  private accountFingerprint = '';
   private powerSessionVerified = false;
   private energyAccountRetry: { identifier: string; at: number } | null = null;
   private inventoryOwnerFingerprint = '';
@@ -77,6 +86,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private scheduledDiscoveryHintOnly = false;
   private discoveryNotBefore = 0;
   private readonly discoveryHints = new RealtimeDiscoveryHints();
+  private nextRoomInventoryFamilyId: number | undefined;
+  private readonly nextRoomInventoryRoomIds = new Map<number, number>();
   private retryDelay = 5000;
   private lastDiscoveryAt = 0;
   private receivedConnection = false;
@@ -199,7 +210,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
           return;
         }
         const current = this.devices.get(id);
-        if (!current) {
+        if (!current || (this.initialized && !this.verifiedDevices.has(id))) {
           throw new Error('Hejhome device is no longer available.');
         }
         this.controls.set(id, { at: new Date().toISOString(), success: true });
@@ -516,6 +527,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.matter?.setElectricalAccount(estimatedEnergyOwner(session.identifier));
     this.powerSessionVerified = true;
     this.sessionFingerprint = sessionFingerprint(session);
+    this.accountFingerprint = discoveryAccountFingerprint(session.identifier);
     this.connection = { session: session.expiresAt <= Date.now() ? 'expired' : 'unknown', realtime: 'connecting' };
     this.receivedConnection = false;
     this.refreshHealth();
@@ -526,10 +538,13 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         if (generation !== this.generation || this.stopping) {
           return;
         }
-        if (event.httpStatus === 401 || event.httpStatus === 403) {
-          this.connection.session = 'expired';
-        } else if (event.httpStatus && event.httpStatus >= 200 && event.httpStatus < 300) {
-          this.connection.session = 'valid';
+        const supplementalInventory = event.path.startsWith('dashboard/rooms/') || event.path.endsWith('/devices?scope=shop');
+        if (!supplementalInventory) {
+          if (event.httpStatus === 401 || event.httpStatus === 403) {
+            this.connection.session = 'expired';
+          } else if (event.httpStatus && event.httpStatus >= 200 && event.httpStatus < 300) {
+            this.connection.session = 'valid';
+          }
         }
         this.info('rest.request', event);
         this.refreshHealth();
@@ -638,6 +653,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     const client = this.client;
     const generation = this.generation;
     const ownerFingerprint = this.sessionFingerprint;
+    const accountFingerprint = this.accountFingerprint;
     const powerObservationStarted = this.powerEstimates.capture();
     if (!client || this.stopping) {
       return;
@@ -646,7 +662,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     const discoveryScope = structuredClone(this.config.scope ?? { mode: 'first-family' as const });
     const families = await client.getFamilies();
     const scope = resolveDiscoveryScope({ scope: discoveryScope }, families);
-    const snapshotFamilies: Array<{ family: HejFamily; devices: HejDevice[] }> = [];
+    const primary: Array<{ family: HejFamily; roomIds: number[] | undefined; devices: Map<string, HejDevice> }> = [];
     // Stage the entire selected scope before mutating either protocol or the cache.
     for (const selected of scope) {
       if (generation !== this.generation || this.stopping) {
@@ -655,37 +671,75 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       const family = families.find((entry) => entry.familyId === selected.familyId);
       if (family) {
         const devices = await this.getScopedDevices(client, selected.familyId, selected.roomIds);
-        snapshotFamilies.push({ family, devices });
+        primary.push({ family, roomIds: selected.roomIds, devices });
       }
+    }
+    const inventories = new Array<{ family: HejFamily } & ScopedDeviceInventory>(primary.length);
+    const roomDeadline = AbortSignal.timeout(ROOM_INVENTORY_BUDGET_MS);
+    const startFamily = Math.max(0, primary.findIndex(({ family }) => family.familyId === this.nextRoomInventoryFamilyId));
+    let firstSkippedFamilyId: number | undefined;
+    for (let offset = 0; offset < primary.length; offset++) {
+      if (generation !== this.generation || this.stopping) {
+        return;
+      }
+      const index = (startFamily + offset) % primary.length;
+      const { family, roomIds, devices } = primary[index]!;
+      if (roomDeadline.aborted) {
+        firstSkippedFamilyId ??= family.familyId;
+      }
+      const inventory = await this.supplementRoomOutlets(client, family.familyId, roomIds, devices, roomDeadline);
+      inventories[index] = { family, ...inventory };
     }
     if (generation !== this.generation || this.stopping) {
       return;
     }
+    // Keep the published family order, but give skipped families the next scan's first slot.
+    this.nextRoomInventoryFamilyId = firstSkippedFamilyId ?? (roomDeadline.aborted ? primary[startFamily]?.family.familyId : undefined);
     if (!await this.currentSessionMatches() || generation !== this.generation || this.stopping) {
       return;
     }
-    const discovered = snapshotFamilies.flatMap((family) => family.devices);
-    const freshPatches = new Map(discovered.map((device) => [device.id, this.freshDiscoveryPatch(device, patches.get(device.id))]));
-    const devices = discovered.map((device) => {
-      const patch = freshPatches.get(device.id);
-      return { ...device, ...patch, name: this.features.devices?.[device.id]?.name ?? device.name,
-        deviceState: { ...device.deviceState, ...this.freshReportedState(device), ...patch?.deviceState } };
-    });
-    const ids = new Set(devices.map((device) => device.id));
-    this.discoveryHints.confirm(ids);
-    for (const device of devices) {
-      const newlyDiscovered = !this.verifiedDevices.has(device.id);
-      this.observations.record(device.id, device.deviceState ?? {});
-      this.devices.set(device.id, device);
-      this.health.observe(device, 'snapshot');
-      const observed = discovered.find((entry) => entry.id === device.id)!;
-      this.powerEstimates.observe(device, observed.deviceState ?? {}, powerObservationStarted);
-      if (newlyDiscovered && freshPatches.get(device.id)?.deviceState) {
-        // Unknown devices cannot be commanded yet; a report staged during their
-        // first discovery is newer than that discovery snapshot.
-        this.powerEstimates.observe(device, freshPatches.get(device.id)!.deviceState!);
+    const confirmedIds = new Set(inventories.flatMap(({ devices }) => devices.map(({ id }) => id)));
+    const retainedIds = new Set<string>();
+    const snapshotFamilies: HejDeviceSnapshot['families'] = inventories.map(({ family, devices, roomOutletIds, retainedOutlets }) => {
+      for (const outlet of retainedOutlets) {
+        if (!confirmedIds.has(outlet.id) && !retainedIds.has(outlet.id)) {
+          retainedIds.add(outlet.id);
+          devices.push(outlet);
+          roomOutletIds.push(outlet.id);
+        }
       }
-      this.verifiedDevices.add(device.id);
+      return { family, devices, ...(roomOutletIds.length > 0 ? { roomOutletIds } : {}) };
+    });
+    const discovered = snapshotFamilies.flatMap((family) => family.devices);
+    const ids = new Set([...confirmedIds, ...retainedIds]);
+    const devices: HejDevice[] = [];
+    this.discoveryHints.confirm(confirmedIds);
+    this.health.retain(confirmedIds);
+    for (const observed of discovered) {
+      const { id } = observed;
+      const retained = retainedIds.has(id);
+      const name = this.features.devices?.[id]?.name ?? observed.name;
+      const patch = retained ? undefined : this.freshDiscoveryPatch(observed, patches.get(id));
+      const device = retained ? { ...observed, name } : { ...observed, ...patch, name,
+        deviceState: { ...observed.deviceState, ...this.freshReportedState(observed), ...patch?.deviceState } };
+      devices.push(device);
+      this.devices.set(device.id, device);
+      if (retained) {
+        this.verifiedDevices.delete(device.id);
+        this.observations.remove(device.id);
+        this.reportedStates.delete(device.id);
+        this.reportedAt.delete(device.id);
+      } else {
+        const newlyDiscovered = !this.verifiedDevices.has(device.id);
+        this.observations.record(device.id, device.deviceState ?? {});
+        this.health.observe(device, 'snapshot');
+        this.powerEstimates.observe(device, observed.deviceState ?? {}, powerObservationStarted);
+        if (newlyDiscovered && patch?.deviceState) {
+          // A report staged during first discovery is newer than its snapshot.
+          this.powerEstimates.observe(device, patch.deviceState);
+        }
+        this.verifiedDevices.add(device.id);
+      }
       if (!this.homekitVisible(device.id)) {
         continue;
       }
@@ -725,8 +779,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         this.reportedAt.delete(id);
       }
     }
-    this.health.retain(ids);
-    this.powerEstimates.retain(ids);
+    this.powerEstimates.retain(confirmedIds);
     try {
       await this.matter?.reconcile(devices.filter((device) => this.matterVisible(device.id)).map((device) => this.matterDevice(device)));
     } catch (error) {
@@ -735,7 +788,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     if (generation !== this.generation || this.stopping) {
       return;
     }
-    await this.snapshotStore.save(snapshotFamilies, ownerFingerprint, discoveryScope);
+    await this.snapshotStore.save(snapshotFamilies, ownerFingerprint, discoveryScope, accountFingerprint);
     if (generation !== this.generation || this.stopping) {
       return;
     }
@@ -844,20 +897,149 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.accessories.delete(uuid);
   }
 
-  private async getScopedDevices(client: HejRestClient, familyId: number, roomIds: number[] | undefined): Promise<HejDevice[]> {
-    if (roomIds === undefined) {
-      return client.getDevices(familyId);
-    }
+  private async getScopedDevices(client: HejRestClient, familyId: number, roomIds: number[] | undefined): Promise<Map<string, HejDevice>> {
     const byId = new Map<string, HejDevice>();
-    for (const roomId of roomIds) {
-      if (this.stopping) {
-        return [];
+    if (roomIds === undefined) {
+      for (const device of await client.getDevices(familyId)) {
+        byId.set(device.id, device);
       }
-      for (const device of await client.getDevices(familyId, roomId)) {
-        byId.set(device.id, { ...device, roomId });
+    } else {
+      for (const roomId of new Set(roomIds)) {
+        if (this.stopping) {
+          break;
+        }
+        for (const device of await client.getDevices(familyId, roomId)) {
+          byId.set(device.id, { ...device, roomId });
+        }
       }
     }
-    return [...byId.values()];
+    return byId;
+  }
+
+  private async supplementRoomOutlets(client: HejRestClient, familyId: number, roomIds: number[] | undefined,
+    byId: Map<string, HejDevice>, signal: AbortSignal): Promise<ScopedDeviceInventory> {
+    const owner = this.sessionFingerprint;
+    const account = this.accountFingerprint;
+    const { outlets, failedRooms, incompleteIds } = await this.getRoomOutlets(client, familyId, roomIds, signal);
+    const roomOutletIds: string[] = [];
+    for (const [id, device] of outlets) {
+      if (!byId.has(id)) {
+        byId.set(id, device);
+        roomOutletIds.push(id);
+      }
+    }
+    if (roomOutletIds.length > 0) {
+      this.debug('discovery.room-outlets', { familyId, count: roomOutletIds.length });
+    }
+    const devices = [...byId.values()];
+    const retainedOutlets: HejDevice[] = [];
+    if (this.stopping || client !== this.client || (failedRooms?.size === 0 && incompleteIds.size === 0)) {
+      return { devices, roomOutletIds, retainedOutlets };
+    }
+    // Stale rows preserve offline topology. Only current REST results can authorize control.
+    const snapshot = await this.snapshotStore.load().catch((error: unknown) => {
+      this.warn('discovery.room-outlets.cache-unavailable', { error: String(error) });
+      return null;
+    });
+    if (snapshot && (snapshot.ownerFingerprint === owner || (account && snapshot.accountFingerprint === account))) {
+      const previous = snapshot.families.find((entry) => entry.family.familyId === familyId);
+      const previouslySupplemented = new Set(previous?.roomOutletIds);
+      for (const device of previous?.devices ?? []) {
+        const roomId = Number(device.roomId);
+        if (previouslySupplemented.has(device.id) && !byId.has(device.id) && (roomIds === undefined || roomIds.includes(roomId))
+          && (failedRooms === null || failedRooms.has(roomId) || incompleteIds.get(roomId)?.has(device.id))) {
+          retainedOutlets.push({ ...device, online: false, deviceState: {} });
+        }
+      }
+    }
+    return { devices, roomOutletIds, retainedOutlets };
+  }
+
+  private async getRoomOutlets(client: HejRestClient, familyId: number, roomIds: number[] | undefined, signal: AbortSignal): Promise<{
+    outlets: Map<string, HejDevice>;
+    failedRooms: Set<number> | null;
+    incompleteIds: Map<number, Set<string>>;
+  }> {
+    const outlets = new Map<string, HejDevice>();
+    const incompleteIds = new Map<number, Set<string>>();
+    const failedRooms = new Set<number>();
+    let selectedRooms: number[];
+    try {
+      if (roomIds === undefined) {
+        signal.throwIfAborted();
+      }
+      selectedRooms = roomIds ?? (await client.getRooms(familyId, signal)).map((room) => room.room_id);
+    } catch (error) {
+      this.warn('discovery.room-outlets.failed', { familyId, error: String(error) });
+      return { outlets, failedRooms: null, incompleteIds };
+    }
+    const rooms = [...new Set(selectedRooms)];
+    const startRoom = Math.max(0, rooms.findIndex((id) => Number(id) === this.nextRoomInventoryRoomIds.get(familyId)));
+    let firstSkippedRoomId: number | undefined;
+    for (let offset = 0; offset < rooms.length; offset++) {
+      if (this.stopping || client !== this.client) {
+        break;
+      }
+      const providerRoomId = rooms[(startRoom + offset) % rooms.length]!;
+      const roomId = Number(providerRoomId);
+      if (!Number.isSafeInteger(roomId) || roomId <= 0) {
+        continue;
+      }
+      if (signal.aborted) {
+        firstSkippedRoomId ??= roomId;
+        failedRooms.add(roomId);
+        continue;
+      }
+      let inventory: Awaited<ReturnType<HejRestClient['getRoomDeviceInventory']>>;
+      try {
+        inventory = await client.getRoomDeviceInventory(familyId, providerRoomId, signal);
+      } catch (error) {
+        failedRooms.add(roomId);
+        this.warn('discovery.room-outlets.failed', { familyId, roomId, error: String(error) });
+        continue;
+      }
+      const incomplete = new Set<string>();
+      for (const device of inventory) {
+        if (typeof device?.id !== 'string' || !device.id.trim()
+          || (device.familyId != null && Number(device.familyId) !== Number(familyId))
+          || (device.roomId != null && Number(device.roomId) !== roomId)) {
+          continue;
+        }
+        if (typeof device.deviceType !== 'string' || !device.deviceType.trim()
+          || typeof device.name !== 'string' || !device.name.trim()) {
+          incomplete.add(device.id);
+          continue;
+        }
+        if (getDeviceCapability(device.deviceType)?.serviceKind !== 'outlet') {
+          continue;
+        }
+        const deviceState: NonNullable<HejDevice['deviceState']> = {};
+        const power = device.deviceState?.power;
+        if (typeof power === 'boolean' || power === '켜짐' || power === '꺼짐') {
+          deviceState.power = power;
+        }
+        for (const key of ['curPower', 'curCurrent', 'curVoltage'] as const) {
+          const value = device.deviceState?.[key];
+          if (value === null || (typeof value === 'number' && Number.isFinite(value))) {
+            deviceState[key] = value;
+          }
+        }
+        outlets.set(device.id, { id: device.id, name: device.name, deviceType: device.deviceType, familyId, roomId, deviceState,
+          ...(typeof device.modelName === 'string' ? { modelName: device.modelName } : {}),
+          ...(typeof device.online === 'boolean' ? { online: device.online } : {}) });
+      }
+      if (incomplete.size > 0) {
+        incompleteIds.set(roomId, incomplete);
+      }
+    }
+    if (client === this.client && !this.stopping) {
+      if (firstSkippedRoomId !== undefined) {
+        this.nextRoomInventoryRoomIds.set(familyId, firstSkippedRoomId);
+      } else if (!signal.aborted) {
+        this.nextRoomInventoryRoomIds.delete(familyId);
+      }
+    }
+    return { outlets, failedRooms, incompleteIds };
   }
 
   private createAccessoryHandler(accessory: PlatformAccessory, device: HejDevice): void {
@@ -1064,6 +1246,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.rediscoveryPending = false;
     this.discoveryNotBefore = 0;
     this.discoveryHints.clear();
+    this.nextRoomInventoryFamilyId = undefined;
+    this.nextRoomInventoryRoomIds.clear();
     this.discoveryPatches?.clear();
     if (this.discoveryRetry) {
       clearTimeout(this.discoveryRetry);
@@ -1119,6 +1303,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
           this.realtime = null;
           this.initialized = false;
           this.sessionFingerprint = '';
+          this.accountFingerprint = '';
         }
         this.connection = { session: 'missing', realtime: 'disconnected' };
       } else if (sessionFingerprint(session) !== this.sessionFingerprint) {

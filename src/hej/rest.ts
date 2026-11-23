@@ -60,14 +60,22 @@ export class HejRestClient {
     return response.result;
   }
 
-  async getRooms(familyId: number): Promise<HejRoom[]> {
-    const response = await this.request<RoomListResponse>(`dashboard/rooms/${familyId}`);
+  async getRooms(familyId: number, signal?: AbortSignal): Promise<HejRoom[]> {
+    const response = await this.request<RoomListResponse>(`dashboard/rooms/${familyId}`, signal);
     return response.result.rooms;
   }
 
   async getDevices(familyId: number, roomId?: number | 'all'): Promise<HejDevice[]> {
     const roomSegment = roomId === undefined ? '' : `/room/${roomId}`;
     return this.request<HejDevice[]>(`dashboard/${familyId}${roomSegment}/devices-state?scope=shop`);
+  }
+
+  async getRoomDeviceInventory(familyId: number, roomId: number, signal?: AbortSignal): Promise<Array<Partial<HejDevice> | null>> {
+    const inventory = await this.request<unknown>(`dashboard/${familyId}/room/${roomId}/devices?scope=shop`, signal);
+    if (!Array.isArray(inventory)) {
+      throw new Error('Hejhome room device inventory response was not recognised.');
+    }
+    return inventory;
   }
 
   async getScenes(familyId: number): Promise<HejScene[]> {
@@ -107,8 +115,8 @@ export class HejRestClient {
     });
   }
 
-  private async request<T>(path: string): Promise<T> {
-    const text = await this.requestText(path, { method: 'GET' });
+  private async request<T>(path: string, signal?: AbortSignal): Promise<T> {
+    const text = await this.requestText(path, { method: 'GET', signal: signal ?? null });
     return JSON.parse(text || 'null') as T;
   }
 
@@ -116,6 +124,7 @@ export class HejRestClient {
     if (this.disposed) {
       throw new Error('Hejhome client is closed.');
     }
+    init.signal?.throwIfAborted();
     const method = init.method ?? 'GET';
     const startedAt = this.now();
     const controller = new AbortController();
@@ -128,7 +137,7 @@ export class HejRestClient {
     try {
       const response = await this.fetchImpl(`${SQUARE_ORIGIN}/${path}`, {
         ...init,
-        signal: controller.signal,
+        signal: init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal,
         headers: {
           accept: 'application/json, text/javascript, */*; q=0.01',
           authorization: `Bearer ${this.session.accessToken}`,
@@ -157,7 +166,7 @@ export class HejRestClient {
         method,
         status: 'error',
         durationMs: this.now() - startedAt,
-        message: sanitizeForLog(isAbort
+        message: sanitizeForLog(init.signal?.aborted ? 'request cancelled by caller' : isAbort
           ? this.disposed ? 'request cancelled because the client is closed' : `request timed out after ${this.requestTimeoutMs}ms`
           : error instanceof Error
             ? error.message

@@ -18,6 +18,7 @@ const rest = vi.hoisted(() => ({
 vi.mock('../src/hej/rest.js', () => ({ HejRestClient: class {
   getFamilies = rest.getFamilies;
   getDevices = rest.getDevices;
+  getRooms = vi.fn(async () => []);
   getScenes = rest.getScenes;
   runScene = rest.runScene;
   dispose = vi.fn();

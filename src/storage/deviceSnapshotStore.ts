@@ -6,6 +6,7 @@ import { resolveDiscoveryScope } from '../discovery/scope.js';
 
 export interface HejDeviceSnapshot {
   ownerFingerprint?: string;
+  accountFingerprint?: string;
   discoveryScope?: NonNullable<HejhomePlatformConfig['scope']>;
   generatedAt: string;
   familyCount: number;
@@ -13,6 +14,7 @@ export interface HejDeviceSnapshot {
   families: Array<{
     family: HejFamily;
     devices: HejDevice[];
+    roomOutletIds?: string[];
   }>;
 }
 
@@ -27,10 +29,11 @@ export class DeviceSnapshotStore {
     return this.snapshotPath;
   }
 
-  async save(families: Array<{ family: HejFamily; devices: HejDevice[] }>, ownerFingerprint?: string,
-    discoveryScope?: NonNullable<HejhomePlatformConfig['scope']>): Promise<HejDeviceSnapshot> {
+  async save(families: HejDeviceSnapshot['families'], ownerFingerprint?: string,
+    discoveryScope?: NonNullable<HejhomePlatformConfig['scope']>, accountFingerprint?: string): Promise<HejDeviceSnapshot> {
     const snapshot: HejDeviceSnapshot = {
       ...(ownerFingerprint ? { ownerFingerprint } : {}),
+      ...(accountFingerprint ? { accountFingerprint } : {}),
       ...(discoveryScope ? { discoveryScope: structuredClone(discoveryScope) } : {}),
       generatedAt: new Date().toISOString(),
       familyCount: families.length,

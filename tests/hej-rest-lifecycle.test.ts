@@ -4,6 +4,36 @@ import type { HejSession } from '../src/types.js';
 
 const session: HejSession = { identifier: 'user@example.test', autoLogin: true, accessToken: 'test',
   jsessionId: 'test', usernameCookie: 'test', expiresAt: 1 };
+
+test('uses the Square room inventory path and rejects a non-list response', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(Response.json([{ id: 'plug' }]))
+    .mockResolvedValueOnce(Response.json({ result: [] }));
+  const client = new HejRestClient(session, { fetch });
+  await expect(client.getRoomDeviceInventory(1, 11)).resolves.toEqual([{ id: 'plug' }]);
+  expect(fetch).toHaveBeenCalledWith('https://square.hej.so/dashboard/1/room/11/devices?scope=shop', expect.objectContaining({ method: 'GET' }));
+  await expect(client.getRoomDeviceInventory(1, 11)).rejects.toThrow('room device inventory response');
+});
+
+test('room inventory cancels a pending response body on the caller deadline', async () => {
+  const deadline = new AbortController();
+  let observedSignal: AbortSignal | null | undefined;
+  const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+    observedSignal = init?.signal;
+    return { ok: true, status: 200, text: () => new Promise((_resolve, reject) => {
+      observedSignal?.addEventListener('abort', () => reject(observedSignal?.reason), { once: true });
+    }) } as Response;
+  });
+  const client = new HejRestClient(session, { fetch });
+  const result = expect(client.getRoomDeviceInventory(1, 11, deadline.signal)).rejects.toMatchObject({ name: 'TimeoutError' });
+  await Promise.resolve();
+  deadline.abort(new DOMException('Budget elapsed', 'TimeoutError'));
+  await result;
+  expect(observedSignal?.aborted).toBe(true);
+  await expect(client.getRoomDeviceInventory(1, 12, deadline.signal)).rejects.toMatchObject({ name: 'TimeoutError' });
+  expect(fetch).toHaveBeenCalledOnce();
+});
+
 function pendingClient(bodyPending: boolean) {
   let signal!: AbortSignal;
   const fetch = vi.fn((_url: unknown, init: RequestInit) => {
