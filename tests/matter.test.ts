@@ -67,6 +67,13 @@ describe('Matter device contract', () => {
     await a.handlers!.windowCovering!.goToLiftPercentage!({ liftPercent100thsValue: 2500 });
     expect(send).toHaveBeenCalledWith({ percentControl: 75 });
   });
+  test('coverings keep invalid positions unknown and fall back to valid current position for an invalid target', () => {
+    const invalid = make(device('Curtain', { percentState: -1, percentControl: 101 }))!.clusters?.windowCovering;
+    expect(invalid?.currentPositionLiftPercent100ths).toBeNull();
+    expect(invalid?.targetPositionLiftPercent100ths).toBeNull();
+    const validCurrent = make(device('Curtain', { percentState: '80', percentControl: '' }))!.clusters?.windowCovering;
+    expect(validCurrent?.targetPositionLiftPercent100ths).toBe(2000);
+  });
   test('temperature and humidity form separate parts with hundredth units', () => {
     const a = make(device('SensorTh', { temperature: 21.5, humidity: 45, battery: 40 }))!;
     expect(a.parts![0]!.clusters.temperatureMeasurement).toEqual({ measuredValue: 2150 });
@@ -229,6 +236,33 @@ describe('Matter lifecycle', () => {
     expect(host.updateAccessoryState).toHaveBeenCalledWith(cached.UUID, 'onOff', { onOff: true }, undefined);
     adapter.dispose();
     expect(adapter.hasDevice(d.id)).toBe(false);
+  });
+
+  test.each([false, true])('a Matter discovery awaiting the host keeps newer curtain positions (another endpoint first: %s)', async (anotherEndpointFirst) => {
+    let release!: () => void;
+    const updatePlatformAccessories = vi.fn(async () => {}).mockImplementationOnce(() => new Promise<void>((resolve) => {
+      release = resolve;
+    }));
+    const updateAccessoryState = vi.fn();
+    const host = { ...api, registerPlatformAccessories: vi.fn(), updatePlatformAccessories,
+      updateAccessoryState, unregisterPlatformAccessories: vi.fn() } as unknown as MatterAPI;
+    const adapter = new MatterAdapter(host, vi.fn(), []);
+    try {
+      const curtain = device('Curtain', { percentState: 20 });
+      const devices = anotherEndpointFirst ? [{ ...device('RelayController', { power1: true }), id: 'relay' }, curtain] : [curtain];
+      await adapter.reconcile(devices);
+      updateAccessoryState.mockClear();
+      const pending = adapter.reconcile(devices);
+      await vi.waitFor(() => expect(release).toBeDefined());
+      await adapter.update({ ...curtain, deviceState: { percentState: 80 } });
+      release();
+      await pending;
+      const positions = updateAccessoryState.mock.calls.filter(([, cluster]) => cluster === 'windowCovering')
+        .map(([, , state]) => state.currentPositionLiftPercent100ths);
+      expect(positions).toEqual([2000]);
+    } finally {
+      adapter.dispose();
+    }
   });
 
   test('explicit opt-out prunes restored cache without cloud discovery or rebuilding allowed devices', async () => {

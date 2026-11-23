@@ -1,6 +1,7 @@
 import mqtt, { type MqttClient } from 'mqtt';
 
 import type { HejDevice, HejSession } from '../types.js';
+import { coveringPercent, coveringWorkState } from '../devices/windowCovering.js';
 import { HEJ_CLIENT_ID, HEJ_CLIENT_SECRET } from './auth.js';
 
 export interface HejRealtimeEvents {
@@ -149,11 +150,24 @@ export class HejRealtimeClient {
             break;
           }
           case 'percent_state':
-            deviceState.percentState = toNumberOrValue(status.value);
-            break;
+          case 'percentState':
           case 'percent_control':
-            deviceState.percentControl = toNumberOrValue(status.value);
+          case 'percentControl': {
+            const percent = coveringPercent(status.value);
+            if (percent !== undefined) {
+              const field = status.code === 'percent_state' || status.code === 'percentState' ? 'percentState' : 'percentControl';
+              deviceState[field] = percent;
+            }
             break;
+          }
+          case 'work_state':
+          case 'workState': {
+            const workState = coveringWorkState(status.value);
+            if (workState !== undefined) {
+              deviceState.workState = workState;
+            }
+            break;
+          }
           case 'control':
             deviceState.control = String(status.value ?? '');
             break;

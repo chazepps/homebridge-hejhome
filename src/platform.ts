@@ -8,7 +8,7 @@ import { RealtimeDiscoveryHints } from './discovery/realtimeHints.js';
 import { DeviceSnapshotStore, type HejDeviceSnapshot } from './storage/deviceSnapshotStore.js';
 import { LogStore, type LogLevel } from './storage/logStore.js';
 import { SessionStore, discoveryAccountFingerprint, sessionFingerprint } from './storage/sessionStore.js';
-import type { HejDevice, HejFamily, HejhomePlatformConfig, HejSession } from './types.js';
+import type { HejDevice, HejDeviceState, HejFamily, HejhomePlatformConfig, HejSession } from './types.js';
 import { sanitizeForLog } from './utils/redact.js';
 import { createSessionLogContext } from './utils/sessionDiagnostics.js';
 import { StateObservations } from './runtime/observations.js';
@@ -18,6 +18,7 @@ import { RuntimeCommandServer, type RuntimeCommandRequest } from './runtime/comm
 import { createIrRemoteRequirements } from './media/irRemoteCommands.js';
 import { HejhomeSceneSwitch, cachedScene, sceneUuidSeed, type SceneContext } from './scenes.js';
 import { getDeviceCapability } from './devices/capabilities.js';
+import { COVERING_FIELDS, readCoveringState } from './devices/windowCovering.js';
 import { isMomentaryPowerDevice } from './devices/power.js';
 import { encodePurifierControl, decodePurifierSettings, type AirPurifierMode } from './devices/purifier.js';
 import { encodeHvacControl, decodeHvacSettings, type HvacCommand } from './devices/hvac.js';
@@ -30,12 +31,18 @@ import { MatterAdapter } from './matter/adapter.js';
 import { MatterSceneAdapter } from './matter/scenes.js';
 
 const ROOM_INVENTORY_BUDGET_MS = 5000;
+const COVERING_REST_CONFIRMATION_MS = 5000;
 
 interface DiscoveryPatch {
   state: NonNullable<HejDevice['deviceState']>;
   receivedAt: Map<string, number>;
   online: boolean | undefined;
   onlineAt: number;
+}
+
+interface CoveringRestState {
+  values: Partial<ReturnType<typeof readCoveringState>>;
+  firstRepeatedAt: Map<(typeof COVERING_FIELDS)[number], number>;
 }
 
 interface ScopedDeviceInventory {
@@ -95,7 +102,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
   private readonly verifiedDevices = new Set<string>();
   private readonly reportedAt = new Map<string, Map<string, number>>();
   private readonly reportedStates = new Map<string, NonNullable<HejDevice['deviceState']>>();
+  private readonly coveringRestStates = new Map<string, CoveringRestState>();
   private discoveryPatches: Map<string, DiscoveryPatch> | null = null;
+  private discoveryCoveringAcks: Set<string> | null = null;
   private initializing = false;
   private localPublicationsPruned = false;
   private cachedMatterInventoryLoaded = false;
@@ -219,8 +228,14 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
           delete committed.power;
         }
         const settled = this.observations.commit(id, current, committed, observedAtDispatch);
+        const isCovering = getDeviceCapability(current.deviceType)?.serviceKind === 'window-covering';
+        if (isCovering && committed.percentControl !== undefined) {
+          this.discoveryCoveringAcks?.add(id);
+          this.coveringRestStates.get(id)?.firstRepeatedAt.delete('percentControl');
+        }
         this.applyDevice(settled.device, origin);
-        if (settled.conflicted && origin === 'matter') {
+        if (origin === 'matter' && (settled.conflicted || isCovering)) {
+          // The Matter host can advance a covering's current position as soon as the command resolves.
           this.settleMatterControl(id, generation);
         }
       } catch (error) {
@@ -509,6 +524,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
   private async replaceSession(session: HejSession): Promise<void> {
     const generation = ++this.generation;
+    const accountFingerprint = discoveryAccountFingerprint(session.identifier);
     this.cancelMatterSettlements();
     this.observations.clear();
     this.verifiedDevices.clear();
@@ -516,6 +532,9 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     await this.matterScenes?.prune(this.features.scenes === true && this.features.matter === true);
     this.reportedStates.clear();
     this.reportedAt.clear();
+    if (this.accountFingerprint !== accountFingerprint) {
+      this.coveringRestStates.clear();
+    }
     this.health.retain(new Set());
     this.cancelDiscoveryRetry();
     this.realtime?.disconnect();
@@ -527,7 +546,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     this.matter?.setElectricalAccount(estimatedEnergyOwner(session.identifier));
     this.powerSessionVerified = true;
     this.sessionFingerprint = sessionFingerprint(session);
-    this.accountFingerprint = discoveryAccountFingerprint(session.identifier);
+    this.accountFingerprint = accountFingerprint;
     this.connection = { session: session.expiresAt <= Date.now() ? 'expired' : 'unknown', realtime: 'connecting' };
     this.receivedConnection = false;
     this.refreshHealth();
@@ -639,17 +658,20 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
   private async discoverDevices(): Promise<void> {
     const patches = new Map<string, DiscoveryPatch>();
+    const coveringAcks = new Set<string>();
     this.discoveryPatches = patches;
+    this.discoveryCoveringAcks = coveringAcks;
     try {
-      await this.collectAndApplyDiscovery(patches);
+      await this.collectAndApplyDiscovery(patches, coveringAcks);
     } finally {
       if (this.discoveryPatches === patches) {
         this.discoveryPatches = null;
+        this.discoveryCoveringAcks = null;
       }
     }
   }
 
-  private async collectAndApplyDiscovery(patches: Map<string, DiscoveryPatch>): Promise<void> {
+  private async collectAndApplyDiscovery(patches: Map<string, DiscoveryPatch>, coveringAcks: Set<string>): Promise<void> {
     const client = this.client;
     const generation = this.generation;
     const ownerFingerprint = this.sessionFingerprint;
@@ -658,7 +680,8 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
     if (!client || this.stopping) {
       return;
     }
-    this.lastDiscoveryAt = Date.now();
+    const startedAt = Date.now();
+    this.lastDiscoveryAt = startedAt;
     const discoveryScope = structuredClone(this.config.scope ?? { mode: 'first-family' as const });
     const families = await client.getFamilies();
     const scope = resolveDiscoveryScope({ scope: discoveryScope }, families);
@@ -720,8 +743,16 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       const retained = retainedIds.has(id);
       const name = this.features.devices?.[id]?.name ?? observed.name;
       const patch = retained ? undefined : this.freshDiscoveryPatch(observed, patches.get(id));
-      const device = retained ? { ...observed, name } : { ...observed, ...patch, name,
-        deviceState: { ...observed.deviceState, ...this.freshReportedState(observed), ...patch?.deviceState } };
+      const recent = retained ? undefined : this.freshReportedState(observed);
+      const deviceState = { ...observed.deviceState, ...recent, ...patch?.deviceState };
+      const isCovering = !retained && getDeviceCapability(observed.deviceType)?.serviceKind === 'window-covering';
+      if (!isCovering) {
+        this.coveringRestStates.delete(id);
+      }
+      const observation = isCovering
+        ? this.reconcileCoveringSnapshot(observed, deviceState, recent, patch?.deviceState, coveringAcks.has(id), startedAt)
+        : deviceState;
+      const device = retained ? { ...observed, name } : { ...observed, ...patch, name, deviceState };
       devices.push(device);
       this.devices.set(device.id, device);
       if (retained) {
@@ -731,7 +762,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         this.reportedAt.delete(device.id);
       } else {
         const newlyDiscovered = !this.verifiedDevices.has(device.id);
-        this.observations.record(device.id, device.deviceState ?? {});
+        this.observations.record(device.id, observation);
         this.health.observe(device, 'snapshot');
         this.powerEstimates.observe(device, observed.deviceState ?? {}, powerObservationStarted);
         if (newlyDiscovered && patch?.deviceState) {
@@ -784,6 +815,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         this.verifiedDevices.delete(id);
         this.reportedStates.delete(id);
         this.reportedAt.delete(id);
+        this.coveringRestStates.delete(id);
       }
     }
     this.powerEstimates.retain(confirmedIds);
@@ -1099,6 +1131,16 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       this.discoveryPatches.set(devicePatch.id, { state: { ...previous?.state, ...devicePatch.deviceState }, receivedAt,
         online: online ?? previous?.online, onlineAt: online === undefined ? previous?.onlineAt ?? 0 : now });
     }
+    // A report invalidates a pending REST comparison even during same-account
+    // re-verification, when it may expire before it can be published.
+    const firstRepeatedAt = this.coveringRestStates.get(devicePatch.id)?.firstRepeatedAt;
+    if (firstRepeatedAt && devicePatch.deviceState) {
+      for (const field of COVERING_FIELDS) {
+        if (Object.hasOwn(devicePatch.deviceState, field)) {
+          firstRepeatedAt.delete(field);
+        }
+      }
+    }
     const current = this.devices.get(devicePatch.id);
     if (!current || !this.verifiedDevices.has(devicePatch.id)) {
       if (this.discoveryHints.add(devicePatch.id)) {
@@ -1154,6 +1196,65 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       }
     }
     return retained;
+  }
+
+  private reconcileCoveringSnapshot(device: HejDevice, merged: HejDeviceState, recent: HejDeviceState | undefined,
+    inFlight: HejDeviceState | null | undefined, acknowledgedDuringDiscovery: boolean, startedAt: number): HejDeviceState {
+    const previousRest = this.coveringRestStates.get(device.id);
+    const previousValues = previousRest?.values ?? {};
+    const nextValues = { ...previousValues };
+    const firstRepeatedAt = previousRest?.firstRepeatedAt ?? new Map<(typeof COVERING_FIELDS)[number], number>();
+    const rest = readCoveringState(device.deviceState);
+    // A baseline belongs to a device discovered under this account, even across credential renewal.
+    const current = readCoveringState(previousRest ? this.devices.get(device.id)?.deviceState : undefined);
+    const recentReport = readCoveringState(recent);
+    const inFlightReport = readCoveringState(inFlight);
+    const verifyingDevice = !this.verifiedDevices.has(device.id);
+    const receivedAt = Date.now();
+    const observation = { ...merged };
+    delete merged.work_state;
+    delete observation.work_state;
+    for (const field of COVERING_FIELDS) {
+      const restValue = rest[field];
+      const report = inFlightReport[field] ?? recentReport[field];
+      const live = verifyingDevice || report === current[field] ? report : undefined;
+      const acknowledgedTarget = field === 'percentControl' && acknowledgedDuringDiscovery ? current.percentControl : undefined;
+      const protectedValue = acknowledgedTarget ?? live;
+      const changed = restValue !== undefined && restValue !== previousValues[field];
+      // Position and target are reconciled first. A newly reported arrival with
+      // an explicit stop can confirm a repeated movement value in this snapshot.
+      const arrived = field === 'workState' && restValue === 'stop' && rest.percentState !== undefined
+        && rest.percentState !== previousValues.percentState && rest.percentState === rest.percentControl
+        && rest.percentState === merged.percentState && rest.percentControl === merged.percentControl;
+      const conflictingRepeat = protectedValue === undefined && restValue !== undefined && !changed && !arrived
+        && current[field] !== undefined && restValue !== current[field];
+      const firstRepeat = firstRepeatedAt.get(field);
+      const confirmed = firstRepeat !== undefined && startedAt - firstRepeat >= COVERING_REST_CONFIRMATION_MS;
+      if (conflictingRepeat && !confirmed) {
+        if (firstRepeat === undefined || receivedAt < firstRepeat) {
+          firstRepeatedAt.set(field, receivedAt);
+        }
+      } else if (restValue !== undefined || protectedValue !== undefined) {
+        firstRepeatedAt.delete(field);
+      }
+      // Confirm conflicting repeats with a later request. They still carry no
+      // evidence of a new device observation for an in-progress target write.
+      const value = protectedValue ?? (conflictingRepeat && !confirmed ? current[field] : restValue ?? current[field]);
+      delete merged[field];
+      delete observation[field];
+      if (value !== undefined) {
+        Object.assign(merged, { [field]: value });
+      }
+      // A REST value rejected during an overlap can still be adopted on a later pass.
+      if (restValue !== undefined && (protectedValue === undefined || protectedValue === restValue)) {
+        Object.assign(nextValues, { [field]: restValue });
+      }
+      if (changed && protectedValue === undefined && restValue !== current[field]) {
+        Object.assign(observation, { [field]: restValue });
+      }
+    }
+    this.coveringRestStates.set(device.id, { values: nextValues, firstRepeatedAt });
+    return observation;
   }
 
   private applyDevice(device: HejDevice, origin: 'hap' | 'matter' | 'ui' | 'external'): void {
@@ -1314,6 +1415,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
           this.verifiedDevices.clear();
           this.reportedStates.clear();
           this.reportedAt.clear();
+          this.coveringRestStates.clear();
           this.health.retain(new Set());
           this.cancelDiscoveryRetry();
           this.realtime?.disconnect();

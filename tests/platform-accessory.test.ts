@@ -161,6 +161,18 @@ describe('HejhomePlatformAccessory', () => {
     await expect(accessory.service('WindowCovering')?.characteristic('PositionState').getValue()).rejects.toThrow('HAP status -70402');
   });
 
+  test('rejects out-of-range cached curtain state and reads normalized movement', async () => {
+    const platform = createPlatformMock();
+    const accessory = createAccessoryMock('커튼', 'curtain', platform);
+    new HejhomePlatformAccessory(platform, accessory,
+      deviceFixture({ deviceType: 'Curtain', deviceState: { percentState: 101, percentControl: -1, work_state: 'stopped' } }), null);
+    const service = accessory.service('WindowCovering')!;
+    expect(service.updates.map((update) => update.characteristic)).toEqual(['PositionState']);
+    await expect(service.characteristic('CurrentPosition').getValue()).rejects.toThrow('HAP status -70402');
+    await expect(service.characteristic('TargetPosition').getValue()).rejects.toThrow('HAP status -70402');
+    await expect(service.characteristic('PositionState').getValue()).resolves.toBe(2);
+  });
+
   test('outlet load follows the per-device freshness override through the shared policy', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
