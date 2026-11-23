@@ -39,7 +39,7 @@ test('restored Matter port endpoints receive changed and cleared names without r
     await manager.registerAccessory('homebridge-hejhome', 'Hejhome', before, deps);
     const endpoint = accessories.get(before.UUID)?.endpoint;
     const states = new StateManager(accessories, new EventEmitter(), () => false);
-    for (const [names, expected] of [[{ power1: '책상' }, '책상'], [{ power1: '😀'.repeat(32) }, '😀'.repeat(32)], [{}, 'Switch 1']] as const) {
+    for (const [names, expected] of [[{ power1: '책상' }, '책상'], [{ power1: '😀'.repeat(32) }, '😀'.repeat(16)], [{}, 'Switch 1']] as const) {
       accessories.get(before.UUID)!._restoredFromCache = true;
       const next = build(names);
       await manager.registerAccessory('homebridge-hejhome', 'Hejhome', next, deps);

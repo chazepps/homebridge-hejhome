@@ -121,7 +121,7 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
 
     if (api.matter) {
       this.matterScenes = new MatterSceneAdapter(api.matter, (scene) => this.runScene(scene),
-        (error) => this.warn('scene.matter.failed', { error: String(error) }));
+        (error) => this.warn('scene.matter.failed', { error: String(error) }), api.versionGreaterOrEqual?.('2.5.1-beta.3'));
       this.matter = new MatterAdapter(api.matter, (id, requirements) => this.controlDevice(id, requirements, 'matter'),
         this.features.meters, (error) => this.warn('matter.update.failed', { error: String(error) }), this.features.devices ?? {},
         (device) => this.powerEstimates.project(device));
@@ -851,6 +851,10 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
           created = new this.api.platformAccessory(scene.name, uuid);
           this.createSceneHandler(created, scene);
           this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [created]);
+          // Recent Homebridge logs a rejected HAP registration without throwing to the plugin.
+          if (this.api.versionGreaterOrEqual?.('2.5.1-beta.3') && !created._associatedHAPAccessory.bridged) {
+            throw new Error('Homebridge did not add the recipe accessory to the HAP bridge.');
+          }
           this.accessories.set(uuid, created);
         }
       } catch (error) {

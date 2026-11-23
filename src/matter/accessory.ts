@@ -197,7 +197,7 @@ export function createMatterAccessory(
     }
     await send(requirements);
   };
-  const power = (key: string): NonNullable<Handlers['onOff']> => ({
+  const power = (key: string) => ({
     on: () => actuate({ [key]: true }), off: () => actuate({ [key]: false }),
     toggle: async () => {
       const value = kind === 'ir-switch' ? readVendorPower(current())
@@ -209,15 +209,17 @@ export function createMatterAccessory(
       await actuate({ [key]: !value });
     },
   });
-  const powerPart = (key: string, outlet: boolean, index: number): MatterAccessoryPart => ({
-    id: key, displayName: matterLabel(channelNames[key] ?? `${label} ${key.slice('power'.length)}`, 64),
-    deviceType: outlet ? types.OnOffOutlet : types.OnOffLight,
-    clusters: {
-      descriptor: { tagList: [{ mfgCode: null, namespaceId: 7, tag: index,
-        label: matterLabel(channelNames[key] ?? `${label} ${key.slice('power'.length)}`, 64) }] },
-      onOff: typeof state[key] === 'boolean' ? { onOff: state[key] === true } : {},
-    }, handlers: { onOff: power(key) },
-  });
+  const powerPart = (key: string, outlet: boolean, index: number): MatterAccessoryPart => {
+    const name = matterLabel(channelNames[key] ?? `${label} ${key.slice('power'.length)}`, 64, (symbol) => Buffer.byteLength(symbol));
+    return {
+      id: key, displayName: name,
+      deviceType: outlet ? types.OnOffOutlet : types.OnOffLight,
+      clusters: {
+        descriptor: { tagList: [{ mfgCode: null, namespaceId: 7, tag: index, label: name }] },
+        onOff: typeof state[key] === 'boolean' ? { onOff: state[key] === true } : {},
+      }, handlers: { onOff: power(key) },
+    };
+  };
   switch (kind) {
     case 'relay-switch':
     case 'ir-switch':
@@ -264,15 +266,15 @@ export function createMatterAccessory(
       handlers.onOff = {
         on: async () => {
           await dimmer.stop();
-          await lightPower.on!({});
+          await lightPower.on();
         },
         off: async () => {
           await dimmer.stop();
-          await lightPower.off!({});
+          await lightPower.off();
         },
         toggle: async () => {
           await dimmer.stop();
-          await lightPower.toggle!({});
+          await lightPower.toggle();
         },
       };
       const level = async (value: number, withOnOff: boolean) => {
@@ -474,12 +476,13 @@ function closedPercent(value: unknown): number | null {
 function isColorMode(mode: unknown): boolean {
   return mode === 'COLOR' || mode === 'COLOUR';
 }
-function matterLabel(name: string, maxLength = 32): string {
-  // Parent nodeLabel allows 32 UTF-16 code units; part semantic-tag labels allow 64.
+function matterLabel(name: string, maxLength = 32, measure = (symbol: string) => symbol.length): string {
   // Iterate code points so truncation never leaves half of a surrogate pair.
   let result = '';
+  let length = 0;
   for (const symbol of name) {
-    if (result.length + symbol.length > maxLength) {
+    length += measure(symbol);
+    if (length > maxLength) {
       break;
     }
     result += symbol;
