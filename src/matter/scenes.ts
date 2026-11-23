@@ -24,6 +24,7 @@ export class MatterSceneAdapter {
     private readonly api: MatterAPI,
     private readonly run: (scene: SceneContext) => Promise<void>,
     private readonly onError: (error: unknown) => void,
+    private readonly nativeToggleIsOptional = false,
   ) {}
 
   restore(accessory: MatterAccessory): void {
@@ -147,9 +148,10 @@ export class MatterSceneAdapter {
       manufacturer: 'Hejhome', model: 'Recipe', serialNumber: uuid.replaceAll('-', '').slice(0, 32),
       context: { scene: { ...entry.scene } },
       clusters: { onOff: { onOff: false }, bridgedDeviceBasicInformation: { reachable: entry.confirmed, nodeLabel: name } },
-      // Homebridge's native Toggle delegates to its On/Off behavior after this hook.
-      // Executing here as well would run the same recipe twice for one command.
-      handlers: { onOff: { on: () => this.press(entry), toggle: async () => {}, off: async () => {} } } };
+      // Older hosts require a Toggle handler before they delegate to On or Off.
+      // New hosts delegate only when the plugin omits the Toggle handler.
+      handlers: { onOff: { on: () => this.press(entry), off: async () => {},
+        ...(this.nativeToggleIsOptional ? {} : { toggle: async () => {} }) } } };
   }
 
   private async press(entry: Entry): Promise<void> {

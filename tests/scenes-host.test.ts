@@ -18,6 +18,7 @@ const rest = vi.hoisted(() => ({
 vi.mock('../src/hej/rest.js', () => ({ HejRestClient: class {
   getFamilies = rest.getFamilies;
   getDevices = rest.getDevices;
+  getRooms = vi.fn(async () => []);
   getScenes = rest.getScenes;
   runScene = rest.runScene;
   dispose = vi.fn();
@@ -46,6 +47,7 @@ async function hosted() {
   const events = new Map<string, () => unknown>();
   const api = { hap: host.hap, platformAccessory: host.platformAccessory, user: { storagePath: () => storage },
     on: (event: string, callback: () => unknown) => events.set(event, callback),
+    versionGreaterOrEqual: host.versionGreaterOrEqual.bind(host),
     registerPlatformAccessories: host.registerPlatformAccessories.bind(host),
     unregisterPlatformAccessories: host.unregisterPlatformAccessories.bind(host),
     updatePlatformAccessories: host.updatePlatformAccessories.bind(host) } as unknown as API;
@@ -63,6 +65,7 @@ async function hosted() {
     service.bridge.addBridgedAccessory(new host.hap.Accessory(`Filler ${index}`, host.hap.uuid.generate(`filler:${index}`))));
   return {
     platform, service, warn, internal, uuidOf, fillers, hap: host.hap,
+    duplicateRemovalIsSafe: host.versionGreaterOrEqual('2.5.1-beta.3'),
     launch: async () => {
       await internal.initialize();
       internal.stopSessionWatcher();
@@ -108,6 +111,22 @@ test('a scene refused by a full bridge is taken back from Homebridge and is publ
   expect(rest.runScene).toHaveBeenCalledWith(100, 's8-main');
 });
 
+test('an outlet refused at HAP capacity is published once a slot is free', async () => {
+  home([]);
+  rest.getDevices.mockResolvedValue([{ id: 'mini', name: 'Mini plug', deviceType: 'SmartPlug', deviceState: { power: false } }]);
+  const h = await hosted();
+  const [freed] = h.fillers(149);
+  const uuid = h.hap.uuid.generate('mini');
+  await h.launch();
+  expect(h.warn).toHaveBeenCalledWith('device.register.failed', expect.objectContaining({ deviceId: 'mini' }));
+  expect(h.platform.accessories.has(uuid)).toBe(false);
+
+  h.service.bridge.removeBridgedAccessory(freed!);
+  await h.rediscover();
+  expect(h.platform.accessories.get(uuid)?.getService(h.hap.Service.Outlet)).toBeDefined();
+  expect(h.service.bridge.bridgedAccessories.some((accessory) => accessory.UUID === uuid)).toBe(true);
+});
+
 test('on a full bridge, a replaced scene makes room for its replacement', async () => {
   home([{ name: 'Old', sceneId: 's8-old' }]);
   const h = await hosted();
@@ -131,7 +150,11 @@ test('a scene Homebridge fails to unregister does not fail discovery, and neithe
   h.service.bridge.removeBridgedAccessory(bridged);
   rest.getScenes.mockResolvedValue([]);
   await h.rediscover();
-  expect(h.warn).toHaveBeenCalledWith('scene.unregister.failed', expect.anything());
+  if (h.duplicateRemovalIsSafe) {
+    expect(h.warn).not.toHaveBeenCalledWith('scene.unregister.failed', expect.anything());
+  } else {
+    expect(h.warn).toHaveBeenCalledWith('scene.unregister.failed', expect.anything());
+  }
   expect(h.warn).not.toHaveBeenCalledWith('discovery.failed', expect.anything());
   expect(h.state('s8-main')).toEqual(nowhere);
   rest.getScenes.mockResolvedValue([{ name: 'Main', sceneId: 's8-main' }]);

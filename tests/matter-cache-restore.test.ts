@@ -80,9 +80,11 @@ test('a recipe executes through the native Matter command, resets after its comm
   const onError = vi.fn();
   const first = await host(storage, 50);
   // Production uses a UUID generator; this host normally uses readable IDs for device assertions.
-  const hap = new HomebridgeAPI().hap;
+  const hostApi = new HomebridgeAPI();
+  const hap = hostApi.hap;
+  const optionalToggle = hostApi.versionGreaterOrEqual('2.5.1-beta.3');
   first.api.uuid.generate = hap.uuid.generate;
-  const scenes = new MatterSceneAdapter(first.api, run, onError);
+  const scenes = new MatterSceneAdapter(first.api, run, onError, optionalToggle);
   cleanups.push(async () => scenes.dispose());
   await scenes.reconcile([recipe], new Set([100]), new Set([100]), () => true);
   expect(onError).not.toHaveBeenCalled();
@@ -112,7 +114,7 @@ test('a recipe executes through the native Matter command, resets after its comm
   await second.manager.registerAccessory('test-plugin', 'Hejhome', restored, second.deps);
   second.accessories.get(uuid)!._restoredFromCache = true;
   const endpoint = second.accessories.get(uuid)!.endpoint;
-  const restoredScenes = new MatterSceneAdapter(second.api, run, onError);
+  const restoredScenes = new MatterSceneAdapter(second.api, run, onError, optionalToggle);
   cleanups.push(async () => restoredScenes.dispose());
   restoredScenes.restore(restored);
   await restoredScenes.prune(true);
@@ -143,19 +145,23 @@ test('recipe opt-out retries late native removal failure and can republish the s
   await publisher.reconcile([recipe], new Set([100]), new Set([100]), () => true);
   const [uuid, accessory] = [...runtime.accessories][0]!;
   const internals = api as unknown as { _matterManager: unknown; _matterServer: unknown };
-  internals._matterManager = { hasActiveMatter: () => true, getExternalServer: () => undefined, isBridgeServerStarting: () => false };
+  internals._matterManager = { hasActiveMatter: () => true, getExternalServer: () => undefined,
+    getBridgeStartFailure: () => undefined, hasBridgeServerStopped: () => false, isBridgeServerStarting: () => false };
   internals._matterServer = runtime.states;
   const removals: Promise<unknown>[] = [];
   const failures: unknown[] = [];
-  api.on('unregisterMatterPlatformAccessories', (_plugin, _platform, items: MatterAccessory[]) => {
+  api.on('unregisterMatterPlatformAccessories', (_plugin, _platform, items: MatterAccessory[], track?: (work: Promise<unknown>) => void) => {
     for (const item of items) {
-      removals.push(new Promise<void>((resolve) => setImmediate(resolve))
-        .then(() => runtime.manager.unregisterAccessory(item.UUID, runtime.deps)).catch((error: unknown) => failures.push(error)));
+      const removal = new Promise<void>((resolve) => setImmediate(resolve))
+        .then(() => runtime.manager.unregisterAccessory(item.UUID, runtime.deps)).catch((error: unknown) => failures.push(error));
+      removals.push(removal);
+      track?.(removal);
     }
   });
-  api.on('registerMatterPlatformAccessories', (plugin, platform, items: MatterAccessory[]) => {
+  api.on('registerMatterPlatformAccessories', (plugin, platform, items: MatterAccessory[], track?: (work: Promise<unknown>) => void) => {
     for (const item of items) {
-      void runtime.manager.registerAccessory(plugin, platform, item, runtime.deps).catch(onError);
+      const registration = runtime.manager.registerAccessory(plugin, platform, item, runtime.deps).catch(onError);
+      track?.(registration);
     }
   });
   const adapter = new MatterSceneAdapter(new MatterAPIImpl(api), run, onError);
@@ -163,6 +169,9 @@ test('recipe opt-out retries late native removal failure and can republish the s
   adapter.restore(accessory);
   accessory._restoredFromCache = true;
   await adapter.reconcile([recipe], new Set([100]), new Set([100]), () => true);
+  if (typeof accessory.endpoint.delete === 'function') {
+    vi.spyOn(accessory.endpoint, 'delete').mockRejectedValueOnce(new Error('Transient native deletion failure'));
+  }
   vi.spyOn(accessory.endpoint, 'close').mockRejectedValueOnce(new Error('Transient native close failure'));
   await adapter.prune(false);
   await Promise.all(removals.splice(0));

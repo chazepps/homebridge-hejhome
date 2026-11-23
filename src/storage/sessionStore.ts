@@ -65,3 +65,8 @@ export function sessionFingerprint(session: HejSession): string {
     session.identifier, session.accessToken, session.jsessionId, session.usernameCookie, session.expiresAt, session.autoLogin,
   ])).digest('hex');
 }
+
+/** Stable across session rotation, for retaining offline discovery metadata only. */
+export function discoveryAccountFingerprint(identifier: string): string {
+  return createHash('sha256').update(`hejhome:discovery:v1:${identifier.trim()}`).digest('hex');
+}

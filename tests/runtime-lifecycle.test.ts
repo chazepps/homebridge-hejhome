@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({ clients: [] as Array<Record<string, ReturnType
   realtime: [] as Array<{ events: HejRealtimeEvents; disconnect: ReturnType<typeof vi.fn> }>,
   loggers: [] as Array<(event: HejRestLogEvent) => void>,
   families: [{ familyId: 1, name: 'Home' }], devices: [] as HejDevice[], fail: false, connectDuringDiscovery: false,
+  rooms: [] as Array<{ room_id: number }>, roomInventoryError: null as Error | null,
   familyGate: undefined as Promise<Array<{ familyId: number; name: string }>> | undefined }));
 vi.mock('../src/hej/rest.js', () => ({ HejRestClient: class {
   getFamilies = vi.fn(async () => {
@@ -32,6 +33,14 @@ vi.mock('../src/hej/rest.js', () => ({ HejRestClient: class {
       throw new Error('family unavailable');
     }
     return mocks.devices;
+  });
+  getRooms = vi.fn(async () => mocks.rooms);
+  getRoomDeviceInventory = vi.fn(async (familyId: number, roomId: number) => {
+    if (mocks.roomInventoryError) {
+      mocks.loggers.at(-1)?.({ path: `dashboard/${familyId}/room/${roomId}/devices?scope=shop`, method: 'GET', status: 'success', httpStatus: 403 });
+      throw mocks.roomInventoryError;
+    }
+    return [];
   });
   controlDevice = vi.fn(async () => undefined);
   dispose = vi.fn();
@@ -56,6 +65,7 @@ const cleanup: Array<() => Promise<void>> = [];
 beforeEach(() => {
   mocks.clients.length = 0; mocks.loggers.length = 0; mocks.realtime.length = 0; mocks.fail = false; mocks.connectDuringDiscovery = false;
   mocks.familyGate = undefined;
+  mocks.rooms = []; mocks.roomInventoryError = null;
   mocks.families = [{ familyId: 1, name: 'Home' }]; mocks.devices = [device('one')];
 });
 afterEach(async () => {
@@ -367,6 +377,15 @@ test('REST unauthorized leaves MQTT measurements readable and reports independen
     expect(status?.connection).toEqual({ session: 'expired', realtime: 'connected' });
     expect(status?.devices[0]?.lastSeenAt).not.toBeNull();
   });
+});
+
+test('a successful supplemental inventory request cannot clear a primary REST authorization failure', async () => {
+  const { dir, internal } = await fixture();
+  const log = mocks.loggers[0]!;
+  log({ path: 'dashboard/control/one', method: 'POST', status: 'success', httpStatus: 401 });
+  log({ path: 'dashboard/1/room/11/devices?scope=shop', method: 'GET', status: 'success', httpStatus: 200 });
+  await internal.statusStore.flush();
+  expect((await loadRuntimeStatus(dir))?.connection.session).toBe('expired');
 });
 
 test('initial failed discovery retries, restores devices, and later removes absent devices', async () => {
@@ -1226,6 +1245,127 @@ test('hint discovery honors family and room scope and leaves unsupported models 
   expect(mocks.clients[0]!.getDevices!.mock.calls).toEqual([[1, 11], [1, 11]]);
   expect(platform.getDeviceHealth('unsupported').reachable).toBe(true);
   expect(platform.getDeviceHealth('outside').reachable).toBe(false);
+});
+
+test.each(['all', 'custom'] as const)('room inventory recovers missing outlets within %s scope', async (mode) => {
+  const scope = mode === 'all' ? { mode } : { mode, includedFamilyIds: [1], includedRoomsByFamilyId: { '1': [11] } };
+  const matter = { deviceTypes, status: MatterStatus, uuid: { generate: (id: string) => id },
+    registerPlatformAccessories: vi.fn(async () => undefined), updatePlatformAccessories: vi.fn(async () => undefined),
+    unregisterPlatformAccessories: vi.fn(async () => undefined), updateAccessoryState: vi.fn(async () => undefined) } as unknown as MatterAPI;
+  const { platform, internal, api, dir } = await fixture(undefined, scope, matter);
+  const plug = (id: string): HejDevice => ({ id, name: id, deviceType: 'SmartPlug', familyId: 1,
+    online: true, deviceState: { power: false } });
+  const client = mocks.clients[0]!;
+  client.getRooms!.mockResolvedValue([{ room_id: 11 }, { room_id: 12 }]);
+  client.getDevices!.mockResolvedValue([device('one'), { ...plug('existing'), deviceState: { power: true } }]);
+  client.getRoomDeviceInventory!.mockImplementation(async (_familyId: number, roomId: number) => roomId === 11
+    ? [{ ...plug('mini-1'), extra: 'not part of an outlet', deviceState: { power: false, curVoltage: 2210, extra: 'unused' } },
+      plug('mini-2'), { id: 'mini-3', name: 'Mini without state', deviceType: 'SmartPlug' }, plug('existing'), { id: 'id-only' },
+      { ...plug('wrong-family'), familyId: 2 }, { ...plug('wrong-room'), roomId: 99 }]
+    : [plug('other-room')]);
+  await internal.discoverDevices();
+
+  const expectedIds = ['existing', 'mini-1', 'mini-2', 'mini-3', 'one', ...(mode === 'all' ? ['other-room'] : [])];
+  expect([...platform.accessories.values()].map((accessory) => accessory.context.device.id).sort()).toEqual(expectedIds);
+  expect(platform.accessories.get(api.hap.uuid.generate('mini-1'))?.getService(api.hap.Service.Outlet)).toBeDefined();
+  expect(platform.accessories.get(api.hap.uuid.generate('mini-3'))?.context.device.deviceState.power).toBeUndefined();
+  expect(platform.accessories.get(api.hap.uuid.generate('existing'))?.context.device.deviceState.power).toBe(true);
+  expect(matter.registerPlatformAccessories).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.arrayContaining([
+    expect.objectContaining({ UUID: 'hejhome:matter:mini-1', deviceType: deviceTypes.OnOffOutlet }),
+  ]));
+  const snapshot = await new DeviceSnapshotStore(dir).load();
+  expect(snapshot?.families[0]?.devices.find(({ id }) => id === 'mini-1')).toEqual({ ...plug('mini-1'), roomId: 11,
+    deviceState: { power: false, curVoltage: 2210 } });
+  expect(snapshot?.families[0]?.roomOutletIds).toEqual(['mini-1', 'mini-2', 'mini-3', ...(mode === 'all' ? ['other-room'] : [])]);
+
+  client.getDevices!.mockResolvedValue([device('one'), device('new-primary'), plug('existing')]);
+  client.getRoomDeviceInventory!.mockImplementation(async (_familyId: number, roomId: number) => {
+    if (roomId === 11) {
+      throw new Error('room inventory unavailable');
+    }
+    return [plug('other-room'), plug('new-room-outlet')];
+  });
+  await internal.discoverDevices();
+  expect(platform.accessories.has(api.hap.uuid.generate('new-primary'))).toBe(true);
+  expect(platform.accessories.has(api.hap.uuid.generate('new-room-outlet'))).toBe(mode === 'all');
+  expect(platform.getDeviceHealth('mini-1').reachable).toBe(false);
+  expect(matter.updateAccessoryState).toHaveBeenCalledWith('hejhome:matter:mini-1', 'bridgedDeviceBasicInformation', { reachable: false }, undefined);
+  expect(matter.unregisterPlatformAccessories).not.toHaveBeenCalled();
+  mocks.realtime[0]!.events.onDeviceUpdate({ id: 'mini-1', deviceState: { power: true } });
+  expect(platform.getDeviceHealth('mini-1').reachable).toBe(false);
+  await expect(platform.controlDevice('mini-1', { power: true }, 'hap')).rejects.toThrow('no longer available');
+  client.getRoomDeviceInventory!.mockImplementation(async (_familyId: number, roomId: number) => roomId === 11
+    ? [{ id: 'mini-1' }, plug('mini-2')] : [plug('other-room'), plug('new-room-outlet')]);
+  await internal.discoverDevices();
+  expect(platform.accessories.has(api.hap.uuid.generate('mini-3'))).toBe(false);
+  expect(platform.getDeviceHealth('mini-2').reachable).toBe(true);
+  expect(platform.getDeviceHealth('mini-1').reachable).toBe(false);
+  expect(platform.accessories.has(api.hap.uuid.generate('mini-1'))).toBe(true);
+  expect((await new DeviceSnapshotStore(dir).load())?.families[0]?.roomOutletIds).toContain('mini-1');
+});
+
+test.each([true, false])('unconfirmed outlet retention respects account identity (same account: %s)', async (sameAccount) => {
+  const { platform, internal, store, session, api, dir } = await fixture();
+  const client = mocks.clients[0]!;
+  client.getRooms!.mockResolvedValue([{ room_id: 11 }]);
+  client.getRoomDeviceInventory!.mockResolvedValue([{ ...device('mini'), deviceType: 'SmartPlug' }]);
+  await internal.discoverDevices();
+  expect(platform.getDeviceHealth('mini').reachable).toBe(true);
+  mocks.rooms = [{ room_id: 11 }];
+  mocks.roomInventoryError = new Error('room inventory unavailable');
+  const nextSession = { ...session, identifier: sameAccount ? session.identifier : 'different-account', accessToken: 'rotated-token' };
+  await store.save(nextSession);
+  await internal.checkSessionAndInitialize();
+
+  expect(platform.accessories.has(api.hap.uuid.generate('mini'))).toBe(sameAccount);
+  expect(platform.getDeviceHealth('mini').reachable).toBe(false);
+  await expect(platform.controlDevice('mini', { power: true }, 'matter')).rejects.toThrow('no longer available');
+  const snapshot = await new DeviceSnapshotStore(dir).load();
+  expect(snapshot?.ownerFingerprint).toBe(sessionFingerprint(nextSession));
+  expect(snapshot?.families[0]?.devices.some(({ id }) => id === 'mini')).toBe(sameAccount);
+});
+
+test('cold discovery still registers primary inventory when the outlet inventory is unavailable', async () => {
+  mocks.connectDuringDiscovery = true;
+  mocks.rooms = [{ room_id: 11 }];
+  mocks.roomInventoryError = new Error('room inventory unavailable');
+  mocks.devices = [{ ...device('one'), deviceType: 'Plug' }];
+  const { platform, internal, dir } = await fixture();
+  expect(mocks.clients[0]!.getRoomDeviceInventory).toHaveBeenCalledWith(1, 11, expect.any(AbortSignal));
+  expect([...platform.accessories.values()].map((accessory) => accessory.context.device.id)).toEqual(['one']);
+  expect((await new DeviceSnapshotStore(dir).load())?.deviceCount).toBe(1);
+  await vi.waitFor(async () => expect((await loadRuntimeStatus(dir))?.connection.session).toBe('valid'));
+
+  mocks.devices = [device('replacement')];
+  await internal.discoverDevices();
+  expect([...platform.accessories.values()].map((accessory) => accessory.context.device.id)).toEqual(['replacement']);
+});
+
+test('the supplemental deadline bounds discovery and the next pass starts with skipped homes and rooms', async () => {
+  const { platform, internal, api } = await fixture();
+  const deadline = new AbortController();
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValueOnce(deadline.signal)
+    .mockReturnValue(new AbortController().signal);
+  const client = mocks.clients[0]!;
+  mocks.families.push({ familyId: 2, name: 'Second home' });
+  mocks.devices = [device('replacement')];
+  client.getRooms!.mockResolvedValue([{ room_id: 11 }, { room_id: 12 }]);
+  client.getRoomDeviceInventory!.mockImplementation(async (_familyId: number, _roomId: number, signal?: AbortSignal) => {
+    deadline.abort();
+    signal?.throwIfAborted();
+    return [];
+  });
+
+  await internal.discoverDevices();
+  expect(timeout).toHaveBeenCalledOnce();
+  expect(client.getDevices!.mock.invocationCallOrder.at(-1)).toBeLessThan(timeout.mock.invocationCallOrder[0]!);
+  expect(client.getRoomDeviceInventory!.mock.calls).toEqual([[1, 11, deadline.signal]]);
+  expect(platform.accessories.has(api.hap.uuid.generate('replacement'))).toBe(true);
+
+  client.getRoomDeviceInventory!.mockClear();
+  await internal.discoverDevices();
+  expect(client.getRoomDeviceInventory!.mock.calls.map(([family, room]) => [family, room]))
+    .toEqual([[2, 11], [2, 12], [1, 12], [1, 11]]);
 });
 
 test('hint discovery never applies a partial inventory to either HAP or Matter', async () => {
