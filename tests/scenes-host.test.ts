@@ -111,6 +111,22 @@ test('a scene refused by a full bridge is taken back from Homebridge and is publ
   expect(rest.runScene).toHaveBeenCalledWith(100, 's8-main');
 });
 
+test('an outlet refused at HAP capacity is published once a slot is free', async () => {
+  home([]);
+  rest.getDevices.mockResolvedValue([{ id: 'mini', name: 'Mini plug', deviceType: 'SmartPlug', deviceState: { power: false } }]);
+  const h = await hosted();
+  const [freed] = h.fillers(149);
+  const uuid = h.hap.uuid.generate('mini');
+  await h.launch();
+  expect(h.warn).toHaveBeenCalledWith('device.register.failed', expect.objectContaining({ deviceId: 'mini' }));
+  expect(h.platform.accessories.has(uuid)).toBe(false);
+
+  h.service.bridge.removeBridgedAccessory(freed!);
+  await h.rediscover();
+  expect(h.platform.accessories.get(uuid)?.getService(h.hap.Service.Outlet)).toBeDefined();
+  expect(h.service.bridge.bridgedAccessories.some((accessory) => accessory.UUID === uuid)).toBe(true);
+});
+
 test('on a full bridge, a replaced scene makes room for its replacement', async () => {
   home([{ name: 'Old', sceneId: 's8-old' }]);
   const h = await hosted();

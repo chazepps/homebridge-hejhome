@@ -752,8 +752,15 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
       if (existing) {
         this.api.updatePlatformAccessories([accessory]);
       } else {
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-        this.accessories.set(uuid, accessory);
+        try {
+          this.registerHomeKitAccessory(accessory);
+          this.accessories.set(uuid, accessory);
+        } catch (error) {
+          this.accessoryHandlers.get(uuid)?.dispose();
+          this.accessoryHandlers.delete(uuid);
+          this.handlerSignatures.delete(uuid);
+          this.warn('device.register.failed', { deviceId: device.id, error: String(error) });
+        }
       }
     }
     for (const [uuid, accessory] of this.accessories) {
@@ -850,21 +857,11 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         } else {
           created = new this.api.platformAccessory(scene.name, uuid);
           this.createSceneHandler(created, scene);
-          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [created]);
-          // Recent Homebridge logs a rejected HAP registration without throwing to the plugin.
-          if (this.api.versionGreaterOrEqual?.('2.5.1-beta.3') && !created._associatedHAPAccessory.bridged) {
-            throw new Error('Homebridge did not add the recipe accessory to the HAP bridge.');
-          }
+          this.registerHomeKitAccessory(created);
           this.accessories.set(uuid, created);
         }
       } catch (error) {
         if (created) {
-          // Homebridge caches an accessory before its bridge accepts it; take that copy back, or a retry is skipped as a duplicate.
-          try {
-            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [created]);
-          } catch {
-            // The bridge never held it, and Homebridge has already dropped its cached copy.
-          }
           this.sceneHandlers.get(uuid)?.dispose();
           this.sceneHandlers.delete(uuid);
         }
@@ -876,6 +873,24 @@ export class HejhomePlatform implements DynamicPlatformPlugin {
         (scene) => this.verifiedScenes.has(this.api.hap.uuid.generate(sceneUuidSeed(scene))));
     }
     this.info('scene.discovery.finished', { sceneCount: wanted.size });
+  }
+
+  private registerHomeKitAccessory(accessory: PlatformAccessory): void {
+    try {
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      // Recent Homebridge logs a rejected HAP registration without throwing to the plugin.
+      if (this.api.versionGreaterOrEqual?.('2.5.1-beta.3') && !accessory._associatedHAPAccessory.bridged) {
+        throw new Error('Homebridge did not add the accessory to its HAP bridge.');
+      }
+    } catch (error) {
+      try {
+        // Earlier Homebridge versions can cache an accessory before the bridge refuses it.
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      } catch {
+        // The bridge never held the accessory, but the cached copy has been dropped.
+      }
+      throw error;
+    }
   }
 
   private createSceneHandler(accessory: PlatformAccessory, scene: SceneContext): void {
